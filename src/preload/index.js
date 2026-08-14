@@ -1,0 +1,47 @@
+const { contextBridge, ipcRenderer } = require("electron");
+
+// Keep in sync with src/shared/ipc/channels.js (preload cannot reliably require() app files when sandbox is on).
+const CH = {
+  PING: "visionforge:ping",
+  OPEN_DEVTOOLS: "visionforge:open-devtools",
+  GET_APP_INFO: "visionforge:get-app-info",
+  OPEN_EXTERNAL_URL: "visionforge:open-external-url",
+  QUIT_APP: "visionforge:quit-app",
+  WINDOW_MINIMIZE: "visionforge:window-minimize",
+  WINDOW_MAXIMIZE: "visionforge:window-maximize",
+  WINDOW_CLOSE: "visionforge:window-close",
+  WINDOW_IS_MAXIMIZED: "visionforge:window-is-maximized",
+  GET_LICENSE_UPDATE: "visionforge:get-license-update",
+  DOWNLOAD_UPDATE: "visionforge:download-update",
+  INSTALL_UPDATE: "visionforge:install-update",
+  CHECK_UPDATE_FILE: "visionforge:check-update-file",
+  LICENSE_UPDATE: "visionforge:license-update",
+  LICENSE_DOWNLOAD_PROGRESS: "visionforge:license-download-progress",
+};
+
+contextBridge.exposeInMainWorld("visionforge", {
+  ping: () => ipcRenderer.invoke(CH.PING),
+  openDevTools: () => ipcRenderer.invoke(CH.OPEN_DEVTOOLS),
+  getAppInfo: () => ipcRenderer.invoke(CH.GET_APP_INFO),
+  openExternalUrl: (url) => ipcRenderer.invoke(CH.OPEN_EXTERNAL_URL, url),
+  quitApp: () => ipcRenderer.invoke(CH.QUIT_APP),
+  minimizeWindow: () => ipcRenderer.invoke(CH.WINDOW_MINIMIZE),
+  maximizeWindow: () => ipcRenderer.invoke(CH.WINDOW_MAXIMIZE),
+  closeWindow: () => ipcRenderer.invoke(CH.WINDOW_CLOSE),
+  isWindowMaximized: () => ipcRenderer.invoke(CH.WINDOW_IS_MAXIMIZED),
+  getLicenseUpdate: () => ipcRenderer.invoke(CH.GET_LICENSE_UPDATE),
+  downloadUpdate: (downloadUrl, filename) =>
+    ipcRenderer.invoke(CH.DOWNLOAD_UPDATE, downloadUrl, filename),
+  installUpdate: (filename) => ipcRenderer.invoke(CH.INSTALL_UPDATE, filename),
+  checkUpdateFile: (filename) => ipcRenderer.invoke(CH.CHECK_UPDATE_FILE, filename),
+  onLicenseUpdate(callback) {
+    const subscription = (_event, payload) => callback(payload);
+    ipcRenderer.on(CH.LICENSE_UPDATE, subscription);
+    return () => ipcRenderer.removeListener(CH.LICENSE_UPDATE, subscription);
+  },
+  onLicenseDownloadProgress(callback) {
+    const subscription = (_event, payload) => callback(payload);
+    ipcRenderer.on(CH.LICENSE_DOWNLOAD_PROGRESS, subscription);
+    return () => ipcRenderer.removeListener(CH.LICENSE_DOWNLOAD_PROGRESS, subscription);
+  },
+});

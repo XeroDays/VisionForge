@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data:;" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VisionForge</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="styles/app.css" />
+</head>
+
+<body>
+  <main class="screen">
+    <header class="app-chrome-header" id="app-chrome-header">
+      <div class="app-chrome-header__brand sidebar-brand">
+        <div class="logo-wrap" aria-hidden="true">
+          <img class="brand-logo" src="images/logo/VisionForge.png" alt="" width="28" height="28" />
+        </div>
+        <span class="sidebar-brand__title">VisionForge</span>
+      </div>
+      <div class="app-chrome-header__topbar app-topbar" id="app-topbar">
+        <div class="app-topbar__left">
+          <span class="app-breadcrumb__current">Welcome</span>
+        </div>
+        <div class="app-topbar__right">
+          <button type="button" id="btn-new-release" class="btn-new-release" hidden aria-label="New Release Available" title="New Release Available">
+            New Release Available
+          </button>
+          <div class="window-controls">
+            <button type="button" class="window-control-btn" id="window-minimize-btn" aria-label="Minimize">
+              <i class="fa-regular fa-window-minimize"></i>
+            </button>
+            <button type="button" class="window-control-btn" id="window-maximize-btn" aria-label="Maximize">
+              <i class="fa-regular fa-window-maximize"></i>
+            </button>
+            <button type="button" class="window-control-btn window-control-btn--close" id="window-close-btn" aria-label="Close">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="screen-body">
+      <section class="screen-section screen-section--main">
+        <div class="main-content">
+          <h1 class="main-content__title">VisionForge</h1>
+          <p class="main-content__subtitle">Your application workspace is ready.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="release-overlay" class="settings-overlay release-overlay" hidden aria-modal="true" role="dialog" aria-label="New release">
+    <div class="settings-modal release-modal">
+      <div class="settings-modal-header">
+        <h2 class="settings-modal-title" id="release-title">New Release</h2>
+        <button type="button" id="btn-release-close" class="icon-btn" aria-label="Close release dialog">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="settings-modal-body release-modal-body">
+        <div id="release-notes" class="release-notes" aria-label="Release notes"></div>
+      </div>
+      <div class="settings-modal-footer release-modal-footer">
+        <div id="release-download-progress" class="release-download-progress" hidden>
+          <div class="release-progress-track" aria-hidden="true">
+            <div id="release-progress-bar" class="release-progress-bar"></div>
+          </div>
+          <span id="release-download-percent" class="release-download-percent">0%</span>
+        </div>
+        <button type="button" id="btn-release-download" class="btn-primary">Download Now</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="scripts/release-update-panel.js"></script>
+  <script src="scripts/window-controls.js"></script>
+  <script>
+    window.initReleaseUpdate?.();
+  </script>
+</body>
+
+</html>

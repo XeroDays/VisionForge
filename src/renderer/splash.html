@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data:;" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VisionForge</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="styles/splash.css" />
+</head>
+
+<body>
+  <div class="splash-panel">
+    <button type="button" class="splash-close-btn" id="splash-close-btn" aria-label="Close">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+
+    <div class="splash-main">
+      <img class="splash-logo" src="images/logo/VisionForge.png" alt="VisionForge" width="96" height="96" />
+      <div class="splash-loading">
+        <div class="splash-spinner" aria-hidden="true"></div>
+        <p id="splash-status-text" class="splash-status-text">Starting…</p>
+      </div>
+    </div>
+
+    <p id="splash-version-label" class="splash-version-label">—</p>
+    <button type="button" id="splash-support-website" class="splash-support-website">www.softasium.com</button>
+  </div>
+
+  <script src="scripts/splash.js"></script>
+</body>
+
+</html>

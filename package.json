@@ -1,0 +1,63 @@
+{
+  "name": "visionforge",
+  "version": "1.0.0",
+  "description": "VisionForge — an Electron desktop application.",
+  "license": "MIT",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "node scripts/start-electron.js",
+    "generate:icon": "node scripts/generate-windows-icon.js",
+    "prebuild:win": "node scripts/generate-windows-icon.js",
+    "build:win": "electron-builder --win nsis --publish never",
+    "postinstall": "node scripts/patch-electron-icon.js"
+  },
+  "build": {
+    "appId": "com.visionforge.app",
+    "productName": "VisionForge",
+    "forceCodeSigning": false,
+    "publish": null,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "build/icon.ico",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "build/icon.png", "to": "icon.png" }
+    ],
+    "win": {
+      "sign": false,
+      "signAndEditExecutable": true,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "VisionForge Release LTS.${ext}",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
+  },
+  "devDependencies": {
+    "electron": "^41.2.0",
+    "electron-builder": "^25.1.8",
+    "png-to-ico": "^2.1.8",
+    "rcedit": "^4.0.1",
+    "sharp": "^0.34.3"
+  },
+  "dependencies": {
+    "electron-log": "^5.4.4"
+  }
+}

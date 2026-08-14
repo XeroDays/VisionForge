@@ -1,0 +1,145 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #0a0e14;
+  color: #e7ecf3;
+  overflow: hidden;
+}
+
+.splash-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+  padding: 1.25rem 1.5rem 1rem;
+  background: #0a0e14;
+  border-radius: 12px;
+}
+
+.splash-close-btn {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.splash-close-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.splash-close-btn i {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.splash-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem 1rem 1.5rem;
+}
+
+.splash-logo {
+  display: block;
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+}
+
+.splash-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.splash-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  border-top-color: #f4b42a;
+  border-radius: 50%;
+  animation: splash-spin 0.85s linear infinite;
+}
+
+.splash-spinner.is-hidden {
+  display: none;
+}
+
+@keyframes splash-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.splash-status-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.splash-status-text--denied {
+  font-weight: 700;
+  color: #ef4444;
+}
+
+.splash-support-website {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #f4b42a;
+  text-align: right;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.splash-support-website:hover {
+  color: #f7d06a;
+}
+
+.splash-support-website:focus-visible {
+  outline: 2px solid #f4b42a;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.splash-version-label {
+  position: absolute;
+  left: 1.5rem;
+  bottom: 1rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: left;
+}
