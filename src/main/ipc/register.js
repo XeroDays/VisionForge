@@ -91,6 +91,26 @@ function registerIpcHandlers() {
     log.info("CREATE_PROJECT", { name, location });
     return projectService.createProject(name, location);
   });
+
+  ipcMain.handle(channels.SELECT_IMAGES_FOLDER, async (event, defaultPath) => {
+    log.debug("SELECT_IMAGES_FOLDER");
+    return projectService.selectImagesFolder(event.sender, defaultPath);
+  });
+
+  ipcMain.handle(channels.LIST_IMAGE_FOLDER, async (_event, folderPath) => {
+    log.debug("LIST_IMAGE_FOLDER", { folderPath });
+    return projectService.listImageFolder(folderPath);
+  });
+
+  ipcMain.handle(channels.LOAD_PROJECT, async (_event, filePath) => {
+    log.info("LOAD_PROJECT", { filePath });
+    return projectService.loadProject(filePath);
+  });
+
+  ipcMain.handle(channels.UPDATE_PROJECT, async (_event, filePath, patch) => {
+    log.info("UPDATE_PROJECT", { filePath });
+    return projectService.updateProject(filePath, patch);
+  });
 }
 
 module.exports = { registerIpcHandlers };

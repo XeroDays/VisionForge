@@ -22,4 +22,8 @@ module.exports = {
   SELECT_PROJECT_FILE: "visionforge:select-project-file",
   GET_SOLUTION_HISTORY: "visionforge:get-solution-history",
   CREATE_PROJECT: "visionforge:create-project",
+  SELECT_IMAGES_FOLDER: "visionforge:select-images-folder",
+  LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
+  LOAD_PROJECT: "visionforge:load-project",
+  UPDATE_PROJECT: "visionforge:update-project",
 };

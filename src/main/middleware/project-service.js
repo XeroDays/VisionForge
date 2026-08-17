@@ -8,6 +8,7 @@ const log = createLogger("project");
 
 const VFSLN_EXT = ".VFSln";
 const ILLEGAL_NAME_CHARS = /[<>:"/\\|?*\u0000-\u001f]/g;
+const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff"]);
 
 function getDefaultProjectsDir() {
   return path.join(app.getPath("documents"), "VisionForge");
@@ -104,6 +105,7 @@ function createProject(name, location) {
     format: "VFSln",
     version: 1,
     name: projectName,
+    imagesFolder: "",
   };
 
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
@@ -113,10 +115,136 @@ function createProject(name, location) {
   return { ok: true, filePath, name: projectName };
 }
 
+function readSolution(filePath) {
+  const resolved = String(filePath || "").trim();
+  if (!resolved) {
+    return { ok: false, reason: "missing-file" };
+  }
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+    return { ok: false, reason: "missing-file" };
+  }
+
+  let project;
+  try {
+    project = JSON.parse(fs.readFileSync(resolved, "utf8"));
+  } catch (err) {
+    log.warn("VFSln parse failed", { filePath: resolved, error: String(err.message || err) });
+    return { ok: false, reason: "invalid-file" };
+  }
+
+  if (!project || typeof project !== "object" || project.format !== "VFSln") {
+    return { ok: false, reason: "invalid-format" };
+  }
+
+  const name = String(project.name || "").trim() || path.basename(resolved, path.extname(resolved));
+  return { ok: true, filePath: resolved, name, project };
+}
+
+function loadProject(filePath) {
+  const startedAt = log.enter("loadProject");
+  const result = readSolution(filePath);
+  if (!result.ok) {
+    log.exit("loadProject", startedAt, { ok: false, reason: result.reason });
+    return result;
+  }
+  recordSolution({ name: result.name, filePath: result.filePath });
+  log.info("loaded VFSln", { filePath: result.filePath });
+  log.exit("loadProject", startedAt, { ok: true });
+  return result;
+}
+
+function updateProject(filePath, patch) {
+  const startedAt = log.enter("updateProject");
+  const result = readSolution(filePath);
+  if (!result.ok) {
+    log.exit("updateProject", startedAt, { ok: false, reason: result.reason });
+    return result;
+  }
+
+  const nextPatch = patch && typeof patch === "object" ? patch : {};
+  const project = {
+    ...result.project,
+    ...nextPatch,
+    format: "VFSln",
+  };
+  if (!project.name) project.name = result.name;
+  if (project.version == null) project.version = 1;
+
+  fs.writeFileSync(result.filePath, `${JSON.stringify(project, null, 2)}\n`, "utf8");
+  log.info("updated VFSln", { filePath: result.filePath });
+  log.exit("updateProject", startedAt, { ok: true });
+  return { ok: true, filePath: result.filePath, name: project.name, project };
+}
+
+function resolveDialogDefault(defaultPath) {
+  const raw = String(defaultPath || "").trim();
+  if (!raw) return ensureDefaultProjectsDir();
+  try {
+    if (fs.existsSync(raw) && fs.statSync(raw).isFile()) {
+      return path.dirname(raw);
+    }
+  } catch {
+    return raw;
+  }
+  return raw;
+}
+
+async function selectImagesFolder(sender, defaultPath) {
+  const startedAt = log.enter("selectImagesFolder");
+  const win = BrowserWindow.fromWebContents(sender);
+  const fallback = resolveDialogDefault(defaultPath);
+
+  const result = await dialog.showOpenDialog(win || undefined, {
+    title: "Select Image Folder",
+    defaultPath: fallback,
+    properties: ["openDirectory"],
+  });
+
+  if (result.canceled || !result.filePaths?.[0]) {
+    log.exit("selectImagesFolder", startedAt, { canceled: true });
+    return { ok: true, canceled: true };
+  }
+
+  const folderPath = result.filePaths[0];
+  log.exit("selectImagesFolder", startedAt, { folderPath });
+  return { ok: true, canceled: false, folderPath };
+}
+
+function listImageFolder(folderPath) {
+  const startedAt = log.enter("listImageFolder");
+  const dir = String(folderPath || "").trim();
+  if (!dir) {
+    log.exit("listImageFolder", startedAt, { ok: false, reason: "missing-folder" });
+    return { ok: false, reason: "missing-folder" };
+  }
+
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+    log.exit("listImageFolder", startedAt, { ok: false, reason: "invalid-folder" });
+    return { ok: false, reason: "invalid-folder" };
+  }
+
+  const files = fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => ({
+      name: entry.name,
+      filePath: path.join(dir, entry.name),
+    }))
+    .filter((file) => IMAGE_EXTENSIONS.has(path.extname(file.name).toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+
+  log.exit("listImageFolder", startedAt, { folderPath: dir, count: files.length });
+  return { ok: true, folderPath: dir, files };
+}
+
 module.exports = {
   getDefaultProjectsDir,
   ensureDefaultProjectsDir,
   selectProjectFolder,
   selectProjectFile,
   createProject,
+  loadProject,
+  updateProject,
+  selectImagesFolder,
+  listImageFolder,
 };

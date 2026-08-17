@@ -23,11 +23,16 @@
       <div class="app-chrome-header__topbar app-topbar" id="app-topbar">
         <div class="app-topbar__left">
           <nav class="app-menubar" aria-label="Application">
-            <button type="button" class="app-menubar__item">File</button>
+            <div class="app-menubar__menu" id="file-menu">
+              <button type="button" class="app-menubar__item" id="btn-file-menu" aria-haspopup="true" aria-expanded="false" aria-controls="file-menu-dropdown">File</button>
+              <div class="app-menubar__dropdown" id="file-menu-dropdown" hidden role="menu">
+                <button type="button" class="app-menubar__dropdown-item" id="btn-select-image-folder" role="menuitem" disabled>Select Image Folder</button>
+              </div>
+            </div>
             <button type="button" class="app-menubar__item">Edit</button>
             <button type="button" class="app-menubar__item">Help</button>
           </nav>
-          <span class="app-breadcrumb__current">Welcome</span>
+          <span class="app-breadcrumb__current" id="app-breadcrumb">Welcome</span>
         </div>
         <div class="app-topbar__right">
           <button type="button" id="btn-new-release" class="btn-new-release" hidden aria-label="New Release Available" title="New Release Available">
@@ -67,6 +72,10 @@
             <polygon points="12,2 21,7.5 21,16.5 12,22 3,16.5 3,7.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
           </svg>
         </button>
+        <div class="tools-rail__divider" id="tools-rail-divider" hidden aria-hidden="true"></div>
+        <button type="button" class="tool-btn tool-btn--command" id="tool-select-images" data-tool="select-images" aria-label="Select Images" title="Select Images" hidden>
+          <i class="fa-solid fa-images" aria-hidden="true"></i>
+        </button>
       </aside>
 
       <section class="screen-section screen-section--main">
@@ -93,7 +102,39 @@
             <ul class="start-recent__list" id="start-recent-list"></ul>
           </div>
         </div>
-        <div class="workspace-canvas" id="workspace-canvas" hidden></div>
+        <div class="workspace-canvas" id="workspace-canvas" hidden>
+          <div class="workspace-stage" id="workspace-stage"></div>
+          <footer class="playback-bar" id="playback-bar">
+            <div class="playback-bar__controls">
+              <button type="button" class="playback-btn" id="playback-skip-start" aria-label="Skip to beginning" title="Skip to beginning">
+                <i class="fa-solid fa-backward-step" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="playback-btn" id="playback-rewind" aria-label="Fast rewind" title="Fast rewind">
+                <i class="fa-solid fa-backward-fast" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="playback-btn" id="playback-step-back" aria-label="Step back" title="Step back">
+                <i class="fa-solid fa-caret-left" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="playback-btn" id="playback-play" aria-label="Play" title="Play" aria-pressed="false">
+                <i class="fa-solid fa-play" id="playback-play-icon" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="playback-btn" id="playback-step-forward" aria-label="Step forward" title="Step forward">
+                <i class="fa-solid fa-caret-right" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="playback-btn" id="playback-forward" aria-label="Fast forward" title="Fast forward">
+                <i class="fa-solid fa-forward-fast" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="playback-btn" id="playback-skip-end" aria-label="Skip to end" title="Skip to end">
+                <i class="fa-solid fa-forward-step" aria-hidden="true"></i>
+              </button>
+            </div>
+            <input type="range" class="playback-slider" id="playback-slider" min="0" max="0" value="0" step="1" aria-label="Seek" />
+            <label class="playback-frame" for="playback-frame">
+              <span class="playback-frame__label">Frame:</span>
+              <input type="number" class="playback-frame__input" id="playback-frame" min="0" max="0" value="0" step="1" />
+            </label>
+          </footer>
+        </div>
       </section>
 
       <div class="inspector-resize-handle" id="inspector-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize inspector" tabindex="0"></div>
@@ -102,10 +143,15 @@
         <div class="inspector-tabs" role="tablist" aria-label="Inspector tabs">
           <button type="button" class="inspector-tab is-selected" id="tab-labels" role="tab" aria-selected="true" aria-controls="panel-labels" data-tab="labels">Labels</button>
           <button type="button" class="inspector-tab" id="tab-detections" role="tab" aria-selected="false" aria-controls="panel-detections" data-tab="detections">Detections</button>
+          <button type="button" class="inspector-tab" id="tab-assets" role="tab" aria-selected="false" aria-controls="panel-assets" data-tab="assets">Assets</button>
         </div>
         <div class="inspector-body">
           <div class="inspector-pane" id="panel-labels" role="tabpanel" aria-labelledby="tab-labels"></div>
           <div class="inspector-pane" id="panel-detections" role="tabpanel" aria-labelledby="tab-detections" hidden></div>
+          <div class="inspector-pane" id="panel-assets" role="tabpanel" aria-labelledby="tab-assets" hidden>
+            <p class="assets-empty" id="assets-empty">No images selected</p>
+            <ul class="assets-list" id="assets-list" hidden></ul>
+          </div>
         </div>
       </aside>
     </div>
@@ -166,6 +212,7 @@
 
   <script src="scripts/renderer-logger.js"></script>
   <script src="scripts/workspace-panels.js"></script>
+  <script src="scripts/workspace-canvas.js"></script>
   <script src="scripts/start-page.js"></script>
   <script src="scripts/create-project-dialog.js"></script>
   <script src="scripts/release-update-panel.js"></script>

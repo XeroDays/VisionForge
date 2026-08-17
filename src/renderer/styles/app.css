@@ -92,6 +92,52 @@ body {
   -webkit-app-region: no-drag;
 }
 
+.app-menubar__menu {
+  position: relative;
+}
+
+.app-menubar__dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: 196px;
+  padding: 0.25rem;
+  background: #1a1a1c;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  -webkit-app-region: no-drag;
+}
+
+.app-menubar__dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.65rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #e7ecf3;
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-menubar__dropdown-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.app-menubar__dropdown-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.app-menubar__item.is-open {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
 .app-menubar__item {
   padding: 0.2rem 0.5rem;
   border: none;
@@ -202,6 +248,13 @@ body {
   height: 16px;
 }
 
+.tools-rail__divider {
+  width: 24px;
+  height: 1px;
+  margin: 0.25rem 0;
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .screen-section--main {
   flex: 1 1 auto;
   min-width: 0;
@@ -243,8 +296,9 @@ body {
 
 .inspector-tab {
   flex: 1 1 0;
+  min-width: 0;
   height: 36px;
-  padding: 0 0.75rem;
+  padding: 0 0.5rem;
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -252,6 +306,9 @@ body {
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 
@@ -268,10 +325,51 @@ body {
 .inspector-body {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 .inspector-pane {
   height: 100%;
+  overflow: auto;
+}
+
+.assets-empty {
+  margin: 0;
+  padding: 0.875rem 0.75rem;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.assets-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+}
+
+.assets-list__item {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.assets-list__item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.assets-list__item.is-current {
+  background: rgba(244, 180, 42, 0.16);
+  color: #f4b42a;
 }
 
 .start-page {
@@ -407,6 +505,95 @@ body {
 .workspace-canvas {
   flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #121214;
+}
+
+.playback-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  height: 42px;
+  padding: 0 0.75rem;
+  background: #1a1a1c;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.playback-bar__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  flex-shrink: 0;
+}
+
+.playback-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.playback-btn:hover {
+  color: #f4b42a;
+  background: rgba(244, 180, 42, 0.12);
+}
+
+.playback-btn.is-active {
+  color: #f4b42a;
+}
+
+.playback-slider {
+  flex: 1 1 auto;
+  min-width: 80px;
+  height: 4px;
+  margin: 0;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.playback-frame {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.playback-frame__label {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.playback-frame__input {
+  width: 3.5rem;
+  height: 24px;
+  padding: 0 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: #0d0d0d;
+  color: #e7ecf3;
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.playback-frame__input:focus {
+  outline: none;
+  border-color: #3b82f6;
 }
 
 .btn-new-release {

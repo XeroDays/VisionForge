@@ -118,6 +118,7 @@
       log.exit("submitCreate", startedAt, { ok: true });
       closeDialog();
       window.refreshSolutionHistory?.();
+      window.showWorkspace?.({ filePath: result.filePath, name: result.name });
     } catch (err) {
       setError("Could not create the project.");
       log.error("submitCreate failed", { error: String(err?.message || err) });

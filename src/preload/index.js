@@ -21,6 +21,10 @@ const CH = {
   SELECT_PROJECT_FILE: "visionforge:select-project-file",
   GET_SOLUTION_HISTORY: "visionforge:get-solution-history",
   CREATE_PROJECT: "visionforge:create-project",
+  SELECT_IMAGES_FOLDER: "visionforge:select-images-folder",
+  LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
+  LOAD_PROJECT: "visionforge:load-project",
+  UPDATE_PROJECT: "visionforge:update-project",
   SPLASH_LOG: "visionforge:splash-log",
 };
 
@@ -43,6 +47,10 @@ contextBridge.exposeInMainWorld("visionforge", {
   openProjectFile: () => ipcRenderer.invoke(CH.SELECT_PROJECT_FILE),
   getSolutionHistory: () => ipcRenderer.invoke(CH.GET_SOLUTION_HISTORY),
   createProject: (name, location) => ipcRenderer.invoke(CH.CREATE_PROJECT, name, location),
+  selectImagesFolder: (defaultPath) => ipcRenderer.invoke(CH.SELECT_IMAGES_FOLDER, defaultPath),
+  listImageFolder: (folderPath) => ipcRenderer.invoke(CH.LIST_IMAGE_FOLDER, folderPath),
+  loadProject: (filePath) => ipcRenderer.invoke(CH.LOAD_PROJECT, filePath),
+  updateProject: (filePath, patch) => ipcRenderer.invoke(CH.UPDATE_PROJECT, filePath, patch),
   log(level, namespace, message, meta) {
     ipcRenderer.send(CH.SPLASH_LOG, { level, namespace, message, meta });
   },

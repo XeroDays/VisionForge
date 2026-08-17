@@ -79,6 +79,7 @@
       }
       log.info("project file selected", { filePath: result.filePath });
       await refreshSolutionHistory();
+      window.showWorkspace?.({ filePath: result.filePath, name: result.name });
       log.exit("openExistingProject", startedAt, { filePath: result.filePath });
     } catch (err) {
       log.error("openExistingProject failed", { error: String(err?.message || err) });
@@ -103,6 +104,13 @@
 
     if (action === "open") {
       void openExistingProject();
+    }
+
+    if (action === "recent") {
+      const filePath = actionEl.dataset.filePath;
+      if (filePath) {
+        window.showWorkspace?.({ filePath, name: actionEl.dataset.projectName });
+      }
     }
   });
 

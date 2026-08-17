@@ -151,7 +151,7 @@ Minimize button → hide to tray → tray Show/click → `showFromTray` + maximi
 
 ### Workspace Panels
 
-**Purpose:** Main-window chrome: left tools rail and resizable right inspector. Visual shell only — no tool actions or tab content yet.
+**Purpose:** Main-window chrome: left tools rail and resizable right inspector.
 
 **Primary Files:**
 - `src/renderer/index.html` — `#tools-rail`, `#inspector-panel`
@@ -159,7 +159,21 @@ Minimize button → hide to tray → tray Show/click → `showFromTray` + maximi
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Tool click → selected highlight only. Inspector tabs switch empty Labels/Detections panes. Drag handle resizes inspector width (in-memory, 220px–50% of workspace).
+Tool click → selected highlight only (Cursor/Rotate/Box/Hexagon). **Select Images** (`#tool-select-images`, shown after a project is open) opens the image-folder picker and does not change the selected drawing tool. Inspector tabs switch Labels, Detections, and Assets panes. Drag handle resizes inspector width (in-memory, 220px–50% of workspace).
+
+---
+
+### Workspace Canvas
+
+**Purpose:** Project workspace after a `.VFSln` is created or opened: empty stage, bottom playback bar, image-folder restore.
+
+**Primary Files:**
+- `src/renderer/index.html` — `#workspace-canvas`, `#playback-bar`, File menu
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/styles/app.css`
+
+**Workflow:**
+Create / Open / Recent → `showWorkspace(filePath)` → hide `#start-page` → load VFSln → restore `imagesFolder` if set → playback range = image count. File → **Select Image Folder** and the Select Images tool share the same picker. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab lists image names; click sets the current frame. Stage does not draw images yet.
 
 ---
 
@@ -173,7 +187,7 @@ Tool click → selected highlight only. Inspector tabs switch empty Labels/Detec
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. **Open existing project** opens a native file picker filtered to `.VFSln`. Recent list is loaded from `history-solutions.vfson`.
+No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. **Open existing project** opens a native file picker filtered to `.VFSln`, then shows the workspace. Recent row click loads that `.VFSln` and shows the workspace.
 
 ---
 
@@ -187,7 +201,7 @@ No project selected → `#start-page` visible. **Create new project** opens `#cr
 - `src/renderer/index.html` — `#create-project-overlay`
 
 **Workflow:**
-Create new project → modal (name + location) → location click/`...` → `selectProjectFolder` native directory dialog → Next → `createProject` writes `{ProjectName}.VFSln` → record history → close modal. Does not open the workspace canvas yet.
+Create new project → modal (name + location) → location click/`...` → `selectProjectFolder` native directory dialog → Next → `createProject` writes `{ProjectName}.VFSln` → record history → close modal → show workspace.
 
 ---
 
@@ -200,7 +214,7 @@ Create new project → modal (name + location) → location click/`...` → `sel
 - `src/main/middleware/project-service.js` — `selectProjectFile()`
 
 **Workflow:**
-Open existing project → `openProjectFile()` → native dialog filtered to `.VFSln` → record in `history-solutions.vfson` → refresh start-page list. Does not open the workspace canvas yet.
+Open existing project → `openProjectFile()` → native dialog filtered to `.VFSln` → record in `history-solutions.vfson` → `loadProject` → show workspace (restore `imagesFolder` if present).
 
 ---
 
@@ -210,10 +224,11 @@ Open existing project → `openProjectFile()` → native dialog filtered to `.VF
 
 **Location:** `{selected-folder}/{ProjectName}.VFSln`
 
-**Current schema (stub):**
+**Current schema:**
 - `format` — always `"VFSln"`
 - `version` — schema version (`1`)
 - `name` — project display name
+- `imagesFolder` — absolute path to the selected image directory (empty string until chosen)
 
 **Rule:** Do not store project config elsewhere (no parallel JSON/DB for project settings). When a new project setting is introduced, add it to the `.VFSln` schema and document the field in this section.
 
@@ -400,11 +415,39 @@ Rules:
 **Purpose:** Main-process business logic (singleton modules). IPC handlers stay thin.
 
 **Primary Files:**
-- `src/main/middleware/project-service.js` — create `.VFSln`, folder picker
+- `src/main/middleware/project-service.js` — create/load/update `.VFSln`, folder pickers, image listing
 
 ---
 
 ## Workflow Registry
+
+### Open Project Workspace
+
+**Trigger:** Create succeeds, Open existing project, or Recent row click
+
+**Flow:**
+Renderer `showWorkspace(filePath)` → `loadProject` reads VFSln → hide start page / show `#workspace-canvas` → if `imagesFolder` set, `listImageFolder` → playback slider max = count - 1, Assets list populated
+
+**Files:**
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/scripts/start-page.js`
+- `src/renderer/scripts/create-project-dialog.js`
+- `src/main/middleware/project-service.js`
+
+---
+
+### Select Image Folder
+
+**Trigger:** File → Select Image Folder, or Select Images tool
+
+**Flow:**
+Native directory dialog → `updateProject({ imagesFolder })` → `listImageFolder` → playback + Assets update
+
+**Files:**
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/main/middleware/project-service.js`
+
+---
 
 ### App Startup
 
@@ -513,6 +556,7 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | System tray | `src/main/helpers/tray.js` |
 | License registration | `src/main/services/license-service.js` |
 | Release update UI | `src/renderer/scripts/release-update-panel.js` |
+| Workspace canvas / playback | `src/renderer/scripts/workspace-canvas.js` |
 | Workspace panels | `src/renderer/scripts/workspace-panels.js` |
 | Start page | `src/renderer/scripts/start-page.js` |
 | Create project dialog | `src/renderer/scripts/create-project-dialog.js` |
@@ -657,6 +701,9 @@ Renderer
 **Changing impacts:**
 - All main renderer scripts using `window.visionforge`
 - `src/renderer/scripts/window-controls.js`
+- `src/renderer/scripts/start-page.js`
+- `src/renderer/scripts/create-project-dialog.js`
+- `src/renderer/scripts/workspace-canvas.js`
 
 ### `src/preload/splash-preload.js`
 
@@ -688,6 +735,13 @@ Renderer
 **Changing impacts:**
 - Splash version label
 - Future about modal
+
+### `src/main/middleware/project-service.js`
+
+**Changing impacts:**
+- Create / open / load / update `.VFSln`
+- Image folder picker and listing
+- Start page and workspace canvas
 
 ### `package.json` (build block)
 
@@ -747,6 +801,10 @@ Renderer
 | `visionforge:select-project-file` | invoke | `register.js` | Native open-file dialog (`.VFSln` filter) |
 | `visionforge:get-solution-history` | invoke | `register.js` | Read `history-solutions.vfson` recents |
 | `visionforge:create-project` | invoke | `register.js` | Write `{Name}.VFSln` in chosen folder |
+| `visionforge:select-images-folder` | invoke | `register.js` | Native open-directory dialog for images |
+| `visionforge:list-image-folder` | invoke | `register.js` | List image files in a folder (non-recursive) |
+| `visionforge:load-project` | invoke | `register.js` | Read `.VFSln` JSON and record history |
+| `visionforge:update-project` | invoke | `register.js` | Merge keys into `.VFSln` and write |
 
 ---
 
@@ -783,8 +841,10 @@ Renderer
 - **Splash/bootstrap** follows CryptoGenesis-style flow (license gate, 1s transition delay, tray on success)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
-- **Create project** writes a stub `{Name}.VFSln` (JSON: format, version, name). All future project config belongs in that file.
-- **Open existing project** opens a native file picker filtered to `.VFSln`; workspace load is not implemented yet.
+- **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder). All project config belongs in that file.
+- **Open existing project** / **Recent** loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab).
+- **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open.
+- **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Images are not drawn on the stage yet.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

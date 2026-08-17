@@ -22,6 +22,7 @@
   const panes = {
     labels: document.getElementById("panel-labels"),
     detections: document.getElementById("panel-detections"),
+    assets: document.getElementById("panel-assets"),
   };
 
   log.debug("workspace-panels.js init");
@@ -94,6 +95,10 @@
   toolsRail?.addEventListener("click", (event) => {
     const btn = event.target.closest(".tool-btn");
     if (!btn || !toolsRail.contains(btn)) return;
+    if (btn.dataset.tool === "select-images") {
+      window.selectImagesFolder?.();
+      return;
+    }
     selectTool(btn.dataset.tool);
   });
 
