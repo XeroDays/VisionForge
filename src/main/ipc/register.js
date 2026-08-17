@@ -1,6 +1,7 @@
 const { BrowserWindow, ipcMain } = require("electron");
 const channels = require("../../shared/ipc/channels");
 const licenseService = require("../services/license-service");
+const projectService = require("../middleware/project-service");
 const { hideToTray } = require("../helpers/tray");
 const { ipc: log } = require("../services/visionforge-logger");
 
@@ -68,6 +69,16 @@ function registerIpcHandlers() {
   ipcMain.handle(channels.CHECK_UPDATE_FILE, async (_event, filename) => {
     log.debug("CHECK_UPDATE_FILE", { filename });
     return licenseService.checkUpdateFile(filename);
+  });
+
+  ipcMain.handle(channels.SELECT_PROJECT_FOLDER, async (event) => {
+    log.debug("SELECT_PROJECT_FOLDER");
+    return projectService.selectProjectFolder(event.sender);
+  });
+
+  ipcMain.handle(channels.CREATE_PROJECT, async (_event, name, location) => {
+    log.info("CREATE_PROJECT", { name, location });
+    return projectService.createProject(name, location);
   });
 }
 

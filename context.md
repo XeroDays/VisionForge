@@ -54,7 +54,7 @@
 | **External services** | Font Awesome CDN (main UI icons only) |
 | **Deployment** | Windows NSIS installer via `electron-builder`; GitHub Actions manual release |
 | **App ID** | `com.visionforge.app` |
-| **Storage (planned)** | `Documents/VisionForge/` — not implemented yet |
+| **Storage (planned)** | Project config in `{folder}/{Name}.VFSln`; logs at `Documents/VisionForge/Logs/` |
 | **Entry point** | `src/main/index.js` |
 | **Preload global** | `window.visionforge` |
 | **IPC namespace** | `visionforge:*` |
@@ -173,7 +173,36 @@ Tool click → selected highlight only. Inspector tabs switch empty Labels/Detec
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-No project selected → `#start-page` visible. Card/row clicks log only (`start-page` namespace). `#workspace-canvas` is hidden until project open is implemented.
+No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. Open/recent remain stubs.
+
+---
+
+### Create Project Dialog
+
+**Purpose:** Configure and create a new VisionForge solution file (`.VFSln`) in a user-chosen folder.
+
+**Primary Files:**
+- `src/renderer/scripts/create-project-dialog.js`
+- `src/main/middleware/project-service.js`
+- `src/renderer/index.html` — `#create-project-overlay`
+
+**Workflow:**
+Create new project → modal (name + location) → location click/`...` → `selectProjectFolder` native directory dialog → Next → `createProject` writes `{ProjectName}.VFSln` → close modal. Does not open the workspace canvas yet.
+
+---
+
+### Project solution file (`.VFSln`)
+
+**Purpose:** Single source of truth for all project configuration. Every project setting belongs in this file (schema grows as features are added).
+
+**Location:** `{selected-folder}/{ProjectName}.VFSln`
+
+**Current schema (stub):**
+- `format` — always `"VFSln"`
+- `version` — schema version (`1`)
+- `name` — project display name
+
+**Rule:** Do not store project config elsewhere (no parallel JSON/DB for project settings). When a new project setting is introduced, add it to the `.VFSln` schema and document the field in this section.
 
 ---
 
@@ -337,16 +366,12 @@ Rules:
 
 ---
 
-### Middleware Layer (Placeholder)
+### Middleware Layer
 
-**Purpose:** Reserved for future business logic. Currently empty.
-
-**Entry Points:** None active
+**Purpose:** Main-process business logic (singleton modules). IPC handlers stay thin.
 
 **Primary Files:**
-- `src/main/middleware/.gitkeep`
-
-**Workflow:** Not implemented — IPC handlers will delegate here when features are added.
+- `src/main/middleware/project-service.js` — create `.VFSln`, folder picker
 
 ---
 
@@ -460,6 +485,8 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | Release update UI | `src/renderer/scripts/release-update-panel.js` |
 | Workspace panels | `src/renderer/scripts/workspace-panels.js` |
 | Start page | `src/renderer/scripts/start-page.js` |
+| Create project dialog | `src/renderer/scripts/create-project-dialog.js` |
+| Project solution service | `src/main/middleware/project-service.js` |
 | Main UI shell | `src/renderer/index.html` |
 | Splash UI | `src/renderer/splash.html` |
 | Window controls UI logic | `src/renderer/scripts/window-controls.js` |
@@ -472,7 +499,7 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | Build config | `package.json` (`build` block) |
 | CI release | `.github/workflows/build-windows.yml` |
 | Debug config | `.vscode/launch.json` |
-| Future business logic | `src/main/middleware/` (empty) |
+| Future business logic | `src/main/middleware/` (project-service.js exists) |
 | Future enums/DTOs | `src/shared/enums/` (empty) |
 | Future about screen | `src/renderer/screens/about/` (empty) |
 | Test placeholders | `tests/main/`, `tests/unit/` |
@@ -686,6 +713,8 @@ Renderer
 | `visionforge:window-maximize` | invoke | `register.js` | Toggle maximize |
 | `visionforge:window-close` | invoke | `register.js` | Close window |
 | `visionforge:window-is-maximized` | invoke | `register.js` | Query maximize state |
+| `visionforge:select-project-folder` | invoke | `register.js` | Native open-directory dialog |
+| `visionforge:create-project` | invoke | `register.js` | Write `{Name}.VFSln` in chosen folder |
 
 ---
 
@@ -722,8 +751,7 @@ Renderer
 - **Splash/bootstrap** follows CryptoGenesis-style flow (license gate, 1s transition delay, tray on success)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
-- **No domain features** — start page, tools, and inspector tabs are chrome only; Create/Open/recent are dummy
-- **No middleware implementations** — `src/main/middleware/` is empty
-- **No persistence** — no file storage, database, or DTOs
+- **Create project** writes a stub `{Name}.VFSln` (JSON: format, version, name). All future project config belongs in that file.
+- **Open existing / recent** remain dummy
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

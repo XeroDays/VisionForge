@@ -18,4 +18,6 @@ module.exports = {
   LICENSE_DOWNLOAD_PROGRESS: "visionforge:license-download-progress",
   INSTALL_UPDATE: "visionforge:install-update",
   CHECK_UPDATE_FILE: "visionforge:check-update-file",
+  SELECT_PROJECT_FOLDER: "visionforge:select-project-folder",
+  CREATE_PROJECT: "visionforge:create-project",
 };

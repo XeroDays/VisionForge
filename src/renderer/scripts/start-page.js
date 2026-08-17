@@ -25,5 +25,9 @@
       action,
       projectName: actionEl.dataset.projectName || null,
     });
+
+    if (action === "create") {
+      window.openCreateProjectDialog?.();
+    }
   });
 })();
