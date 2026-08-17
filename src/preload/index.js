@@ -25,6 +25,7 @@ const CH = {
   LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
   LOAD_PROJECT: "visionforge:load-project",
   UPDATE_PROJECT: "visionforge:update-project",
+  ROTATE_IMAGE: "visionforge:rotate-image",
   SPLASH_LOG: "visionforge:splash-log",
 };
 
@@ -51,6 +52,7 @@ contextBridge.exposeInMainWorld("visionforge", {
   listImageFolder: (folderPath) => ipcRenderer.invoke(CH.LIST_IMAGE_FOLDER, folderPath),
   loadProject: (filePath) => ipcRenderer.invoke(CH.LOAD_PROJECT, filePath),
   updateProject: (filePath, patch) => ipcRenderer.invoke(CH.UPDATE_PROJECT, filePath, patch),
+  rotateImage: (filePath) => ipcRenderer.invoke(CH.ROTATE_IMAGE, filePath),
   log(level, namespace, message, meta) {
     ipcRenderer.send(CH.SPLASH_LOG, { level, namespace, message, meta });
   },

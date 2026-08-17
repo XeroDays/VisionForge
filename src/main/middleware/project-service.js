@@ -3,6 +3,7 @@ const path = require("path");
 const { app, dialog, BrowserWindow } = require("electron");
 const { createLogger } = require("../services/visionforge-logger");
 const { recordSolution } = require("../services/history-solutions-store");
+const { setAllowedImagesDir } = require("../services/image-protocol");
 
 const log = createLogger("project");
 
@@ -233,6 +234,7 @@ function listImageFolder(folderPath) {
     .filter((file) => IMAGE_EXTENSIONS.has(path.extname(file.name).toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
 
+  setAllowedImagesDir(dir);
   log.exit("listImageFolder", startedAt, { folderPath: dir, count: files.length });
   return { ok: true, folderPath: dir, files };
 }

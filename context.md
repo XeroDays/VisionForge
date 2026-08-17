@@ -83,6 +83,7 @@
 | Tray | Created after successful bootstrap via `helpers/tray.js` |
 | Logo asset | `src/renderer/images/logo/VisionForge.png` (dev + splash); packaged `icon.png` via `helpers/app-icon.js` |
 | Logging | Main + renderer via `visionforge-logger.js` / `renderer-logger.js` (`electron-log`); file at `Documents/VisionForge/Logs/logfile.txt`; level via `VISIONFORGE_LOG_LEVEL` env |
+| Image protocol | Privileged `vfimg:` scheme registered before `app.whenReady`; only paths under the current images folder |
 | File naming | kebab-case for all source files |
 | electron-builder config | Lives in `package.json` `build` block — no separate YAML |
 | Git operations | Agents must never run `git add`, `git commit`, `git push`, tags, or releases — file edits only |
@@ -159,7 +160,7 @@ Minimize button → hide to tray → tray Show/click → `showFromTray` + maximi
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Tool click → selected highlight only (Cursor/Rotate/Box/Hexagon). **Select Images** (`#tool-select-images`, shown after a project is open) opens the image-folder picker and does not change the selected drawing tool. Inspector tabs switch Labels, Detections, and Assets panes. Drag handle resizes inspector width (in-memory, 220px–50% of workspace).
+Tool click → selected highlight for Cursor, Move, Box, Hexagon. Command tools (Zoom in, Zoom out, Rotate, Select Images) run immediately and do not stay selected. Inspector tabs: **Assets** (default, first), Labels, Detections. Drag handle resizes inspector width (in-memory, 220px–50% of workspace).
 
 ---
 
@@ -173,7 +174,7 @@ Tool click → selected highlight only (Cursor/Rotate/Box/Hexagon). **Select Ima
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Create / Open / Recent → `showWorkspace(filePath)` → hide `#start-page` → load VFSln → restore `imagesFolder` if set → playback range = image count. File → **Select Image Folder** and the Select Images tool share the same picker. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab lists image names; click sets the current frame. Stage does not draw images yet.
+Create / Open / Recent → `showWorkspace(filePath)` → hide `#start-page` → load VFSln → restore `imagesFolder` if set → playback range = image count → current frame previewed fit-to-screen via `vfimg:` protocol. File → **Select Image Folder** and the Select Images tool share the same picker. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names; click sets the current frame. Zoom in/out and mouse wheel scale the view; Move tool pans by drag. Rotate overwrites the current image file 90° clockwise and re-fits.
 
 ---
 
@@ -416,6 +417,8 @@ Rules:
 
 **Primary Files:**
 - `src/main/middleware/project-service.js` — create/load/update `.VFSln`, folder pickers, image listing
+- `src/main/middleware/image-service.js` — rotate current image 90° CW and overwrite the file
+- `src/main/services/image-protocol.js` — privileged `vfimg:` protocol; only serves files under the allowed images folder
 
 ---
 
@@ -426,7 +429,7 @@ Rules:
 **Trigger:** Create succeeds, Open existing project, or Recent row click
 
 **Flow:**
-Renderer `showWorkspace(filePath)` → `loadProject` reads VFSln → hide start page / show `#workspace-canvas` → if `imagesFolder` set, `listImageFolder` → playback slider max = count - 1, Assets list populated
+Renderer `showWorkspace(filePath)` → `loadProject` reads VFSln → hide start page / show `#workspace-canvas` → Assets tab selected → if `imagesFolder` set, `listImageFolder` → playback slider max = count - 1, Assets list populated, current image fit-to-screen
 
 **Files:**
 - `src/renderer/scripts/workspace-canvas.js`
@@ -441,11 +444,26 @@ Renderer `showWorkspace(filePath)` → `loadProject` reads VFSln → hide start 
 **Trigger:** File → Select Image Folder, or Select Images tool
 
 **Flow:**
-Native directory dialog → `updateProject({ imagesFolder })` → `listImageFolder` → playback + Assets update
+Native directory dialog → `updateProject({ imagesFolder })` → `listImageFolder` → playback + Assets + stage preview update
 
 **Files:**
 - `src/renderer/scripts/workspace-canvas.js`
 - `src/main/middleware/project-service.js`
+
+---
+
+### Zoom Pan Rotate
+
+**Trigger:** Zoom in/out tools, mouse wheel on stage, Move tool drag, Rotate tool
+
+**Flow:**
+Zoom multiplies view scale (clamped) around center or cursor. Move tool pointer-drag pans. Rotate → `rotateImage` (sharp 90° CW overwrite) → reload `vfimg` src with cache-bust → re-fit.
+
+**Files:**
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/scripts/workspace-panels.js`
+- `src/main/middleware/image-service.js`
+- `src/main/services/image-protocol.js`
 
 ---
 
@@ -558,6 +576,8 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | Release update UI | `src/renderer/scripts/release-update-panel.js` |
 | Workspace canvas / playback | `src/renderer/scripts/workspace-canvas.js` |
 | Workspace panels | `src/renderer/scripts/workspace-panels.js` |
+| Image protocol (`vfimg:`) | `src/main/services/image-protocol.js` |
+| Image rotate service | `src/main/middleware/image-service.js` |
 | Start page | `src/renderer/scripts/start-page.js` |
 | Create project dialog | `src/renderer/scripts/create-project-dialog.js` |
 | Project solution service | `src/main/middleware/project-service.js` |
@@ -638,14 +658,14 @@ Renderer
 | Auth | None (public CDN) |
 | Entry | `<link>` to cdnjs.cloudflare.com |
 
-### sharp + png-to-ico
+### sharp
 
 | Field | Value |
 |-------|-------|
-| Purpose | Build-time icon generation |
-| Files | `scripts/generate-windows-icon.js` |
-| Auth | N/A (dev dependency) |
-| Entry | `npm run generate:icon` |
+| Purpose | Runtime 90° image rotate (overwrite) and build-time icon generation |
+| Files | `src/main/middleware/image-service.js`, `scripts/generate-windows-icon.js` |
+| Auth | N/A (npm dependency) |
+| Entry | `require("sharp")`; packaged via `asarUnpack` for `sharp` / `@img` |
 
 ### rcedit
 
@@ -715,6 +735,7 @@ Renderer
 **Changing impacts:**
 - App startup timing
 - Splash → main transition
+- `vfimg:` protocol registration
 - All bootstrap-dependent behavior
 
 ### `src/main/ipc/register.js`
@@ -750,6 +771,7 @@ Renderer
 - App ID, product name
 - Packaged file inclusion
 - `extraResources` copies `build/icon.png` → `icon.png` for packaged tray/taskbar icon resolution
+- `asarUnpack` for `sharp` / `@img` native binaries
 
 ### `scripts/generate-windows-icon.js` / logo asset
 
@@ -805,6 +827,7 @@ Renderer
 | `visionforge:list-image-folder` | invoke | `register.js` | List image files in a folder (non-recursive) |
 | `visionforge:load-project` | invoke | `register.js` | Read `.VFSln` JSON and record history |
 | `visionforge:update-project` | invoke | `register.js` | Merge keys into `.VFSln` and write |
+| `visionforge:rotate-image` | invoke | `register.js` | Rotate image 90° CW and overwrite file |
 
 ---
 
@@ -844,7 +867,9 @@ Renderer
 - **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder). All project config belongs in that file.
 - **Open existing project** / **Recent** loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab).
 - **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open.
-- **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Images are not drawn on the stage yet.
+- **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Current frame is previewed fit-to-screen via `vfimg:`.
+- **Assets** is the first/default inspector tab.
+- **Zoom / Move / Rotate:** zoom in/out + wheel, Move pans, Rotate overwrites the current file 90° clockwise (`sharp` runtime dependency).
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

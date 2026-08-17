@@ -13,9 +13,15 @@
 
   const PLAY_INTERVAL_MS = 100;
   const SKIP_STEP = 10;
+  const ZOOM_IN = 1.25;
+  const ZOOM_OUT = 0.8;
+  const MIN_ZOOM = 0.25;
+  const MAX_ZOOM = 16;
 
   const startPage = document.getElementById("start-page");
   const canvas = document.getElementById("workspace-canvas");
+  const stage = document.getElementById("workspace-stage");
+  const imageEl = document.getElementById("workspace-image");
   const breadcrumb = document.getElementById("app-breadcrumb");
   const selectImagesBtn = document.getElementById("tool-select-images");
   const toolsDivider = document.getElementById("tools-rail-divider");
@@ -45,12 +51,67 @@
     frameIndex: 0,
     playing: false,
     playTimer: null,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    previewToken: 0,
+    currentTool: "cursor",
+    rotating: false,
   };
+
+  let fitScale = 1;
+  let panning = false;
+  let panLastX = 0;
+  let panLastY = 0;
 
   log.debug("workspace-canvas.js init");
 
   function lastFrameIndex() {
     return Math.max(0, state.files.length - 1);
+  }
+
+  function currentFile() {
+    return state.files[state.frameIndex] || null;
+  }
+
+  function currentScale() {
+    return fitScale * state.zoom;
+  }
+
+  function applyView() {
+    if (!imageEl) return;
+    const scale = currentScale();
+    imageEl.style.transform = `translate(-50%, -50%) translate(${state.panX}px, ${state.panY}px) scale(${scale})`;
+  }
+
+  function computeFitScale() {
+    if (!stage || !imageEl || !imageEl.naturalWidth || !imageEl.naturalHeight) {
+      fitScale = 1;
+      return;
+    }
+    const stageW = stage.clientWidth;
+    const stageH = stage.clientHeight;
+    if (stageW <= 0 || stageH <= 0) {
+      fitScale = 1;
+      return;
+    }
+    fitScale = Math.min(stageW / imageEl.naturalWidth, stageH / imageEl.naturalHeight);
+  }
+
+  function previewSrc(filePath, token) {
+    return `vfimg://local/?p=${encodeURIComponent(filePath)}&t=${encodeURIComponent(String(token || 0))}`;
+  }
+
+  function loadPreview() {
+    if (!imageEl) return;
+    const file = currentFile();
+    if (!file) {
+      imageEl.hidden = true;
+      imageEl.removeAttribute("src");
+      return;
+    }
+    imageEl.hidden = false;
+    imageEl.src = previewSrc(file.filePath, state.previewToken);
   }
 
   function closeFileMenu() {
@@ -153,6 +214,12 @@
     state.frameIndex = next;
     syncPlaybackControls();
     highlightCurrentAsset();
+    if (!options.keepView) {
+      state.zoom = 1;
+      state.panX = 0;
+      state.panY = 0;
+    }
+    loadPreview();
     if (!options.silent) {
       log.debug("frame", { index: state.frameIndex, count: state.files.length });
     }
@@ -184,33 +251,42 @@
   function applyImageList(folderPath, files) {
     state.imagesFolder = folderPath || "";
     state.files = Array.isArray(files) ? files : [];
+    state.previewToken = 0;
     stopPlay();
     setFrame(0);
     renderAssets();
     log.info("image folder loaded", { folderPath: state.imagesFolder, count: state.files.length });
   }
 
-  async function restoreImagesFolder(folderPath) {
-    const dir = String(folderPath || "").trim();
-    if (!dir) {
-      applyImageList("", []);
-      return;
+  function zoomBy(factor, origin) {
+    if (!currentFile()) return;
+    const oldScale = currentScale();
+    const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, state.zoom * factor));
+    const newScale = fitScale * nextZoom;
+    if (origin && oldScale > 0) {
+      const ratio = newScale / oldScale;
+      state.panX = origin.x - (origin.x - state.panX) * ratio;
+      state.panY = origin.y - (origin.y - state.panY) * ratio;
     }
-    const startedAt = log.enter("restoreImagesFolder");
-    try {
-      const result = await window.visionforge?.listImageFolder?.(dir);
-      if (!result?.ok) {
-        log.warn("could not restore images folder", { folderPath: dir, reason: result?.reason });
-        applyImageList(dir, []);
-        log.exit("restoreImagesFolder", startedAt, { ok: false });
-        return;
-      }
-      applyImageList(result.folderPath, result.files);
-      log.exit("restoreImagesFolder", startedAt, { count: result.files?.length || 0 });
-    } catch (err) {
-      log.error("restoreImagesFolder failed", { error: String(err?.message || err) });
-      applyImageList(dir, []);
-      log.exit("restoreImagesFolder", startedAt, { error: true });
+    state.zoom = nextZoom;
+    applyView();
+    log.debug("zoom", { zoom: state.zoom });
+  }
+
+  function zoomIn() {
+    zoomBy(ZOOM_IN, { x: 0, y: 0 });
+  }
+
+  function zoomOut() {
+    zoomBy(ZOOM_OUT, { x: 0, y: 0 });
+  }
+
+  function setWorkspaceTool(toolId) {
+    state.currentTool = toolId || "cursor";
+    stage?.classList.toggle("is-move", state.currentTool === "move");
+    if (state.currentTool !== "move") {
+      panning = false;
+      stage?.classList.remove("is-panning");
     }
   }
 
@@ -237,12 +313,37 @@
       setWorkspaceChrome(true);
       if (breadcrumb) breadcrumb.textContent = state.name;
       closeFileMenu();
+      window.selectInspectorTab?.("assets");
       log.info("workspace opened", { filePath: state.filePath, name: state.name });
       await restoreImagesFolder(result.project?.imagesFolder || "");
       log.exit("showWorkspace", startedAt, { ok: true });
     } catch (err) {
       log.error("showWorkspace failed", { error: String(err?.message || err) });
       log.exit("showWorkspace", startedAt, { error: true });
+    }
+  }
+
+  async function restoreImagesFolder(folderPath) {
+    const dir = String(folderPath || "").trim();
+    if (!dir) {
+      applyImageList("", []);
+      return;
+    }
+    const startedAt = log.enter("restoreImagesFolder");
+    try {
+      const result = await window.visionforge?.listImageFolder?.(dir);
+      if (!result?.ok) {
+        log.warn("could not restore images folder", { folderPath: dir, reason: result?.reason });
+        applyImageList(dir, []);
+        log.exit("restoreImagesFolder", startedAt, { ok: false });
+        return;
+      }
+      applyImageList(result.folderPath, result.files);
+      log.exit("restoreImagesFolder", startedAt, { count: result.files?.length || 0 });
+    } catch (err) {
+      log.error("restoreImagesFolder failed", { error: String(err?.message || err) });
+      applyImageList(dir, []);
+      log.exit("restoreImagesFolder", startedAt, { error: true });
     }
   }
 
@@ -281,6 +382,104 @@
       log.exit("selectImagesFolder", startedAt, { error: true });
     }
   }
+
+  async function rotateCurrentImage() {
+    const file = currentFile();
+    if (!file || state.rotating) return;
+    const startedAt = log.enter("rotateCurrentImage");
+    state.rotating = true;
+    stopPlay();
+    if (imageEl) {
+      imageEl.removeAttribute("src");
+    }
+    try {
+      const result = await window.visionforge?.rotateImage?.(file.filePath);
+      if (!result?.ok) {
+        log.warn("rotate failed", { reason: result?.reason });
+        state.previewToken = Date.now();
+        loadPreview();
+        log.exit("rotateCurrentImage", startedAt, { ok: false, reason: result?.reason });
+        return;
+      }
+      state.previewToken = Date.now();
+      state.zoom = 1;
+      state.panX = 0;
+      state.panY = 0;
+      loadPreview();
+      log.info("image rotated", { filePath: file.filePath });
+      log.exit("rotateCurrentImage", startedAt, { ok: true });
+    } catch (err) {
+      log.error("rotateCurrentImage failed", { error: String(err?.message || err) });
+      state.previewToken = Date.now();
+      loadPreview();
+      log.exit("rotateCurrentImage", startedAt, { error: true });
+    } finally {
+      state.rotating = false;
+    }
+  }
+
+  imageEl?.addEventListener("load", () => {
+    computeFitScale();
+    applyView();
+  });
+
+  imageEl?.addEventListener("error", () => {
+    log.warn("preview load failed", { src: imageEl?.src || "" });
+  });
+
+  if (stage && typeof ResizeObserver === "function") {
+    new ResizeObserver(() => {
+      computeFitScale();
+      applyView();
+    }).observe(stage);
+  }
+
+  stage?.addEventListener(
+    "wheel",
+    (event) => {
+      if (!currentFile()) return;
+      event.preventDefault();
+      const rect = stage.getBoundingClientRect();
+      const origin = {
+        x: event.clientX - rect.left - rect.width / 2,
+        y: event.clientY - rect.top - rect.height / 2,
+      };
+      zoomBy(event.deltaY < 0 ? ZOOM_IN : ZOOM_OUT, origin);
+    },
+    { passive: false },
+  );
+
+  stage?.addEventListener("pointerdown", (event) => {
+    if (state.currentTool !== "move" || event.button !== 0) return;
+    if (!currentFile()) return;
+    event.preventDefault();
+    panning = true;
+    panLastX = event.clientX;
+    panLastY = event.clientY;
+    stage.classList.add("is-panning");
+    stage.setPointerCapture?.(event.pointerId);
+  });
+
+  stage?.addEventListener("pointermove", (event) => {
+    if (!panning) return;
+    state.panX += event.clientX - panLastX;
+    state.panY += event.clientY - panLastY;
+    panLastX = event.clientX;
+    panLastY = event.clientY;
+    applyView();
+  });
+
+  function endPan(event) {
+    if (!panning) return;
+    panning = false;
+    stage?.classList.remove("is-panning");
+    if (event?.pointerId != null) {
+      stage?.releasePointerCapture?.(event.pointerId);
+    }
+  }
+
+  stage?.addEventListener("pointerup", endPan);
+  stage?.addEventListener("pointercancel", endPan);
 
   skipStartBtn?.addEventListener("click", () => setFrame(0));
   rewindBtn?.addEventListener("click", () => setFrame(state.frameIndex - SKIP_STEP));
@@ -329,4 +528,10 @@
 
   window.showWorkspace = showWorkspace;
   window.selectImagesFolder = selectImagesFolder;
+  window.setWorkspaceTool = setWorkspaceTool;
+  window.zoomWorkspace = (direction) => {
+    if (direction < 0) zoomOut();
+    else zoomIn();
+  };
+  window.rotateCurrentImage = rotateCurrentImage;
 })();

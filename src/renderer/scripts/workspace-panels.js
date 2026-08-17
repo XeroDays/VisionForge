@@ -25,16 +25,20 @@
     assets: document.getElementById("panel-assets"),
   };
 
+  const COMMAND_TOOLS = new Set(["select-images", "zoom-in", "zoom-out", "rotate"]);
+
   log.debug("workspace-panels.js init");
 
   function selectTool(toolId) {
     if (!toolsRail) return;
     const buttons = toolsRail.querySelectorAll(".tool-btn");
     buttons.forEach((btn) => {
+      if (COMMAND_TOOLS.has(btn.dataset.tool)) return;
       const selected = btn.dataset.tool === toolId;
       btn.classList.toggle("is-selected", selected);
       btn.setAttribute("aria-pressed", selected ? "true" : "false");
     });
+    window.setWorkspaceTool?.(toolId);
     log.debug("tool selected", { tool: toolId });
   }
 
@@ -95,11 +99,24 @@
   toolsRail?.addEventListener("click", (event) => {
     const btn = event.target.closest(".tool-btn");
     if (!btn || !toolsRail.contains(btn)) return;
-    if (btn.dataset.tool === "select-images") {
+    const tool = btn.dataset.tool;
+    if (tool === "select-images") {
       window.selectImagesFolder?.();
       return;
     }
-    selectTool(btn.dataset.tool);
+    if (tool === "zoom-in") {
+      window.zoomWorkspace?.(1);
+      return;
+    }
+    if (tool === "zoom-out") {
+      window.zoomWorkspace?.(-1);
+      return;
+    }
+    if (tool === "rotate") {
+      window.rotateCurrentImage?.();
+      return;
+    }
+    selectTool(tool);
   });
 
   tabButtons.forEach((btn) => {
@@ -111,4 +128,6 @@
   resizeHandle?.addEventListener("pointerdown", startResize);
 
   setInspectorWidth(DEFAULT_INSPECTOR_WIDTH);
+  selectTab("assets");
+  window.selectInspectorTab = selectTab;
 })();

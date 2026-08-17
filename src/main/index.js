@@ -1,8 +1,11 @@
 const { app, Menu, BrowserWindow } = require("electron");
 const { startup: log, initFileLogging } = require("./services/visionforge-logger");
+const imageProtocol = require("./services/image-protocol");
 const { createSplashWindow } = require("./windows/splash-window");
 const { registerSplashHandlers } = require("./ipc/register-splash-handlers");
 const channels = require("../shared/ipc/channels");
+
+imageProtocol.registerPrivilegedScheme();
 
 if (process.platform === "win32" && app.isPackaged) {
   app.setAppUserModelId("com.visionforge.app");
@@ -186,6 +189,7 @@ async function bootstrap() {
 
 app.whenReady().then(() => {
   log.mark("app.whenReady");
+  imageProtocol.registerHandler();
   Menu.setApplicationMenu(null);
   bootstrap();
 

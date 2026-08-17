@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data:;" />
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: vfimg:;" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VisionForge</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -61,7 +61,16 @@
         <button type="button" class="tool-btn is-selected" id="tool-cursor" data-tool="cursor" aria-label="Mouse Cursor" title="Mouse Cursor" aria-pressed="true">
           <i class="fa-solid fa-arrow-pointer" aria-hidden="true"></i>
         </button>
-        <button type="button" class="tool-btn" id="tool-rotate" data-tool="rotate" aria-label="Rotate" title="Rotate" aria-pressed="false">
+        <button type="button" class="tool-btn" id="tool-move" data-tool="move" aria-label="Move" title="Move" aria-pressed="false">
+          <i class="fa-solid fa-hand" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="tool-btn tool-btn--command" id="tool-zoom-in" data-tool="zoom-in" aria-label="Zoom In" title="Zoom In">
+          <i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="tool-btn tool-btn--command" id="tool-zoom-out" data-tool="zoom-out" aria-label="Zoom Out" title="Zoom Out">
+          <i class="fa-solid fa-magnifying-glass-minus" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="tool-btn tool-btn--command" id="tool-rotate" data-tool="rotate" aria-label="Rotate" title="Rotate">
           <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
         </button>
         <button type="button" class="tool-btn" id="tool-box" data-tool="box" aria-label="Box" title="Box" aria-pressed="false">
@@ -103,7 +112,9 @@
           </div>
         </div>
         <div class="workspace-canvas" id="workspace-canvas" hidden>
-          <div class="workspace-stage" id="workspace-stage"></div>
+          <div class="workspace-stage" id="workspace-stage">
+            <img class="workspace-image" id="workspace-image" alt="" draggable="false" hidden />
+          </div>
           <footer class="playback-bar" id="playback-bar">
             <div class="playback-bar__controls">
               <button type="button" class="playback-btn" id="playback-skip-start" aria-label="Skip to beginning" title="Skip to beginning">
@@ -141,17 +152,17 @@
 
       <aside class="inspector-panel" id="inspector-panel" aria-label="Inspector">
         <div class="inspector-tabs" role="tablist" aria-label="Inspector tabs">
-          <button type="button" class="inspector-tab is-selected" id="tab-labels" role="tab" aria-selected="true" aria-controls="panel-labels" data-tab="labels">Labels</button>
+          <button type="button" class="inspector-tab is-selected" id="tab-assets" role="tab" aria-selected="true" aria-controls="panel-assets" data-tab="assets">Assets</button>
+          <button type="button" class="inspector-tab" id="tab-labels" role="tab" aria-selected="false" aria-controls="panel-labels" data-tab="labels">Labels</button>
           <button type="button" class="inspector-tab" id="tab-detections" role="tab" aria-selected="false" aria-controls="panel-detections" data-tab="detections">Detections</button>
-          <button type="button" class="inspector-tab" id="tab-assets" role="tab" aria-selected="false" aria-controls="panel-assets" data-tab="assets">Assets</button>
         </div>
         <div class="inspector-body">
-          <div class="inspector-pane" id="panel-labels" role="tabpanel" aria-labelledby="tab-labels"></div>
-          <div class="inspector-pane" id="panel-detections" role="tabpanel" aria-labelledby="tab-detections" hidden></div>
-          <div class="inspector-pane" id="panel-assets" role="tabpanel" aria-labelledby="tab-assets" hidden>
+          <div class="inspector-pane" id="panel-assets" role="tabpanel" aria-labelledby="tab-assets">
             <p class="assets-empty" id="assets-empty">No images selected</p>
             <ul class="assets-list" id="assets-list" hidden></ul>
           </div>
+          <div class="inspector-pane" id="panel-labels" role="tabpanel" aria-labelledby="tab-labels" hidden></div>
+          <div class="inspector-pane" id="panel-detections" role="tabpanel" aria-labelledby="tab-detections" hidden></div>
         </div>
       </aside>
     </div>

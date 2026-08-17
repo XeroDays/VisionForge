@@ -26,4 +26,5 @@ module.exports = {
   LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
   LOAD_PROJECT: "visionforge:load-project",
   UPDATE_PROJECT: "visionforge:update-project",
+  ROTATE_IMAGE: "visionforge:rotate-image",
 };

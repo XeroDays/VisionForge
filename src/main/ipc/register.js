@@ -2,6 +2,7 @@ const { BrowserWindow, ipcMain } = require("electron");
 const channels = require("../../shared/ipc/channels");
 const licenseService = require("../services/license-service");
 const projectService = require("../middleware/project-service");
+const imageService = require("../middleware/image-service");
 const historyStore = require("../services/history-solutions-store");
 const { hideToTray } = require("../helpers/tray");
 const { ipc: log } = require("../services/visionforge-logger");
@@ -110,6 +111,11 @@ function registerIpcHandlers() {
   ipcMain.handle(channels.UPDATE_PROJECT, async (_event, filePath, patch) => {
     log.info("UPDATE_PROJECT", { filePath });
     return projectService.updateProject(filePath, patch);
+  });
+
+  ipcMain.handle(channels.ROTATE_IMAGE, async (_event, filePath) => {
+    log.info("ROTATE_IMAGE", { filePath });
+    return imageService.rotateImage(filePath);
   });
 }
 

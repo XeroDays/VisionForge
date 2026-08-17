@@ -29,6 +29,10 @@
     "extraResources": [
       { "from": "build/icon.png", "to": "icon.png" }
     ],
+    "asarUnpack": [
+      "**/node_modules/sharp/**",
+      "**/node_modules/@img/**"
+    ],
     "win": {
       "sign": false,
       "signAndEditExecutable": true,
@@ -54,10 +58,10 @@
     "electron": "^41.2.0",
     "electron-builder": "^25.1.8",
     "png-to-ico": "^2.1.8",
-    "rcedit": "^4.0.1",
-    "sharp": "^0.34.3"
+    "rcedit": "^4.0.1"
   },
   "dependencies": {
-    "electron-log": "^5.4.4"
+    "electron-log": "^5.4.4",
+    "sharp": "^0.34.3"
   }
 }

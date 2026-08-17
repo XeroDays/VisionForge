@@ -510,9 +510,29 @@ body {
 }
 
 .workspace-stage {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
   background: #121214;
+}
+
+.workspace-stage.is-move {
+  cursor: grab;
+}
+
+.workspace-stage.is-move.is-panning {
+  cursor: grabbing;
+}
+
+.workspace-image {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  transform-origin: center center;
+  user-select: none;
+  pointer-events: none;
 }
 
 .playback-bar {
