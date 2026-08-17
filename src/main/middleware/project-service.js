@@ -107,6 +107,7 @@ function createProject(name, location) {
     version: 1,
     name: projectName,
     imagesFolder: "",
+    labels: [],
   };
 
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
@@ -141,16 +142,57 @@ function readSolution(filePath) {
   return { ok: true, filePath: resolved, name, project };
 }
 
+function isLabelsEmpty(labels) {
+  return !Array.isArray(labels) || labels.length === 0;
+}
+
+function readClassesTxt(solutionFilePath) {
+  const txtPath = path.join(path.dirname(solutionFilePath), "classes.txt");
+  if (!fs.existsSync(txtPath) || !fs.statSync(txtPath).isFile()) {
+    return null;
+  }
+
+  const names = fs
+    .readFileSync(txtPath, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return names.map((name, id) => ({ id, name }));
+}
+
+function importLabelsIfEmpty(result) {
+  if (!result?.ok || !isLabelsEmpty(result.project?.labels)) {
+    return result;
+  }
+
+  const imported = readClassesTxt(result.filePath);
+  if (!imported || imported.length === 0) {
+    result.project.labels = [];
+    return result;
+  }
+
+  const updated = updateProject(result.filePath, { labels: imported });
+  if (!updated.ok) {
+    log.warn("could not persist imported labels", { reason: updated.reason });
+    result.project.labels = imported;
+    return result;
+  }
+
+  log.info("imported labels from classes.txt", { count: imported.length });
+  return updated;
+}
+
 function loadProject(filePath) {
   const startedAt = log.enter("loadProject");
-  const result = readSolution(filePath);
+  const result = importLabelsIfEmpty(readSolution(filePath));
   if (!result.ok) {
     log.exit("loadProject", startedAt, { ok: false, reason: result.reason });
     return result;
   }
   recordSolution({ name: result.name, filePath: result.filePath });
   log.info("loaded VFSln", { filePath: result.filePath });
-  log.exit("loadProject", startedAt, { ok: true });
+  log.exit("loadProject", startedAt, { ok: true, labels: result.project?.labels?.length || 0 });
   return result;
 }
 

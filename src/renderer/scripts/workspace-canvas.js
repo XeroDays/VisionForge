@@ -22,6 +22,8 @@
   const canvas = document.getElementById("workspace-canvas");
   const stage = document.getElementById("workspace-stage");
   const imageEl = document.getElementById("workspace-image");
+  const viewToolbar = document.getElementById("view-toolbar");
+  const viewMoveBtn = document.getElementById("view-tool-move");
   const breadcrumb = document.getElementById("app-breadcrumb");
   const selectImagesBtn = document.getElementById("tool-select-images");
   const toolsDivider = document.getElementById("tools-rail-divider");
@@ -40,6 +42,13 @@
   const frameInput = document.getElementById("playback-frame");
   const assetsEmpty = document.getElementById("assets-empty");
   const assetsList = document.getElementById("assets-list");
+  const labelsEmpty = document.getElementById("labels-empty");
+  const labelsList = document.getElementById("labels-list");
+  const labelsAddBtn = document.getElementById("btn-labels-add");
+  const labelsComposer = document.getElementById("labels-composer");
+  const labelsComposerInput = document.getElementById("labels-composer-input");
+  const labelsConfirmBtn = document.getElementById("btn-labels-confirm");
+  const labelsCancelBtn = document.getElementById("btn-labels-cancel");
 
   if (!canvas) return;
 
@@ -57,6 +66,8 @@
     previewToken: 0,
     currentTool: "cursor",
     rotating: false,
+    labels: [],
+    addingLabel: false,
   };
 
   let fitScale = 1;
@@ -102,16 +113,32 @@
     return `vfimg://local/?p=${encodeURIComponent(filePath)}&t=${encodeURIComponent(String(token || 0))}`;
   }
 
+  function setViewToolbarVisible(visible) {
+    if (viewToolbar) viewToolbar.hidden = !visible;
+    if (!visible && state.currentTool === "move") {
+      window.selectWorkspaceTool?.("cursor");
+    }
+  }
+
+  function updateMoveHighlight() {
+    const selected = state.currentTool === "move";
+    if (!viewMoveBtn) return;
+    viewMoveBtn.classList.toggle("is-selected", selected);
+    viewMoveBtn.setAttribute("aria-pressed", selected ? "true" : "false");
+  }
+
   function loadPreview() {
     if (!imageEl) return;
     const file = currentFile();
     if (!file) {
       imageEl.hidden = true;
       imageEl.removeAttribute("src");
+      setViewToolbarVisible(false);
       return;
     }
     imageEl.hidden = false;
     imageEl.src = previewSrc(file.filePath, state.previewToken);
+    setViewToolbarVisible(true);
   }
 
   function closeFileMenu() {
@@ -133,6 +160,7 @@
     if (selectImagesBtn) selectImagesBtn.hidden = !visible;
     if (toolsDivider) toolsDivider.hidden = !visible;
     if (selectFolderMenuItem) selectFolderMenuItem.disabled = !visible;
+    if (labelsAddBtn) labelsAddBtn.disabled = !visible;
   }
 
   function setPlaying(playing) {
@@ -182,6 +210,100 @@
       li.appendChild(button);
       assetsList.appendChild(li);
     });
+  }
+
+  function renderLabels(labels) {
+    if (!labelsList || !labelsEmpty) return;
+    const items = Array.isArray(labels) ? labels : [];
+    state.labels = items.map((label) => ({
+      id: Number.isFinite(Number(label?.id)) ? Number(label.id) : 0,
+      name: String(label?.name || "").trim() || "Untitled",
+    }));
+    labelsList.replaceChildren();
+
+    if (!state.labels.length) {
+      labelsEmpty.hidden = false;
+      labelsList.hidden = true;
+      return;
+    }
+
+    labelsEmpty.hidden = true;
+    labelsList.hidden = false;
+
+    state.labels.forEach((label) => {
+      const li = document.createElement("li");
+      li.className = "labels-list__item";
+      li.title = label.name;
+
+      const idEl = document.createElement("span");
+      idEl.className = "labels-list__id";
+      idEl.textContent = String(label.id);
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "labels-list__name";
+      nameEl.textContent = label.name;
+
+      li.append(idEl, nameEl);
+      labelsList.appendChild(li);
+    });
+  }
+
+  function nextLabelId() {
+    if (!state.labels.length) return 0;
+    return Math.max(...state.labels.map((label) => label.id)) + 1;
+  }
+
+  function setComposerOpen(open) {
+    if (!labelsComposer) return;
+    labelsComposer.hidden = !open;
+    if (labelsAddBtn) {
+      labelsAddBtn.disabled = !state.filePath || open;
+    }
+    if (open) {
+      if (labelsComposerInput) labelsComposerInput.value = "";
+      labelsComposerInput?.focus();
+    }
+  }
+
+  function closeComposer() {
+    setComposerOpen(false);
+  }
+
+  function openComposer() {
+    if (!state.filePath) return;
+    setComposerOpen(true);
+  }
+
+  async function confirmAddLabel() {
+    if (!state.filePath || state.addingLabel) return;
+    const name = String(labelsComposerInput?.value || "").trim();
+    if (!name) {
+      labelsComposerInput?.focus();
+      return;
+    }
+
+    const startedAt = log.enter("confirmAddLabel");
+    state.addingLabel = true;
+    if (labelsConfirmBtn) labelsConfirmBtn.disabled = true;
+    try {
+      const next = state.labels.concat([{ id: nextLabelId(), name }]);
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { labels: next });
+      if (!updated?.ok) {
+        log.warn("could not persist label", { reason: updated?.reason });
+        log.exit("confirmAddLabel", startedAt, { ok: false });
+        return;
+      }
+      renderLabels(updated.project?.labels || next);
+      closeComposer();
+      log.info("label added", { name, count: state.labels.length });
+      log.exit("confirmAddLabel", startedAt, { ok: true });
+    } catch (err) {
+      log.error("confirmAddLabel failed", { error: String(err?.message || err) });
+      log.exit("confirmAddLabel", startedAt, { error: true });
+    } finally {
+      state.addingLabel = false;
+      if (labelsConfirmBtn) labelsConfirmBtn.disabled = false;
+    }
   }
 
   function highlightCurrentAsset() {
@@ -281,6 +403,16 @@
     zoomBy(ZOOM_OUT, { x: 0, y: 0 });
   }
 
+  function fitToScreen() {
+    if (!currentFile()) return;
+    state.zoom = 1;
+    state.panX = 0;
+    state.panY = 0;
+    computeFitScale();
+    applyView();
+    log.debug("fit to screen");
+  }
+
   function setWorkspaceTool(toolId) {
     state.currentTool = toolId || "cursor";
     stage?.classList.toggle("is-move", state.currentTool === "move");
@@ -288,6 +420,7 @@
       panning = false;
       stage?.classList.remove("is-panning");
     }
+    updateMoveHighlight();
   }
 
   async function showWorkspace({ filePath, name } = {}) {
@@ -313,8 +446,10 @@
       setWorkspaceChrome(true);
       if (breadcrumb) breadcrumb.textContent = state.name;
       closeFileMenu();
+      closeComposer();
       window.selectInspectorTab?.("assets");
       log.info("workspace opened", { filePath: state.filePath, name: state.name });
+      renderLabels(result.project?.labels);
       await restoreImagesFolder(result.project?.imagesFolder || "");
       log.exit("showWorkspace", startedAt, { ok: true });
     } catch (err) {
@@ -480,6 +615,55 @@
 
   stage?.addEventListener("pointerup", endPan);
   stage?.addEventListener("pointercancel", endPan);
+
+  viewToolbar?.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+
+  viewToolbar?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-view-tool]");
+    if (!btn || !viewToolbar.contains(btn)) return;
+    const action = btn.dataset.viewTool;
+    if (action === "move") {
+      window.selectWorkspaceTool?.("move");
+      return;
+    }
+    if (action === "zoom-in") {
+      zoomIn();
+      return;
+    }
+    if (action === "zoom-out") {
+      zoomOut();
+      return;
+    }
+    if (action === "fit") {
+      fitToScreen();
+      return;
+    }
+    if (action === "rotate") {
+      void rotateCurrentImage();
+    }
+  });
+
+  labelsAddBtn?.addEventListener("click", () => {
+    openComposer();
+  });
+  labelsConfirmBtn?.addEventListener("click", () => {
+    void confirmAddLabel();
+  });
+  labelsCancelBtn?.addEventListener("click", () => {
+    closeComposer();
+  });
+  labelsComposerInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void confirmAddLabel();
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeComposer();
+    }
+  });
 
   skipStartBtn?.addEventListener("click", () => setFrame(0));
   rewindBtn?.addEventListener("click", () => setFrame(state.frameIndex - SKIP_STEP));

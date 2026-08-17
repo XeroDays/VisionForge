@@ -160,7 +160,7 @@ Minimize button → hide to tray → tray Show/click → `showFromTray` + maximi
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Tool click → selected highlight for Cursor, Move, Box, Hexagon. Command tools (Zoom in, Zoom out, Rotate, Select Images) run immediately and do not stay selected. Inspector tabs: **Assets** (default, first), Labels, Detections. Drag handle resizes inspector width (in-memory, 220px–50% of workspace).
+Tool click → selected highlight for Cursor, Box, Hexagon. **Select Images** is a command (shown after a project is open). Inspector tabs: **Assets** (default, first), Labels (list + Add composer; new rows persist only in VFSln `labels`), Detections. Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Move, Zoom, Fit to Screen, Rotate) live on `#view-toolbar` over the stage, not on the left rail.
 
 ---
 
@@ -174,7 +174,7 @@ Tool click → selected highlight for Cursor, Move, Box, Hexagon. Command tools 
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Create / Open / Recent → `showWorkspace(filePath)` → hide `#start-page` → load VFSln → restore `imagesFolder` if set → playback range = image count → current frame previewed fit-to-screen via `vfimg:` protocol. File → **Select Image Folder** and the Select Images tool share the same picker. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names; click sets the current frame. Zoom in/out and mouse wheel scale the view; Move tool pans by drag. Rotate overwrites the current image file 90° clockwise and re-fits.
+Create / Open / Recent → `showWorkspace(filePath)` → hide `#start-page` → load VFSln → restore `imagesFolder` if set → playback range = image count → current frame previewed fit-to-screen via `vfimg:` protocol. File → **Select Image Folder** and the Select Images tool share the same picker. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names; click sets the current frame. When an image is previewed, `#view-toolbar` (top-left of the stage) shows Move, Zoom in/out, Fit to Screen, and Rotate. Mouse wheel also zooms. Rotate overwrites the current image file 90° clockwise and re-fits.
 
 ---
 
@@ -230,6 +230,7 @@ Open existing project → `openProjectFile()` → native dialog filtered to `.VF
 - `version` — schema version (`1`)
 - `name` — project display name
 - `imagesFolder` — absolute path to the selected image directory (empty string until chosen)
+- `labels` — `[{ id, name }, …]` class list (`id` from 0). Imported from `{same-folder}/classes.txt` on load only when this array is missing or empty
 
 **Rule:** Do not store project config elsewhere (no parallel JSON/DB for project settings). When a new project setting is introduced, add it to the `.VFSln` schema and document the field in this section.
 
@@ -416,7 +417,7 @@ Rules:
 **Purpose:** Main-process business logic (singleton modules). IPC handlers stay thin.
 
 **Primary Files:**
-- `src/main/middleware/project-service.js` — create/load/update `.VFSln`, folder pickers, image listing
+- `src/main/middleware/project-service.js` — create/load/update `.VFSln`, folder pickers, image listing, `classes.txt` label import
 - `src/main/middleware/image-service.js` — rotate current image 90° CW and overwrite the file
 - `src/main/services/image-protocol.js` — privileged `vfimg:` protocol; only serves files under the allowed images folder
 
@@ -429,13 +430,39 @@ Rules:
 **Trigger:** Create succeeds, Open existing project, or Recent row click
 
 **Flow:**
-Renderer `showWorkspace(filePath)` → `loadProject` reads VFSln → hide start page / show `#workspace-canvas` → Assets tab selected → if `imagesFolder` set, `listImageFolder` → playback slider max = count - 1, Assets list populated, current image fit-to-screen
+Renderer `showWorkspace(filePath)` → `loadProject` reads VFSln (import `classes.txt` into `labels` if empty) → hide start page / show `#workspace-canvas` → Assets tab selected → Labels tab populated → if `imagesFolder` set, `listImageFolder` → playback slider max = count - 1, Assets list populated, current image fit-to-screen
 
 **Files:**
 - `src/renderer/scripts/workspace-canvas.js`
 - `src/renderer/scripts/start-page.js`
 - `src/renderer/scripts/create-project-dialog.js`
 - `src/main/middleware/project-service.js`
+
+---
+
+### Import Labels from classes.txt
+
+**Trigger:** `loadProject` when VFSln `labels` is missing or empty
+
+**Flow:**
+Read `{vfsln-dir}/classes.txt` (one name per line) → write `labels: [{ id, name }, …]` starting at id 0 → do not overwrite if `labels` already has items → renderer fills the Labels tab
+
+**Files:**
+- `src/main/middleware/project-service.js`
+- `src/renderer/scripts/workspace-canvas.js`
+
+---
+
+### Add Label
+
+**Trigger:** Labels tab → Add (project must be open)
+
+**Flow:**
+Add → inline composer (name + check / cancel) → Enter or check → `updateProject({ labels })` appends `{ id: max+1, name }` to VFSln only → refresh list. Does not write `classes.txt`.
+
+**Files:**
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/index.html` — `#panel-labels`
 
 ---
 
@@ -454,14 +481,14 @@ Native directory dialog → `updateProject({ imagesFolder })` → `listImageFold
 
 ### Zoom Pan Rotate
 
-**Trigger:** Zoom in/out tools, mouse wheel on stage, Move tool drag, Rotate tool
+**Trigger:** `#view-toolbar` (visible only while an image is previewed), mouse wheel on stage
 
 **Flow:**
-Zoom multiplies view scale (clamped) around center or cursor. Move tool pointer-drag pans. Rotate → `rotateImage` (sharp 90° CW overwrite) → reload `vfimg` src with cache-bust → re-fit.
+Toolbar appears at top-left of `#workspace-stage` when a frame image is shown. Zoom in/out multiply view scale; Fit to Screen resets `zoom=1` and pan. Move is a selectable pan mode. Rotate → `rotateImage` (sharp 90° CW overwrite) → reload `vfimg` src with cache-bust → re-fit. Hiding the toolbar while Move is active falls back to the Cursor tool.
 
 **Files:**
 - `src/renderer/scripts/workspace-canvas.js`
-- `src/renderer/scripts/workspace-panels.js`
+- `src/renderer/index.html` — `#view-toolbar`
 - `src/main/middleware/image-service.js`
 - `src/main/services/image-protocol.js`
 
@@ -864,12 +891,13 @@ Renderer
 - **Splash/bootstrap** follows CryptoGenesis-style flow (license gate, 1s transition delay, tray on success)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
-- **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder). All project config belongs in that file.
+- **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder, labels). All project config belongs in that file.
 - **Open existing project** / **Recent** loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab).
+- **Labels:** if VFSln `labels` is empty, import `{project-folder}/classes.txt` as `{ id, name }` (id from 0) and list them in the Labels tab. Existing labels are never overwritten by that import. **Add** in the Labels tab appends a new `{ id, name }` to VFSln only (never `classes.txt`).
 - **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open.
 - **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Current frame is previewed fit-to-screen via `vfimg:`.
 - **Assets** is the first/default inspector tab.
-- **Zoom / Move / Rotate:** zoom in/out + wheel, Move pans, Rotate overwrites the current file 90° clockwise (`sharp` runtime dependency).
+- **Zoom / Move / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): Move pans, zoom in/out + wheel, Fit to Screen resets view, Rotate overwrites the current file 90° clockwise (`sharp`).
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

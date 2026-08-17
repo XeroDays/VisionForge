@@ -25,7 +25,7 @@
     assets: document.getElementById("panel-assets"),
   };
 
-  const COMMAND_TOOLS = new Set(["select-images", "zoom-in", "zoom-out", "rotate"]);
+  const COMMAND_TOOLS = new Set(["select-images"]);
 
   log.debug("workspace-panels.js init");
 
@@ -104,18 +104,6 @@
       window.selectImagesFolder?.();
       return;
     }
-    if (tool === "zoom-in") {
-      window.zoomWorkspace?.(1);
-      return;
-    }
-    if (tool === "zoom-out") {
-      window.zoomWorkspace?.(-1);
-      return;
-    }
-    if (tool === "rotate") {
-      window.rotateCurrentImage?.();
-      return;
-    }
     selectTool(tool);
   });
 
@@ -130,4 +118,5 @@
   setInspectorWidth(DEFAULT_INSPECTOR_WIDTH);
   selectTab("assets");
   window.selectInspectorTab = selectTab;
+  window.selectWorkspaceTool = selectTool;
 })();

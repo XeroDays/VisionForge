@@ -61,18 +61,6 @@
         <button type="button" class="tool-btn is-selected" id="tool-cursor" data-tool="cursor" aria-label="Mouse Cursor" title="Mouse Cursor" aria-pressed="true">
           <i class="fa-solid fa-arrow-pointer" aria-hidden="true"></i>
         </button>
-        <button type="button" class="tool-btn" id="tool-move" data-tool="move" aria-label="Move" title="Move" aria-pressed="false">
-          <i class="fa-solid fa-hand" aria-hidden="true"></i>
-        </button>
-        <button type="button" class="tool-btn tool-btn--command" id="tool-zoom-in" data-tool="zoom-in" aria-label="Zoom In" title="Zoom In">
-          <i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i>
-        </button>
-        <button type="button" class="tool-btn tool-btn--command" id="tool-zoom-out" data-tool="zoom-out" aria-label="Zoom Out" title="Zoom Out">
-          <i class="fa-solid fa-magnifying-glass-minus" aria-hidden="true"></i>
-        </button>
-        <button type="button" class="tool-btn tool-btn--command" id="tool-rotate" data-tool="rotate" aria-label="Rotate" title="Rotate">
-          <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
-        </button>
         <button type="button" class="tool-btn" id="tool-box" data-tool="box" aria-label="Box" title="Box" aria-pressed="false">
           <i class="fa-solid fa-vector-square" aria-hidden="true"></i>
         </button>
@@ -113,6 +101,23 @@
         </div>
         <div class="workspace-canvas" id="workspace-canvas" hidden>
           <div class="workspace-stage" id="workspace-stage">
+            <div class="view-toolbar" id="view-toolbar" hidden>
+              <button type="button" class="view-toolbar__btn" id="view-tool-move" data-view-tool="move" aria-label="Move" title="Move" aria-pressed="false">
+                <i class="fa-solid fa-hand" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="view-toolbar__btn" id="view-tool-zoom-in" data-view-tool="zoom-in" aria-label="Zoom In" title="Zoom In">
+                <i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="view-toolbar__btn" id="view-tool-zoom-out" data-view-tool="zoom-out" aria-label="Zoom Out" title="Zoom Out">
+                <i class="fa-solid fa-magnifying-glass-minus" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="view-toolbar__btn" id="view-tool-fit" data-view-tool="fit" aria-label="Fit to Screen" title="Fit to Screen">
+                <i class="fa-solid fa-expand" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="view-toolbar__btn" id="view-tool-rotate" data-view-tool="rotate" aria-label="Rotate" title="Rotate">
+                <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+              </button>
+            </div>
             <img class="workspace-image" id="workspace-image" alt="" draggable="false" hidden />
           </div>
           <footer class="playback-bar" id="playback-bar">
@@ -161,7 +166,28 @@
             <p class="assets-empty" id="assets-empty">No images selected</p>
             <ul class="assets-list" id="assets-list" hidden></ul>
           </div>
-          <div class="inspector-pane" id="panel-labels" role="tabpanel" aria-labelledby="tab-labels" hidden></div>
+          <div class="inspector-pane labels-pane" id="panel-labels" role="tabpanel" aria-labelledby="tab-labels" hidden>
+            <div class="labels-header">
+              <span class="labels-header__title">Labels</span>
+              <button type="button" class="labels-header__add" id="btn-labels-add" disabled aria-label="Add label" title="Add">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                Add
+              </button>
+            </div>
+            <div class="labels-composer" id="labels-composer" hidden>
+              <input type="text" class="labels-composer__input" id="labels-composer-input" placeholder="Label name" autocomplete="off" maxlength="80" />
+              <button type="button" class="labels-composer__btn labels-composer__btn--confirm" id="btn-labels-confirm" aria-label="Confirm" title="Add">
+                <i class="fa-solid fa-check" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="labels-composer__btn" id="btn-labels-cancel" aria-label="Cancel" title="Cancel">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div class="labels-body">
+              <p class="labels-empty" id="labels-empty">No labels</p>
+              <ul class="labels-list" id="labels-list" hidden></ul>
+            </div>
+          </div>
           <div class="inspector-pane" id="panel-detections" role="tabpanel" aria-labelledby="tab-detections" hidden></div>
         </div>
       </aside>
