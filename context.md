@@ -82,7 +82,7 @@
 | Minimize behavior | Main window minimize hides to system tray (`hideToTray`) |
 | Tray | Created after successful bootstrap via `helpers/tray.js` |
 | Logo asset | `src/renderer/images/logo/VisionForge.png` (dev + splash); packaged `icon.png` via `helpers/app-icon.js` |
-| Logging | Main process uses `visionforge-logger.js` (`electron-log`); level via `VISIONFORGE_LOG_LEVEL` env |
+| Logging | Main + renderer via `visionforge-logger.js` / `renderer-logger.js` (`electron-log`); file at `Documents/VisionForge/Logs/logfile.txt`; level via `VISIONFORGE_LOG_LEVEL` env |
 | File naming | kebab-case for all source files |
 | electron-builder config | Lives in `package.json` `build` block — no separate YAML |
 | Git operations | Agents must never run `git add`, `git commit`, `git push`, tags, or releases — file edits only |
@@ -146,6 +146,34 @@ Minimize button → hide to tray → tray Show/click → `showFromTray` + maximi
 
 **Workflow:**
 `LICENSE_UPDATE` on main load → `initReleaseUpdate()` → show button if `updateAvailable` → modal download/install via license IPC
+
+---
+
+### Workspace Panels
+
+**Purpose:** Main-window chrome: left tools rail and resizable right inspector. Visual shell only — no tool actions or tab content yet.
+
+**Primary Files:**
+- `src/renderer/index.html` — `#tools-rail`, `#inspector-panel`
+- `src/renderer/scripts/workspace-panels.js`
+- `src/renderer/styles/app.css`
+
+**Workflow:**
+Tool click → selected highlight only. Inspector tabs switch empty Labels/Detections panes. Drag handle resizes inspector width (in-memory, 220px–50% of workspace).
+
+---
+
+### Start Page
+
+**Purpose:** Dummy no-project home in the center pane (Cursor-style). Create/Open and recent rows are visual stubs only.
+
+**Primary Files:**
+- `src/renderer/index.html` — `#start-page`, hidden `#workspace-canvas`
+- `src/renderer/scripts/start-page.js`
+- `src/renderer/styles/app.css`
+
+**Workflow:**
+No project selected → `#start-page` visible. Card/row clicks log only (`start-page` namespace). `#workspace-canvas` is hidden until project open is implemented.
 
 ---
 
@@ -229,25 +257,57 @@ Button click → `window.visionforge.*Window()` → preload invoke → `register
 
 ### Logging
 
-**Purpose:** Structured main-process logging with boot timing and renderer log relay.
+**Purpose:** Structured logging across main and renderer with boot timing, file rotation, and renderer log relay. Production defaults to `info` level — `debug` calls are filtered before IPC to avoid performance impact.
 
 **Entry Points:**
-- `src/main/services/visionforge-logger.js`
+- Main: `src/main/services/visionforge-logger.js`
+- Renderer: `src/renderer/scripts/renderer-logger.js` (`window.VisionForgeLogger`)
 
 **Primary Files:**
-- `src/main/services/visionforge-logger.js`
+- `src/main/services/visionforge-logger.js` — main-process logger (`createLogger`, `logFromRenderer`, `getLogLevel`)
+- `src/main/services/log-file-store.js` — rotating file log at `Documents/VisionForge/Logs/logfile.txt` (1 MB max)
+- `src/renderer/scripts/renderer-logger.js` — renderer-side logger with pre-IPC level filtering
 
 **Related Files:**
-- All `src/main/` modules import `startup`, `splash`, or `ipc` loggers
-- `register-splash-handlers.js` — `SPLASH_LOG` handler
+- All `src/main/` modules use `createLogger(namespace)` or named exports (`startup`, `splash`, `ipc`, `license`)
+- `register-splash-handlers.js` — `SPLASH_LOG` IPC handler relays renderer logs to main
+- `src/preload/index.js` and `src/preload/splash-preload.js` — both expose `visionforge.log()`
+- `src/main/ipc/app-info.js` — returns `logLevel` in `getAppInfo()` for renderer filter sync
 
 **Dependencies:**
 - `electron-log` npm package
 - `VISIONFORGE_LOG_LEVEL` env var (`debug` | `info` | `warn` | `error`)
 
 **Workflow:**
-Main: `log.enter/exit/mark` → console + file via electron-log
-Splash renderer: `visionforge.log()` → `SPLASH_LOG` → `logFromRenderer()`
+- Main: `log.enter/exit/mark/timed` → console + file via electron-log
+- Renderer: `VisionForgeLogger.create('namespace')` → filtered by level → `visionforge.log()` → `SPLASH_LOG` → `logFromRenderer()` → main logger
+- Global `error` and `unhandledrejection` in renderer auto-relay to main
+
+**Mandatory conventions for new files:**
+
+Main process (`src/main/**`):
+```js
+const { createLogger } = require("./services/visionforge-logger");
+const log = createLogger("my-module");
+log.enter("methodName");
+log.info("message", { key: "value" });
+log.exit("methodName", startedAt);
+```
+
+Renderer (`src/renderer/scripts/**`):
+```js
+const log = VisionForgeLogger.create("my-feature");
+log.info("message", { key: "value" });
+```
+
+Rules:
+- Every new module gets a unique kebab-case namespace string
+- Use `enter`/`exit`/`timed` for async flows; `mark` for milestones
+- Do not use raw `console.log` in app code — use the logger
+- Production level is `info` — use `debug` for verbose tracing only
+- Override via `VISIONFORGE_LOG_LEVEL=debug` env var
+- Log file: `Documents/VisionForge/Logs/logfile.txt` (1 MB rotation, delete-and-recreate)
+- Include `renderer-logger.js` in any new renderer HTML page before feature scripts
 
 ---
 
@@ -392,10 +452,14 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | Main preload bridge | `src/preload/index.js` |
 | Splash preload bridge | `src/preload/splash-preload.js` |
 | Logging service | `src/main/services/visionforge-logger.js` |
+| Log file store | `src/main/services/log-file-store.js` |
+| Renderer logger | `src/renderer/scripts/renderer-logger.js` |
 | App icon resolver | `src/main/helpers/app-icon.js` |
 | System tray | `src/main/helpers/tray.js` |
 | License registration | `src/main/services/license-service.js` |
 | Release update UI | `src/renderer/scripts/release-update-panel.js` |
+| Workspace panels | `src/renderer/scripts/workspace-panels.js` |
+| Start page | `src/renderer/scripts/start-page.js` |
 | Main UI shell | `src/renderer/index.html` |
 | Splash UI | `src/renderer/splash.html` |
 | Window controls UI logic | `src/renderer/scripts/window-controls.js` |
@@ -458,10 +522,11 @@ Renderer
 
 | Field | Value |
 |-------|-------|
-| Purpose | Main-process structured logging |
-| Files | `src/main/services/visionforge-logger.js` |
+| Purpose | Structured logging (main + renderer relay) |
+| Files | `src/main/services/visionforge-logger.js`, `src/main/services/log-file-store.js`, `src/renderer/scripts/renderer-logger.js` |
 | Auth | N/A (local npm package) |
 | Entry | `require("electron-log")` in logger service |
+| Log file | `Documents/VisionForge/Logs/logfile.txt` (1 MB rotation) |
 
 ### Font Awesome CDN
 
@@ -657,7 +722,7 @@ Renderer
 - **Splash/bootstrap** follows CryptoGenesis-style flow (license gate, 1s transition delay, tray on success)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
-- **No domain features** — main UI is a welcome placeholder only
+- **No domain features** — start page, tools, and inspector tabs are chrome only; Create/Open/recent are dummy
 - **No middleware implementations** — `src/main/middleware/` is empty
 - **No persistence** — no file storage, database, or DTOs
 - **No tests** — `tests/` contains `.gitkeep` placeholders only

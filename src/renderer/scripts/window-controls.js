@@ -1,4 +1,6 @@
 (function () {
+  const log = window.VisionForgeLogger?.create("window-controls") ?? { debug() {}, info() {}, warn() {}, error() {}, enter() { return Date.now(); }, exit() {} };
+
   const minimizeBtn = document.getElementById("window-minimize-btn");
   const maximizeBtn = document.getElementById("window-maximize-btn");
   const closeBtn = document.getElementById("window-close-btn");
@@ -6,6 +8,8 @@
   const topbar = document.getElementById("app-topbar");
 
   const maximizeIcon = maximizeBtn?.querySelector("i");
+
+  log.debug("window-controls.js init");
 
   async function syncMaximizeIcon() {
     if (!maximizeIcon || !window.visionforge?.isWindowMaximized) return;
@@ -16,16 +20,19 @@
     if (maximizeBtn) {
       maximizeBtn.setAttribute("aria-label", maximized ? "Restore" : "Maximize");
     }
+    log.debug("syncMaximizeIcon", { maximized });
   }
 
   if (minimizeBtn) {
     minimizeBtn.addEventListener("click", () => {
+      log.info("minimize clicked");
       window.visionforge.minimizeWindow();
     });
   }
 
   if (maximizeBtn) {
     maximizeBtn.addEventListener("click", async () => {
+      log.info("maximize clicked");
       await window.visionforge.maximizeWindow();
       await syncMaximizeIcon();
     });
@@ -33,6 +40,7 @@
 
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
+      log.info("close clicked");
       window.visionforge.closeWindow();
     });
   }
@@ -41,6 +49,7 @@
   if (maximizeTarget) {
     maximizeTarget.addEventListener("dblclick", async (event) => {
       if (event.target.closest("button, a, input, select, textarea")) return;
+      log.info("titlebar dblclick maximize");
       await window.visionforge.maximizeWindow();
       await syncMaximizeIcon();
     });

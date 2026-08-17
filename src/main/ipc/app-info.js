@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 const licenseService = require("../services/license-service");
+const { getLogLevel } = require("../services/visionforge-logger");
 
 function buildAppInfo() {
   let pkg = {};
@@ -52,6 +53,7 @@ function buildAppInfo() {
     copyright: "© 2026 VisionForge. All rights reserved.",
     licenseUrl,
     repositoryUrl: repoUrl,
+    logLevel: getLogLevel(),
   };
 }
 

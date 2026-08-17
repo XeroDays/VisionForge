@@ -1,5 +1,8 @@
 const { Tray, Menu, nativeImage } = require("electron");
 const { getAppIcon } = require("./app-icon");
+const { createLogger } = require("../services/visionforge-logger");
+
+const log = createLogger("tray");
 
 let tray = null;
 
@@ -31,6 +34,7 @@ function createTray({ onShow, onQuit }) {
     if (onShow) onShow();
   });
 
+  log.info("tray created");
   return tray;
 }
 
@@ -38,12 +42,14 @@ function destroyTray() {
   if (!tray) return;
   tray.destroy();
   tray = null;
+  log.info("tray destroyed");
 }
 
 function hideToTray(win) {
   if (!win || win.isDestroyed()) return;
   win.setSkipTaskbar(true);
   win.hide();
+  log.debug("window hidden to tray");
 }
 
 function showFromTray(win) {
@@ -52,6 +58,7 @@ function showFromTray(win) {
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
+  log.debug("window shown from tray");
 }
 
 module.exports = {

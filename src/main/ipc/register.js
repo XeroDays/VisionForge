@@ -21,6 +21,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle(channels.WINDOW_MINIMIZE, (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
+    log.debug("WINDOW_MINIMIZE");
     if (win) hideToTray(win);
     return { ok: true };
   });
@@ -28,16 +29,19 @@ function registerIpcHandlers() {
   ipcMain.handle(channels.WINDOW_MAXIMIZE, (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return { ok: false };
-    if (win.isMaximized()) {
+    const wasMaximized = win.isMaximized();
+    if (wasMaximized) {
       win.unmaximize();
     } else {
       win.maximize();
     }
+    log.debug("WINDOW_MAXIMIZE", { maximized: win.isMaximized() });
     return { ok: true, maximized: win.isMaximized() };
   });
 
   ipcMain.handle(channels.WINDOW_CLOSE, (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
+    log.debug("WINDOW_CLOSE");
     if (win) win.close();
     return { ok: true };
   });
@@ -52,14 +56,17 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle(channels.DOWNLOAD_UPDATE, async (event, downloadUrl, filename) => {
+    log.info("DOWNLOAD_UPDATE", { filename });
     return licenseService.downloadUpdate(downloadUrl, filename, event.sender);
   });
 
   ipcMain.handle(channels.INSTALL_UPDATE, async (_event, filename) => {
+    log.info("INSTALL_UPDATE", { filename });
     return licenseService.installUpdate(filename);
   });
 
   ipcMain.handle(channels.CHECK_UPDATE_FILE, async (_event, filename) => {
+    log.debug("CHECK_UPDATE_FILE", { filename });
     return licenseService.checkUpdateFile(filename);
   });
 }

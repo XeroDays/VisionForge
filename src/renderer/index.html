@@ -43,13 +43,81 @@
       </div>
     </header>
 
-    <div class="screen-body">
+    <div class="screen-body" id="screen-body">
+      <aside class="tools-rail" id="tools-rail" aria-label="Tools">
+        <button type="button" class="tool-btn is-selected" id="tool-cursor" data-tool="cursor" aria-label="Mouse Cursor" title="Mouse Cursor" aria-pressed="true">
+          <i class="fa-solid fa-arrow-pointer" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="tool-btn" id="tool-rotate" data-tool="rotate" aria-label="Rotate" title="Rotate" aria-pressed="false">
+          <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="tool-btn" id="tool-box" data-tool="box" aria-label="Box" title="Box" aria-pressed="false">
+          <i class="fa-solid fa-vector-square" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="tool-btn" id="tool-hexagon" data-tool="hexagon" aria-label="Hexagon" title="Hexagon" aria-pressed="false">
+          <svg class="tool-btn__hexagon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <polygon points="12,2 21,7.5 21,16.5 12,22 3,16.5 3,7.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </aside>
+
       <section class="screen-section screen-section--main">
-        <div class="main-content">
-          <h1 class="main-content__title">VisionForge</h1>
-          <p class="main-content__subtitle">Your application workspace is ready.</p>
+        <div class="start-page" id="start-page">
+          <div class="start-page__brand">
+            <img class="start-page__logo" src="images/logo/VisionForge.png" alt="" width="56" height="56" />
+            <h1 class="start-page__title">VisionForge</h1>
+          </div>
+
+          <div class="start-page__actions">
+            <button type="button" class="start-action-card" id="btn-create-project" data-start-action="create">
+              <i class="fa-solid fa-plus start-action-card__icon" aria-hidden="true"></i>
+              <span class="start-action-card__label">Create new project</span>
+            </button>
+            <button type="button" class="start-action-card" id="btn-open-project" data-start-action="open">
+              <i class="fa-solid fa-folder-open start-action-card__icon" aria-hidden="true"></i>
+              <span class="start-action-card__label">Open existing project</span>
+            </button>
+          </div>
+
+          <div class="start-recent" aria-label="Recent projects">
+            <h2 class="start-recent__heading">Recent projects</h2>
+            <ul class="start-recent__list">
+              <li>
+                <button type="button" class="start-recent__row" data-start-action="recent" data-project-name="Sample Labels">
+                  <span class="start-recent__name">Sample Labels</span>
+                  <span class="start-recent__path">D:\Projects\VisionForge\sample-labels</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="start-recent__row" data-start-action="recent" data-project-name="Demo Detections">
+                  <span class="start-recent__name">Demo Detections</span>
+                  <span class="start-recent__path">D:\Projects\VisionForge\demo-detections</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="start-recent__row" data-start-action="recent" data-project-name="Empty Workspace">
+                  <span class="start-recent__name">Empty Workspace</span>
+                  <span class="start-recent__path">C:\Users\User\Documents\VisionForge\empty</span>
+                </button>
+              </li>
+            </ul>
+          </div>
         </div>
+        <div class="workspace-canvas" id="workspace-canvas" hidden></div>
       </section>
+
+      <div class="inspector-resize-handle" id="inspector-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize inspector" tabindex="0"></div>
+
+      <aside class="inspector-panel" id="inspector-panel" aria-label="Inspector">
+        <div class="inspector-tabs" role="tablist" aria-label="Inspector tabs">
+          <button type="button" class="inspector-tab is-selected" id="tab-labels" role="tab" aria-selected="true" aria-controls="panel-labels" data-tab="labels">Labels</button>
+          <button type="button" class="inspector-tab" id="tab-detections" role="tab" aria-selected="false" aria-controls="panel-detections" data-tab="detections">Detections</button>
+        </div>
+        <div class="inspector-body">
+          <div class="inspector-pane" id="panel-labels" role="tabpanel" aria-labelledby="tab-labels"></div>
+          <div class="inspector-pane" id="panel-detections" role="tabpanel" aria-labelledby="tab-detections" hidden></div>
+        </div>
+      </aside>
     </div>
   </main>
 
@@ -76,6 +144,9 @@
     </div>
   </div>
 
+  <script src="scripts/renderer-logger.js"></script>
+  <script src="scripts/workspace-panels.js"></script>
+  <script src="scripts/start-page.js"></script>
   <script src="scripts/release-update-panel.js"></script>
   <script src="scripts/window-controls.js"></script>
   <script>

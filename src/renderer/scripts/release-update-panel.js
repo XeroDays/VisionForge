@@ -1,4 +1,6 @@
 (function () {
+  const log = window.VisionForgeLogger?.create("release") ?? { debug() {}, info() {}, warn() {}, error() {}, enter() { return Date.now(); }, exit() {} };
+
   const state = {
     payload: null,
     filename: null,
@@ -76,7 +78,7 @@
     try {
       await window.visionforge?.quitApp?.();
     } catch (err) {
-      console.error("[release] quitApp failed:", err?.message || err);
+      log.error("quitApp failed", { error: String(err?.message || err) });
     }
   }
 
@@ -121,7 +123,7 @@
         setActionMode(state.installerExists ? "install" : "download");
       }
     } catch (err) {
-      console.error("[release] checkUpdateFile failed:", err?.message || err);
+      log.error("checkUpdateFile failed", { error: String(err?.message || err) });
       state.installerExists = false;
       setActionMode("download");
     }
@@ -154,9 +156,11 @@
 
     const url = payloadField(state.payload, "downloadUrl", "DownloadUrl");
     if (!url) {
-      console.error("[release] Download URL is missing from the license server.");
+      log.error("download URL missing from license server");
       return;
     }
+
+    log.info("download started", { filename: state.filename });
 
     state.downloading = true;
     setActionMode("downloading");
@@ -175,9 +179,10 @@
 
       state.filename = result.filename || state.filename;
       state.installerExists = true;
+      log.info("download completed", { filename: state.filename });
       setActionMode("install");
     } catch (err) {
-      console.error("[release] download failed:", err?.message || err);
+      log.error("download failed", { error: String(err?.message || err) });
       setActionMode("download");
     } finally {
       unsubscribeProgress?.();
@@ -190,10 +195,12 @@
     if (!state.filename) {
       await refreshInstallerState();
       if (!state.filename) {
-        console.error("[release] Installer file was not found in Downloads.");
+        log.error("installer file not found in Downloads");
         return;
       }
     }
+
+    log.info("install started", { filename: state.filename });
 
     const { btnAction } = els();
     if (btnAction) btnAction.disabled = true;
@@ -204,7 +211,7 @@
         throw new Error(result?.error || result?.reason || "Install failed.");
       }
     } catch (err) {
-      console.error("[release] install failed:", err?.message || err);
+      log.error("install failed", { error: String(err?.message || err) });
       if (btnAction) btnAction.disabled = false;
     }
   }
@@ -272,12 +279,18 @@
 
     if (btnNewRelease) btnNewRelease.hidden = false;
 
+    log.info("update available", {
+      latestVersion: payloadField(result.payload, "latestVersion", "LatestVersion"),
+      forceUpdate: isForceUpdate(result.payload),
+    });
+
     if (isForceUpdate(result.payload)) {
       openReleaseModal();
     }
   }
 
   async function initReleaseUpdate() {
+    log.debug("initReleaseUpdate");
     wireReleaseUiOnce();
 
     if (typeof window.visionforge?.onLicenseUpdate === "function") {
@@ -288,7 +301,7 @@
       const result = await window.visionforge?.getLicenseUpdate?.();
       applyLicenseResult(result);
     } catch (err) {
-      console.error("[release] initReleaseUpdate failed:", err?.message || err);
+      log.error("initReleaseUpdate failed", { error: String(err?.message || err) });
       const { btnNewRelease } = els();
       if (btnNewRelease) btnNewRelease.hidden = true;
     }

@@ -1,5 +1,5 @@
 const { app, Menu, BrowserWindow } = require("electron");
-const { startup: log } = require("./services/visionforge-logger");
+const { startup: log, initFileLogging } = require("./services/visionforge-logger");
 const { createSplashWindow } = require("./windows/splash-window");
 const { registerSplashHandlers } = require("./ipc/register-splash-handlers");
 const channels = require("../shared/ipc/channels");
@@ -79,6 +79,7 @@ function quitApp(deps) {
 }
 
 async function bootstrap() {
+  initFileLogging();
   const bootstrapStartedAt = log.enter("bootstrap");
 
   let handlersStartedAt = log.enter("registerSplashHandlers");
@@ -102,7 +103,7 @@ async function bootstrap() {
   await yieldToEventLoop();
 
   sendSplashStatus(splash, "Starting…");
-  log.mark('sendSplashStatus "Starting…"');
+  log.mark('sendSplashStatus "Starting..."');
   await yieldToEventLoop();
 
   let heavyStartedAt = log.enter("loadHeavyModules");
@@ -122,7 +123,7 @@ async function bootstrap() {
   const [licenseResult] = await Promise.all([
     (async () => {
       sendSplashStatus(splash, "Checking for updates…");
-      log.mark('sendSplashStatus "Checking for updates…"');
+      log.mark('sendSplashStatus "Checking for updates..."');
       const registerStartedAt = log.enter("licenseService.register");
       const result = await deps.licenseService.register();
       log.exit("licenseService.register", registerStartedAt, {
@@ -154,7 +155,7 @@ async function bootstrap() {
   }
 
   sendSplashStatus(splash, "Loading workspace…");
-  log.mark('sendSplashStatus "Loading workspace…"');
+  log.mark('sendSplashStatus "Loading workspace..."');
   await new Promise((resolve) => setTimeout(resolve, 1000));
 
   if (!main.isDestroyed() && main.webContents && !main.webContents.isDestroyed()) {

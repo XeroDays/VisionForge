@@ -17,6 +17,7 @@ const CH = {
   CHECK_UPDATE_FILE: "visionforge:check-update-file",
   LICENSE_UPDATE: "visionforge:license-update",
   LICENSE_DOWNLOAD_PROGRESS: "visionforge:license-download-progress",
+  SPLASH_LOG: "visionforge:splash-log",
 };
 
 contextBridge.exposeInMainWorld("visionforge", {
@@ -34,6 +35,9 @@ contextBridge.exposeInMainWorld("visionforge", {
     ipcRenderer.invoke(CH.DOWNLOAD_UPDATE, downloadUrl, filename),
   installUpdate: (filename) => ipcRenderer.invoke(CH.INSTALL_UPDATE, filename),
   checkUpdateFile: (filename) => ipcRenderer.invoke(CH.CHECK_UPDATE_FILE, filename),
+  log(level, namespace, message, meta) {
+    ipcRenderer.send(CH.SPLASH_LOG, { level, namespace, message, meta });
+  },
   onLicenseUpdate(callback) {
     const subscription = (_event, payload) => callback(payload);
     ipcRenderer.on(CH.LICENSE_UPDATE, subscription);
