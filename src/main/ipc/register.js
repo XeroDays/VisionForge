@@ -76,6 +76,11 @@ function registerIpcHandlers() {
     return projectService.selectProjectFolder(event.sender);
   });
 
+  ipcMain.handle(channels.SELECT_PROJECT_FILE, async (event) => {
+    log.debug("SELECT_PROJECT_FILE");
+    return projectService.selectProjectFile(event.sender);
+  });
+
   ipcMain.handle(channels.CREATE_PROJECT, async (_event, name, location) => {
     log.info("CREATE_PROJECT", { name, location });
     return projectService.createProject(name, location);

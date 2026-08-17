@@ -49,6 +49,30 @@ async function selectProjectFolder(sender) {
   return { ok: true, canceled: false, folderPath };
 }
 
+async function selectProjectFile(sender) {
+  const startedAt = log.enter("selectProjectFile");
+  const win = BrowserWindow.fromWebContents(sender);
+  const defaultPath = ensureDefaultProjectsDir();
+
+  const result = await dialog.showOpenDialog(win || undefined, {
+    title: "Open existing project",
+    defaultPath,
+    properties: ["openFile"],
+    filters: [
+      { name: "VisionForge Solution", extensions: ["VFSln"] },
+    ],
+  });
+
+  if (result.canceled || !result.filePaths?.[0]) {
+    log.exit("selectProjectFile", startedAt, { canceled: true });
+    return { ok: true, canceled: true };
+  }
+
+  const filePath = result.filePaths[0];
+  log.exit("selectProjectFile", startedAt, { filePath });
+  return { ok: true, canceled: false, filePath };
+}
+
 function createProject(name, location) {
   const startedAt = log.enter("createProject");
   const projectName = sanitizeProjectName(name);
@@ -89,5 +113,6 @@ module.exports = {
   getDefaultProjectsDir,
   ensureDefaultProjectsDir,
   selectProjectFolder,
+  selectProjectFile,
   createProject,
 };

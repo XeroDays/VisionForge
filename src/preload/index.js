@@ -18,6 +18,7 @@ const CH = {
   LICENSE_UPDATE: "visionforge:license-update",
   LICENSE_DOWNLOAD_PROGRESS: "visionforge:license-download-progress",
   SELECT_PROJECT_FOLDER: "visionforge:select-project-folder",
+  SELECT_PROJECT_FILE: "visionforge:select-project-file",
   CREATE_PROJECT: "visionforge:create-project",
   SPLASH_LOG: "visionforge:splash-log",
 };
@@ -38,6 +39,7 @@ contextBridge.exposeInMainWorld("visionforge", {
   installUpdate: (filename) => ipcRenderer.invoke(CH.INSTALL_UPDATE, filename),
   checkUpdateFile: (filename) => ipcRenderer.invoke(CH.CHECK_UPDATE_FILE, filename),
   selectProjectFolder: () => ipcRenderer.invoke(CH.SELECT_PROJECT_FOLDER),
+  openProjectFile: () => ipcRenderer.invoke(CH.SELECT_PROJECT_FILE),
   createProject: (name, location) => ipcRenderer.invoke(CH.CREATE_PROJECT, name, location),
   log(level, namespace, message, meta) {
     ipcRenderer.send(CH.SPLASH_LOG, { level, namespace, message, meta });

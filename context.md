@@ -165,7 +165,7 @@ Tool click → selected highlight only. Inspector tabs switch empty Labels/Detec
 
 ### Start Page
 
-**Purpose:** Dummy no-project home in the center pane (Cursor-style). Create/Open and recent rows are visual stubs only.
+**Purpose:** No-project home in the center pane (Cursor-style). Create opens the new-project dialog; Open opens a `.VFSln` file picker. Recent rows are stubs.
 
 **Primary Files:**
 - `src/renderer/index.html` — `#start-page`, hidden `#workspace-canvas`
@@ -173,7 +173,7 @@ Tool click → selected highlight only. Inspector tabs switch empty Labels/Detec
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. Open/recent remain stubs.
+No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. **Open existing project** opens a native file picker filtered to `.VFSln`. Recent rows remain stubs.
 
 ---
 
@@ -188,6 +188,19 @@ No project selected → `#start-page` visible. **Create new project** opens `#cr
 
 **Workflow:**
 Create new project → modal (name + location) → location click/`...` → `selectProjectFolder` native directory dialog → Next → `createProject` writes `{ProjectName}.VFSln` → close modal. Does not open the workspace canvas yet.
+
+---
+
+### Open Existing Project
+
+**Purpose:** Pick an existing `.VFSln` solution file via the native file dialog.
+
+**Primary Files:**
+- `src/renderer/scripts/start-page.js`
+- `src/main/middleware/project-service.js` — `selectProjectFile()`
+
+**Workflow:**
+Open existing project → `openProjectFile()` → native dialog filtered to `.VFSln` → log selected path. Does not open the workspace canvas yet.
 
 ---
 
@@ -714,6 +727,7 @@ Renderer
 | `visionforge:window-close` | invoke | `register.js` | Close window |
 | `visionforge:window-is-maximized` | invoke | `register.js` | Query maximize state |
 | `visionforge:select-project-folder` | invoke | `register.js` | Native open-directory dialog |
+| `visionforge:select-project-file` | invoke | `register.js` | Native open-file dialog (`.VFSln` filter) |
 | `visionforge:create-project` | invoke | `register.js` | Write `{Name}.VFSln` in chosen folder |
 
 ---
@@ -752,6 +766,7 @@ Renderer
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
 - **Create project** writes a stub `{Name}.VFSln` (JSON: format, version, name). All future project config belongs in that file.
-- **Open existing / recent** remain dummy
+- **Open existing project** opens a native file picker filtered to `.VFSln`; workspace load is not implemented yet.
+- **Recent projects** remain dummy
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**
