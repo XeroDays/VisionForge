@@ -89,26 +89,8 @@
 
           <div class="start-recent" aria-label="Recent projects">
             <h2 class="start-recent__heading">Recent projects</h2>
-            <ul class="start-recent__list">
-              <li>
-                <button type="button" class="start-recent__row" data-start-action="recent" data-project-name="Sample Labels">
-                  <span class="start-recent__name">Sample Labels</span>
-                  <span class="start-recent__path">D:\Projects\VisionForge\sample-labels</span>
-                </button>
-              </li>
-              <li>
-                <button type="button" class="start-recent__row" data-start-action="recent" data-project-name="Demo Detections">
-                  <span class="start-recent__name">Demo Detections</span>
-                  <span class="start-recent__path">D:\Projects\VisionForge\demo-detections</span>
-                </button>
-              </li>
-              <li>
-                <button type="button" class="start-recent__row" data-start-action="recent" data-project-name="Empty Workspace">
-                  <span class="start-recent__name">Empty Workspace</span>
-                  <span class="start-recent__path">C:\Users\User\Documents\VisionForge\empty</span>
-                </button>
-              </li>
-            </ul>
+            <p class="start-recent__empty" id="start-recent-empty" hidden>No recent projects</p>
+            <ul class="start-recent__list" id="start-recent-list"></ul>
           </div>
         </div>
         <div class="workspace-canvas" id="workspace-canvas" hidden></div>

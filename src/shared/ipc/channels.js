@@ -20,5 +20,6 @@ module.exports = {
   CHECK_UPDATE_FILE: "visionforge:check-update-file",
   SELECT_PROJECT_FOLDER: "visionforge:select-project-folder",
   SELECT_PROJECT_FILE: "visionforge:select-project-file",
+  GET_SOLUTION_HISTORY: "visionforge:get-solution-history",
   CREATE_PROJECT: "visionforge:create-project",
 };

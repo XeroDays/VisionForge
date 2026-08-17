@@ -54,7 +54,7 @@
 | **External services** | Font Awesome CDN (main UI icons only) |
 | **Deployment** | Windows NSIS installer via `electron-builder`; GitHub Actions manual release |
 | **App ID** | `com.visionforge.app` |
-| **Storage (planned)** | Project config in `{folder}/{Name}.VFSln`; logs at `Documents/VisionForge/Logs/` |
+| **Storage (planned)** | Project config in `{folder}/{Name}.VFSln`; recents in `Documents/VisionForge/history-solutions.vfson`; logs at `Documents/VisionForge/Logs/` |
 | **Entry point** | `src/main/index.js` |
 | **Preload global** | `window.visionforge` |
 | **IPC namespace** | `visionforge:*` |
@@ -165,7 +165,7 @@ Tool click → selected highlight only. Inspector tabs switch empty Labels/Detec
 
 ### Start Page
 
-**Purpose:** No-project home in the center pane (Cursor-style). Create opens the new-project dialog; Open opens a `.VFSln` file picker. Recent rows are stubs.
+**Purpose:** No-project home in the center pane (Cursor-style). Create opens the new-project dialog; Open opens a `.VFSln` file picker. Recent list comes from `history-solutions.vfson`.
 
 **Primary Files:**
 - `src/renderer/index.html` — `#start-page`, hidden `#workspace-canvas`
@@ -173,7 +173,7 @@ Tool click → selected highlight only. Inspector tabs switch empty Labels/Detec
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. **Open existing project** opens a native file picker filtered to `.VFSln`. Recent rows remain stubs.
+No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. **Open existing project** opens a native file picker filtered to `.VFSln`. Recent list is loaded from `history-solutions.vfson`.
 
 ---
 
@@ -187,7 +187,7 @@ No project selected → `#start-page` visible. **Create new project** opens `#cr
 - `src/renderer/index.html` — `#create-project-overlay`
 
 **Workflow:**
-Create new project → modal (name + location) → location click/`...` → `selectProjectFolder` native directory dialog → Next → `createProject` writes `{ProjectName}.VFSln` → close modal. Does not open the workspace canvas yet.
+Create new project → modal (name + location) → location click/`...` → `selectProjectFolder` native directory dialog → Next → `createProject` writes `{ProjectName}.VFSln` → record history → close modal. Does not open the workspace canvas yet.
 
 ---
 
@@ -200,7 +200,7 @@ Create new project → modal (name + location) → location click/`...` → `sel
 - `src/main/middleware/project-service.js` — `selectProjectFile()`
 
 **Workflow:**
-Open existing project → `openProjectFile()` → native dialog filtered to `.VFSln` → log selected path. Does not open the workspace canvas yet.
+Open existing project → `openProjectFile()` → native dialog filtered to `.VFSln` → record in `history-solutions.vfson` → refresh start-page list. Does not open the workspace canvas yet.
 
 ---
 
@@ -216,6 +216,22 @@ Open existing project → `openProjectFile()` → native dialog filtered to `.VF
 - `name` — project display name
 
 **Rule:** Do not store project config elsewhere (no parallel JSON/DB for project settings). When a new project setting is introduced, add it to the `.VFSln` schema and document the field in this section.
+
+---
+
+### Solution history (`history-solutions.vfson`)
+
+**Purpose:** App-level recents list for the start page. Not project config — that stays in `.VFSln`.
+
+**Location:** `Documents/VisionForge/history-solutions.vfson`
+
+**Schema:**
+- `format` — `"vfson"`
+- `version` — `1`
+- `solutions[]` — `{ name, filePath, openedAt }` newest first, max 20, deduped by `filePath`
+
+**Workflow:**
+Create or open a `.VFSln` → `recordSolution` upserts history → start page `getSolutionHistory()` renders Recent projects.
 
 ---
 
@@ -491,6 +507,7 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | Splash preload bridge | `src/preload/splash-preload.js` |
 | Logging service | `src/main/services/visionforge-logger.js` |
 | Log file store | `src/main/services/log-file-store.js` |
+| Solution history store | `src/main/services/history-solutions-store.js` |
 | Renderer logger | `src/renderer/scripts/renderer-logger.js` |
 | App icon resolver | `src/main/helpers/app-icon.js` |
 | System tray | `src/main/helpers/tray.js` |
@@ -728,6 +745,7 @@ Renderer
 | `visionforge:window-is-maximized` | invoke | `register.js` | Query maximize state |
 | `visionforge:select-project-folder` | invoke | `register.js` | Native open-directory dialog |
 | `visionforge:select-project-file` | invoke | `register.js` | Native open-file dialog (`.VFSln` filter) |
+| `visionforge:get-solution-history` | invoke | `register.js` | Read `history-solutions.vfson` recents |
 | `visionforge:create-project` | invoke | `register.js` | Write `{Name}.VFSln` in chosen folder |
 
 ---
@@ -767,6 +785,6 @@ Renderer
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
 - **Create project** writes a stub `{Name}.VFSln` (JSON: format, version, name). All future project config belongs in that file.
 - **Open existing project** opens a native file picker filtered to `.VFSln`; workspace load is not implemented yet.
-- **Recent projects** remain dummy
+- **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

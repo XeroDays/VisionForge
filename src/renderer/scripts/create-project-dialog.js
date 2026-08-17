@@ -117,6 +117,7 @@
       log.info("project created", { filePath: result.filePath, name: result.name });
       log.exit("submitCreate", startedAt, { ok: true });
       closeDialog();
+      window.refreshSolutionHistory?.();
     } catch (err) {
       setError("Could not create the project.");
       log.error("submitCreate failed", { error: String(err?.message || err) });

@@ -12,9 +12,58 @@
     };
 
   const startPage = document.getElementById("start-page");
+  const recentList = document.getElementById("start-recent-list");
+  const recentEmpty = document.getElementById("start-recent-empty");
   if (!startPage) return;
 
   log.debug("start-page.js init");
+
+  function renderHistory(solutions) {
+    if (!recentList) return;
+    recentList.replaceChildren();
+    const items = Array.isArray(solutions) ? solutions : [];
+
+    if (recentEmpty) {
+      recentEmpty.hidden = items.length > 0;
+    }
+    recentList.hidden = items.length === 0;
+
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "start-recent__row";
+      button.dataset.startAction = "recent";
+      button.dataset.projectName = item.name || "";
+      button.dataset.filePath = item.filePath || "";
+
+      const name = document.createElement("span");
+      name.className = "start-recent__name";
+      name.textContent = item.name || "Untitled";
+
+      const filePath = document.createElement("span");
+      filePath.className = "start-recent__path";
+      filePath.textContent = item.filePath || "";
+
+      button.append(name, filePath);
+      li.appendChild(button);
+      recentList.appendChild(li);
+    });
+  }
+
+  async function refreshSolutionHistory() {
+    const startedAt = log.enter("refreshSolutionHistory");
+    try {
+      const history = await window.visionforge?.getSolutionHistory?.();
+      const solutions = history?.solutions || [];
+      renderHistory(solutions);
+      log.exit("refreshSolutionHistory", startedAt, { count: solutions.length });
+    } catch (err) {
+      renderHistory([]);
+      log.error("refreshSolutionHistory failed", { error: String(err?.message || err) });
+      log.exit("refreshSolutionHistory", startedAt, { error: true });
+    }
+  }
 
   async function openExistingProject() {
     const startedAt = log.enter("openExistingProject");
@@ -29,6 +78,7 @@
         return;
       }
       log.info("project file selected", { filePath: result.filePath });
+      await refreshSolutionHistory();
       log.exit("openExistingProject", startedAt, { filePath: result.filePath });
     } catch (err) {
       log.error("openExistingProject failed", { error: String(err?.message || err) });
@@ -44,6 +94,7 @@
     log.debug("start-page action", {
       action,
       projectName: actionEl.dataset.projectName || null,
+      filePath: actionEl.dataset.filePath || null,
     });
 
     if (action === "create") {
@@ -54,4 +105,7 @@
       void openExistingProject();
     }
   });
+
+  window.refreshSolutionHistory = refreshSolutionHistory;
+  void refreshSolutionHistory();
 })();

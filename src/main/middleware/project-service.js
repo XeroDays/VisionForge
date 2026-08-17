@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { app, dialog, BrowserWindow } = require("electron");
 const { createLogger } = require("../services/visionforge-logger");
+const { recordSolution } = require("../services/history-solutions-store");
 
 const log = createLogger("project");
 
@@ -69,8 +70,10 @@ async function selectProjectFile(sender) {
   }
 
   const filePath = result.filePaths[0];
+  const name = path.basename(filePath, path.extname(filePath));
+  recordSolution({ name, filePath });
   log.exit("selectProjectFile", startedAt, { filePath });
-  return { ok: true, canceled: false, filePath };
+  return { ok: true, canceled: false, filePath, name };
 }
 
 function createProject(name, location) {
@@ -104,6 +107,7 @@ function createProject(name, location) {
   };
 
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  recordSolution({ name: projectName, filePath });
   log.info("created VFSln", { filePath });
   log.exit("createProject", startedAt, { ok: true });
   return { ok: true, filePath, name: projectName };
