@@ -445,7 +445,8 @@ body {
 }
 
 .assets-empty,
-.labels-empty {
+.labels-empty,
+.detections-empty {
   margin: 0;
   padding: 0.875rem 0.75rem;
   font-size: 0.8125rem;
@@ -453,7 +454,8 @@ body {
 }
 
 .assets-list,
-.labels-list {
+.labels-list,
+.detections-list {
   list-style: none;
   margin: 0;
   padding: 0.25rem 0;
@@ -741,14 +743,39 @@ body {
   cursor: grabbing;
 }
 
-.workspace-image {
+.workspace-view {
   position: absolute;
   left: 50%;
   top: 50%;
-  max-width: none;
+  transform: translate(-50%, -50%);
   transform-origin: center center;
   user-select: none;
   pointer-events: none;
+}
+
+.workspace-image {
+  display: block;
+  max-width: none;
+}
+
+.detection-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.detection-overlay,
+.detection-overlay * {
+  box-sizing: content-box;
+}
+
+.detection-overlay__box {
+  fill: none;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
 
 .view-toolbar {
@@ -1383,4 +1410,68 @@ body {
 .btn-danger:hover {
   background: #f1707a;
   color: #fff;
+}
+
+.detections-list__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.8125rem;
+  overflow: hidden;
+}
+
+.detections-list__swatch {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.detections-list__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loading-project-overlay {
+  z-index: 400;
+}
+
+.loading-project-modal {
+  width: min(280px, 94vw);
+}
+
+.loading-project-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 1.5rem 1.25rem;
+}
+
+.loading-project-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  border-top-color: #f4b42a;
+  border-radius: 50%;
+  animation: loading-project-spin 0.85s linear infinite;
+}
+
+@keyframes loading-project-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-project-label {
+  margin: 0;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.78);
 }

@@ -18,11 +18,16 @@
   const MIN_ZOOM = 0.25;
   const MAX_ZOOM = 16;
   const FRAME_WHEEL_COOLDOWN_MS = 80;
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const DETECTION_COLORS = ["#f4b42a", "#38bdf8", "#a78bfa", "#34d399", "#f87171", "#fb923c", "#e879f9"];
 
   const startPage = document.getElementById("start-page");
   const canvas = document.getElementById("workspace-canvas");
   const stage = document.getElementById("workspace-stage");
+  const workspaceView = document.getElementById("workspace-view");
   const imageEl = document.getElementById("workspace-image");
+  const detectionOverlay = document.getElementById("detection-overlay");
+  const loadingOverlay = document.getElementById("loading-project-overlay");
   const viewToolbar = document.getElementById("view-toolbar");
   const viewMoveBtn = document.getElementById("view-tool-move");
   const breadcrumb = document.getElementById("app-breadcrumb");
@@ -47,6 +52,8 @@
   const frameInput = document.getElementById("playback-frame");
   const assetsEmpty = document.getElementById("assets-empty");
   const assetsList = document.getElementById("assets-list");
+  const detectionsEmpty = document.getElementById("detections-empty");
+  const detectionsList = document.getElementById("detections-list");
   const labelsEmpty = document.getElementById("labels-empty");
   const labelsList = document.getElementById("labels-list");
   const labelsAddBtn = document.getElementById("btn-labels-add");
@@ -81,6 +88,8 @@
     editingLabelId: null,
     pendingDeleteId: null,
     savingLabel: false,
+    assets: [],
+    assetsByName: new Map(),
   };
 
   let fitScale = 1;
@@ -104,9 +113,9 @@
   }
 
   function applyView() {
-    if (!imageEl) return;
+    if (!workspaceView) return;
     const scale = currentScale();
-    imageEl.style.transform = `translate(-50%, -50%) translate(${state.panX}px, ${state.panY}px) scale(${scale})`;
+    workspaceView.style.transform = `translate(-50%, -50%) translate(${state.panX}px, ${state.panY}px) scale(${scale})`;
   }
 
   function computeFitScale() {
@@ -145,14 +154,20 @@
     if (!imageEl) return;
     const file = currentFile();
     if (!file) {
-      imageEl.hidden = true;
+      if (workspaceView) workspaceView.hidden = true;
       imageEl.removeAttribute("src");
+      clearDetectionOverlay();
       setViewToolbarVisible(false);
       return;
     }
-    imageEl.hidden = false;
+    if (workspaceView) workspaceView.hidden = false;
     imageEl.src = previewSrc(file.filePath, state.previewToken);
     setViewToolbarVisible(true);
+    if (imageReady()) {
+      computeFitScale();
+      applyView();
+      drawDetectionBoxes();
+    }
   }
 
   function closeFileMenu() {
@@ -228,6 +243,151 @@
       li.appendChild(button);
       assetsList.appendChild(li);
     });
+  }
+
+  function waitForPaint() {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(resolve);
+      });
+    });
+  }
+
+  async function showLoadingOverlay() {
+    if (!loadingOverlay) return;
+    loadingOverlay.hidden = false;
+    await waitForPaint();
+  }
+
+  function hideLoadingOverlay() {
+    if (loadingOverlay) loadingOverlay.hidden = true;
+  }
+
+  function setAssets(assets) {
+    state.assets = Array.isArray(assets) ? assets : [];
+    state.assetsByName = new Map();
+    for (const asset of state.assets) {
+      const name = String(asset?.name || "");
+      if (name) state.assetsByName.set(name, asset);
+    }
+  }
+
+  function currentDetections() {
+    const file = currentFile();
+    if (!file) return [];
+    const asset = state.assetsByName.get(file.name);
+    return Array.isArray(asset?.detections) ? asset.detections : [];
+  }
+
+  function labelNameForId(labelid) {
+    const id = Number(labelid);
+    const label = state.labels.find((item) => item.id === id);
+    if (label?.name) return label.name;
+    return Number.isFinite(id) ? String(id) : "Unknown";
+  }
+
+  function colorForLabelId(labelid) {
+    const id = Number(labelid);
+    if (!Number.isFinite(id)) return DETECTION_COLORS[0];
+    return DETECTION_COLORS[Math.abs(id) % DETECTION_COLORS.length];
+  }
+
+  function detectionToRect(value, imgW, imgH) {
+    if (!value || typeof value !== "object") return null;
+    const xmin = Number(value.xmin);
+    const ymin = Number(value.ymin);
+    const xmax = Number(value.xmax);
+    const ymax = Number(value.ymax);
+    if ([xmin, ymin, xmax, ymax].every(Number.isFinite)) {
+      return { x: xmin, y: ymin, width: xmax - xmin, height: ymax - ymin };
+    }
+    const xc = Number(value.xc);
+    const yc = Number(value.yc);
+    const w = Number(value.w);
+    const h = Number(value.h);
+    if (![xc, yc, w, h].every(Number.isFinite) || !imgW || !imgH) return null;
+    return {
+      x: (xc - w / 2) * imgW,
+      y: (yc - h / 2) * imgH,
+      width: w * imgW,
+      height: h * imgH,
+    };
+  }
+
+  function imageReady() {
+    return Boolean(imageEl && imageEl.complete && imageEl.naturalWidth > 0 && imageEl.naturalHeight > 0);
+  }
+
+  function clearDetectionOverlay() {
+    if (!detectionOverlay) return;
+    detectionOverlay.replaceChildren();
+  }
+
+  function syncOverlaySize() {
+    if (!detectionOverlay || !imageEl || !imageReady()) return false;
+    detectionOverlay.setAttribute("viewBox", `0 0 ${imageEl.naturalWidth} ${imageEl.naturalHeight}`);
+    detectionOverlay.removeAttribute("width");
+    detectionOverlay.removeAttribute("height");
+    detectionOverlay.style.width = "";
+    detectionOverlay.style.height = "";
+    return true;
+  }
+
+  function drawDetectionBoxes() {
+    if (!detectionOverlay) return;
+    if (!syncOverlaySize()) return;
+    const imgW = imageEl.naturalWidth;
+    const imgH = imageEl.naturalHeight;
+    const boxes = [];
+    currentDetections().forEach((detection) => {
+      const rect = detectionToRect(detection?.value, imgW, imgH);
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+      const el = document.createElementNS(SVG_NS, "rect");
+      el.setAttribute("class", "detection-overlay__box");
+      el.setAttribute("x", String(rect.x));
+      el.setAttribute("y", String(rect.y));
+      el.setAttribute("width", String(rect.width));
+      el.setAttribute("height", String(rect.height));
+      el.setAttribute("stroke", colorForLabelId(detection.labelid));
+      boxes.push(el);
+    });
+    detectionOverlay.replaceChildren(...boxes);
+  }
+
+  function renderDetections() {
+    if (!detectionsList || !detectionsEmpty) return;
+    const items = currentDetections();
+    detectionsList.replaceChildren();
+
+    if (!items.length) {
+      detectionsEmpty.hidden = false;
+      detectionsList.hidden = true;
+      drawDetectionBoxes();
+      return;
+    }
+
+    detectionsEmpty.hidden = true;
+    detectionsList.hidden = false;
+
+    items.forEach((detection, index) => {
+      const name = labelNameForId(detection?.labelid);
+      const li = document.createElement("li");
+      li.className = "detections-list__item";
+      li.title = name;
+
+      const swatch = document.createElement("span");
+      swatch.className = "detections-list__swatch";
+      swatch.style.background = colorForLabelId(detection?.labelid);
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "detections-list__name";
+      nameEl.textContent = `${index + 1}. ${name}`;
+
+      li.append(swatch, nameEl);
+      detectionsList.appendChild(li);
+    });
+
+    drawDetectionBoxes();
   }
 
   function renderLabels(labels, options = {}) {
@@ -314,6 +474,7 @@
       return false;
     }
     renderLabels(updated.project?.labels || next);
+    renderDetections();
     log.exit(method, startedAt, { ok: true, count: state.labels.length });
     return true;
   }
@@ -438,6 +599,7 @@
         return;
       }
       renderLabels(updated.project?.labels || next);
+      renderDetections();
       closeComposer();
       log.info("label added", { name, count: state.labels.length });
       log.exit("confirmAddLabel", startedAt, { ok: true });
@@ -486,6 +648,7 @@
       state.panY = 0;
     }
     loadPreview();
+    renderDetections();
     if (!options.silent) {
       log.debug("frame", { index: state.frameIndex, count: state.files.length });
     }
@@ -576,6 +739,7 @@
     }
 
     try {
+      await showLoadingOverlay();
       const result = await window.visionforge?.loadProject?.(resolvedPath);
       if (!result?.ok) {
         log.error("loadProject failed", { filePath: resolvedPath, reason: result?.reason });
@@ -594,12 +758,15 @@
       closeDeleteDialog();
       window.selectInspectorTab?.("assets");
       log.info("workspace opened", { filePath: state.filePath, name: state.name });
+      setAssets(result.project?.assets);
       renderLabels(result.project?.labels);
       await restoreImagesFolder(result.project?.imagesFolder || "");
       log.exit("showWorkspace", startedAt, { ok: true });
     } catch (err) {
       log.error("showWorkspace failed", { error: String(err?.message || err) });
       log.exit("showWorkspace", startedAt, { error: true });
+    } finally {
+      hideLoadingOverlay();
     }
   }
 
@@ -613,6 +780,8 @@
     window.selectWorkspaceTool?.("cursor");
     applyImageList("", []);
     renderLabels([]);
+    setAssets([]);
+    renderDetections();
     state.filePath = "";
     state.name = "";
     state.previewToken = 0;
@@ -679,20 +848,28 @@
         return;
       }
 
-      const folderPath = picked.folderPath;
-      const updated = await window.visionforge?.updateProject?.(state.filePath, { imagesFolder: folderPath });
-      if (!updated?.ok) {
-        log.warn("could not persist imagesFolder", { reason: updated?.reason });
-      }
+      await showLoadingOverlay();
+      try {
+        const folderPath = picked.folderPath;
+        const updated = await window.visionforge?.updateProject?.(state.filePath, { imagesFolder: folderPath });
+        if (!updated?.ok) {
+          log.warn("could not persist imagesFolder", { reason: updated?.reason });
+        } else {
+          renderLabels(updated.project?.labels);
+          setAssets(updated.project?.assets);
+        }
 
-      const listed = await window.visionforge?.listImageFolder?.(folderPath);
-      if (!listed?.ok) {
-        applyImageList(folderPath, []);
-        log.exit("selectImagesFolder", startedAt, { ok: false, reason: listed?.reason });
-        return;
+        const listed = await window.visionforge?.listImageFolder?.(folderPath);
+        if (!listed?.ok) {
+          applyImageList(folderPath, []);
+          log.exit("selectImagesFolder", startedAt, { ok: false, reason: listed?.reason });
+          return;
+        }
+        applyImageList(listed.folderPath, listed.files);
+        log.exit("selectImagesFolder", startedAt, { folderPath, count: listed.files?.length || 0 });
+      } finally {
+        hideLoadingOverlay();
       }
-      applyImageList(listed.folderPath, listed.files);
-      log.exit("selectImagesFolder", startedAt, { folderPath, count: listed.files?.length || 0 });
     } catch (err) {
       log.error("selectImagesFolder failed", { error: String(err?.message || err) });
       log.exit("selectImagesFolder", startedAt, { error: true });
@@ -708,6 +885,7 @@
     if (imageEl) {
       imageEl.removeAttribute("src");
     }
+    clearDetectionOverlay();
     try {
       const result = await window.visionforge?.rotateImage?.(file.filePath);
       if (!result?.ok) {
@@ -737,10 +915,12 @@
   imageEl?.addEventListener("load", () => {
     computeFitScale();
     applyView();
+    drawDetectionBoxes();
   });
 
   imageEl?.addEventListener("error", () => {
     log.warn("preview load failed", { src: imageEl?.src || "" });
+    clearDetectionOverlay();
   });
 
   if (stage && typeof ResizeObserver === "function") {

@@ -119,7 +119,10 @@
                 <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
               </button>
             </div>
-            <img class="workspace-image" id="workspace-image" alt="" draggable="false" hidden />
+            <div class="workspace-view" id="workspace-view" hidden>
+              <img class="workspace-image" id="workspace-image" alt="" draggable="false" />
+              <svg class="detection-overlay" id="detection-overlay" aria-hidden="true"></svg>
+            </div>
           </div>
           <footer class="playback-bar" id="playback-bar">
             <div class="playback-bar__controls">
@@ -189,7 +192,10 @@
               <ul class="labels-list" id="labels-list" hidden></ul>
             </div>
           </div>
-          <div class="inspector-pane" id="panel-detections" role="tabpanel" aria-labelledby="tab-detections" hidden></div>
+          <div class="inspector-pane" id="panel-detections" role="tabpanel" aria-labelledby="tab-detections" hidden>
+            <p class="detections-empty" id="detections-empty">No detections</p>
+            <ul class="detections-list" id="detections-list" hidden></ul>
+          </div>
         </div>
       </aside>
     </div>
@@ -259,6 +265,15 @@
       <div class="settings-modal-footer create-project-footer">
         <button type="button" id="btn-create-project-cancel" class="btn-secondary">Cancel</button>
         <button type="button" id="btn-create-project-next" class="btn-primary">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading-project-overlay" class="settings-overlay loading-project-overlay" hidden aria-modal="true" role="alertdialog" aria-busy="true" aria-labelledby="loading-project-label">
+    <div class="settings-modal settings-modal--compact loading-project-modal">
+      <div class="loading-project-body">
+        <div class="loading-project-spinner" aria-hidden="true"></div>
+        <p class="loading-project-label" id="loading-project-label">Loading project</p>
       </div>
     </div>
   </div>

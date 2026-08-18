@@ -5,6 +5,7 @@ const { createLogger } = require("../services/visionforge-logger");
 const { recordSolution } = require("../services/history-solutions-store");
 const { setAllowedImagesDir } = require("../services/image-protocol");
 const { isValidAnnotation } = require("../../shared/enums/annotation-types");
+const { importEmptyDetections } = require("./detection-import-service");
 
 const log = createLogger("project");
 
@@ -116,6 +117,7 @@ function createProject(name, location, annotation) {
     name: projectName,
     imagesFolder: "",
     labels: [],
+    assets: [],
     annotationType,
     annotationMode,
   };
@@ -156,8 +158,18 @@ function isLabelsEmpty(labels) {
   return !Array.isArray(labels) || labels.length === 0;
 }
 
-function readClassesTxt(solutionFilePath) {
-  const txtPath = path.join(path.dirname(solutionFilePath), "classes.txt");
+function sameDir(a, b) {
+  try {
+    return path.resolve(String(a || "")) === path.resolve(String(b || ""));
+  } catch {
+    return false;
+  }
+}
+
+function readClassesTxt(dir) {
+  const folder = String(dir || "").trim();
+  if (!folder) return null;
+  const txtPath = path.join(folder, "classes.txt");
   if (!fs.existsSync(txtPath) || !fs.statSync(txtPath).isFile()) {
     return null;
   }
@@ -168,6 +180,7 @@ function readClassesTxt(solutionFilePath) {
     .map((line) => line.trim())
     .filter(Boolean);
 
+  if (!names.length) return null;
   return names.map((name, id) => ({ id, name }));
 }
 
@@ -176,37 +189,148 @@ function importLabelsIfEmpty(result) {
     return result;
   }
 
-  const imported = readClassesTxt(result.filePath);
-  if (!imported || imported.length === 0) {
+  const slnDir = path.dirname(result.filePath);
+  const dirs = [slnDir];
+  const imagesFolder = String(result.project?.imagesFolder || "").trim();
+  if (imagesFolder && !sameDir(imagesFolder, slnDir)) {
+    dirs.push(imagesFolder);
+  }
+
+  let imported = null;
+  let sourceDir = "";
+  for (const dir of dirs) {
+    const names = readClassesTxt(dir);
+    if (names?.length) {
+      imported = names;
+      sourceDir = dir;
+      break;
+    }
+  }
+
+  if (!imported) {
     result.project.labels = [];
     return result;
   }
 
   const updated = updateProject(result.filePath, { labels: imported });
   if (!updated.ok) {
-    log.warn("could not persist imported labels", { reason: updated.reason });
+    log.warn("could not persist imported labels", { reason: updated.reason, sourceDir });
     result.project.labels = imported;
     return result;
   }
 
-  log.info("imported labels from classes.txt", { count: imported.length });
+  log.info("imported labels from classes.txt", { count: imported.length, sourceDir });
   return updated;
+}
+
+function listImageFiles(folderPath) {
+  const dir = String(folderPath || "").trim();
+  if (!dir) {
+    return { ok: false, reason: "missing-folder" };
+  }
+
+  try {
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+      return { ok: false, reason: "invalid-folder" };
+    }
+  } catch {
+    return { ok: false, reason: "invalid-folder" };
+  }
+
+  const files = fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => ({
+      name: entry.name,
+      filePath: path.join(dir, entry.name),
+    }))
+    .filter((file) => IMAGE_EXTENSIONS.has(path.extname(file.name).toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+
+  return { ok: true, folderPath: dir, files };
+}
+
+function syncAssetsFromFolder(result) {
+  if (!result?.ok) return result;
+  const folder = String(result.project?.imagesFolder || "").trim();
+  if (!folder) return result;
+
+  const listed = listImageFiles(folder);
+  if (!listed.ok) {
+    log.warn("could not list images for assets sync", { folder, reason: listed.reason });
+    return result;
+  }
+
+  const hadAssets = Array.isArray(result.project.assets);
+  const assets = hadAssets ? result.project.assets.slice() : [];
+  const existing = new Set(assets.map((row) => String(row?.name || "")));
+  let added = 0;
+  for (const file of listed.files) {
+    if (existing.has(file.name)) continue;
+    assets.push({ name: file.name, detections: [] });
+    existing.add(file.name);
+    added += 1;
+  }
+
+  if (!added && hadAssets) return result;
+
+  const updated = updateProject(result.filePath, { assets }, { skipPostHooks: true });
+  if (!updated.ok) {
+    log.warn("could not persist synced assets", { reason: updated.reason, added });
+    result.project.assets = assets;
+    return result;
+  }
+
+  log.info("synced assets from folder", { added, total: assets.length, folder });
+  return updated;
+}
+
+function applyDetectionImport(result) {
+  if (!result?.ok) return result;
+  const folder = String(result.project?.imagesFolder || "").trim();
+  const imported = importEmptyDetections(result.project, folder);
+  if (!imported.changed) return result;
+
+  const updated = updateProject(result.filePath, { assets: imported.assets }, { skipPostHooks: true });
+  if (!updated.ok) {
+    log.warn("could not persist imported detections", { reason: updated.reason });
+    result.project.assets = imported.assets;
+    return result;
+  }
+
+  log.info("imported detections for empty assets", { filePath: result.filePath });
+  return updated;
+}
+
+function refreshFolderDerivedState(result) {
+  let next = result;
+  if (isLabelsEmpty(next.project?.labels)) {
+    next = importLabelsIfEmpty(next);
+  }
+  next = syncAssetsFromFolder(next);
+  return applyDetectionImport(next);
 }
 
 function loadProject(filePath) {
   const startedAt = log.enter("loadProject");
-  const result = importLabelsIfEmpty(readSolution(filePath));
+  let result = importLabelsIfEmpty(readSolution(filePath));
   if (!result.ok) {
     log.exit("loadProject", startedAt, { ok: false, reason: result.reason });
     return result;
   }
+  result = syncAssetsFromFolder(result);
+  result = applyDetectionImport(result);
   recordSolution({ name: result.name, filePath: result.filePath });
   log.info("loaded VFSln", { filePath: result.filePath });
-  log.exit("loadProject", startedAt, { ok: true, labels: result.project?.labels?.length || 0 });
+  log.exit("loadProject", startedAt, {
+    ok: true,
+    labels: result.project?.labels?.length || 0,
+    assets: result.project?.assets?.length || 0,
+  });
   return result;
 }
 
-function updateProject(filePath, patch) {
+function updateProject(filePath, patch, options = {}) {
   const startedAt = log.enter("updateProject");
   const result = readSolution(filePath);
   if (!result.ok) {
@@ -225,8 +349,18 @@ function updateProject(filePath, patch) {
 
   fs.writeFileSync(result.filePath, `${JSON.stringify(project, null, 2)}\n`, "utf8");
   log.info("updated VFSln", { filePath: result.filePath });
-  log.exit("updateProject", startedAt, { ok: true });
-  return { ok: true, filePath: result.filePath, name: project.name, project };
+
+  let written = { ok: true, filePath: result.filePath, name: project.name, project };
+  if (!options.skipPostHooks && Object.prototype.hasOwnProperty.call(nextPatch, "imagesFolder")) {
+    written = refreshFolderDerivedState(written);
+  }
+
+  log.exit("updateProject", startedAt, {
+    ok: true,
+    labels: written.project?.labels?.length || 0,
+    assets: written.project?.assets?.length || 0,
+  });
+  return written;
 }
 
 function resolveDialogDefault(defaultPath) {
@@ -265,30 +399,15 @@ async function selectImagesFolder(sender, defaultPath) {
 
 function listImageFolder(folderPath) {
   const startedAt = log.enter("listImageFolder");
-  const dir = String(folderPath || "").trim();
-  if (!dir) {
-    log.exit("listImageFolder", startedAt, { ok: false, reason: "missing-folder" });
-    return { ok: false, reason: "missing-folder" };
+  const listed = listImageFiles(folderPath);
+  if (!listed.ok) {
+    log.exit("listImageFolder", startedAt, { ok: false, reason: listed.reason });
+    return listed;
   }
 
-  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
-    log.exit("listImageFolder", startedAt, { ok: false, reason: "invalid-folder" });
-    return { ok: false, reason: "invalid-folder" };
-  }
-
-  const files = fs
-    .readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => ({
-      name: entry.name,
-      filePath: path.join(dir, entry.name),
-    }))
-    .filter((file) => IMAGE_EXTENSIONS.has(path.extname(file.name).toLowerCase()))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
-
-  setAllowedImagesDir(dir);
-  log.exit("listImageFolder", startedAt, { folderPath: dir, count: files.length });
-  return { ok: true, folderPath: dir, files };
+  setAllowedImagesDir(listed.folderPath);
+  log.exit("listImageFolder", startedAt, { folderPath: listed.folderPath, count: listed.files.length });
+  return listed;
 }
 
 function closeProject() {
