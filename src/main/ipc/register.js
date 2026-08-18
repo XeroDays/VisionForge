@@ -88,9 +88,14 @@ function registerIpcHandlers() {
     return historyStore.readHistory();
   });
 
-  ipcMain.handle(channels.CREATE_PROJECT, async (_event, name, location) => {
-    log.info("CREATE_PROJECT", { name, location });
-    return projectService.createProject(name, location);
+  ipcMain.handle(channels.CREATE_PROJECT, async (_event, name, location, annotation) => {
+    log.info("CREATE_PROJECT", {
+      name,
+      location,
+      annotationType: annotation?.type,
+      annotationMode: annotation?.mode,
+    });
+    return projectService.createProject(name, location, annotation);
   });
 
   ipcMain.handle(channels.SELECT_IMAGES_FOLDER, async (event, defaultPath) => {
@@ -116,6 +121,11 @@ function registerIpcHandlers() {
   ipcMain.handle(channels.ROTATE_IMAGE, async (_event, filePath) => {
     log.info("ROTATE_IMAGE", { filePath });
     return imageService.rotateImage(filePath);
+  });
+
+  ipcMain.handle(channels.CLOSE_PROJECT, async () => {
+    log.info("CLOSE_PROJECT");
+    return projectService.closeProject();
   });
 }
 

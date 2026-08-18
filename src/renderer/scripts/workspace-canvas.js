@@ -17,6 +17,7 @@
   const ZOOM_OUT = 0.8;
   const MIN_ZOOM = 0.25;
   const MAX_ZOOM = 16;
+  const FRAME_WHEEL_COOLDOWN_MS = 80;
 
   const startPage = document.getElementById("start-page");
   const canvas = document.getElementById("workspace-canvas");
@@ -30,6 +31,7 @@
   const fileMenuBtn = document.getElementById("btn-file-menu");
   const fileMenuDropdown = document.getElementById("file-menu-dropdown");
   const selectFolderMenuItem = document.getElementById("btn-select-image-folder");
+  const gotoStartupMenuItem = document.getElementById("btn-goto-startup");
   const skipStartBtn = document.getElementById("playback-skip-start");
   const rewindBtn = document.getElementById("playback-rewind");
   const stepBackBtn = document.getElementById("playback-step-back");
@@ -49,6 +51,11 @@
   const labelsComposerInput = document.getElementById("labels-composer-input");
   const labelsConfirmBtn = document.getElementById("btn-labels-confirm");
   const labelsCancelBtn = document.getElementById("btn-labels-cancel");
+  const deleteLabelOverlay = document.getElementById("delete-label-overlay");
+  const deleteLabelMessage = document.getElementById("delete-label-message");
+  const deleteLabelCloseBtn = document.getElementById("btn-delete-label-close");
+  const deleteLabelCancelBtn = document.getElementById("btn-delete-label-cancel");
+  const deleteLabelConfirmBtn = document.getElementById("btn-delete-label-confirm");
 
   if (!canvas) return;
 
@@ -68,12 +75,16 @@
     rotating: false,
     labels: [],
     addingLabel: false,
+    editingLabelId: null,
+    pendingDeleteId: null,
+    savingLabel: false,
   };
 
   let fitScale = 1;
   let panning = false;
   let panLastX = 0;
   let panLastY = 0;
+  let lastFrameWheelAt = 0;
 
   log.debug("workspace-canvas.js init");
 
@@ -160,6 +171,7 @@
     if (selectImagesBtn) selectImagesBtn.hidden = !visible;
     if (toolsDivider) toolsDivider.hidden = !visible;
     if (selectFolderMenuItem) selectFolderMenuItem.disabled = !visible;
+    if (gotoStartupMenuItem) gotoStartupMenuItem.disabled = !visible;
     if (labelsAddBtn) labelsAddBtn.disabled = !visible;
   }
 
@@ -212,13 +224,16 @@
     });
   }
 
-  function renderLabels(labels) {
+  function renderLabels(labels, options = {}) {
     if (!labelsList || !labelsEmpty) return;
     const items = Array.isArray(labels) ? labels : [];
     state.labels = items.map((label) => ({
       id: Number.isFinite(Number(label?.id)) ? Number(label.id) : 0,
       name: String(label?.name || "").trim() || "Untitled",
     }));
+    if (!options.keepEditing) {
+      state.editingLabelId = null;
+    }
     labelsList.replaceChildren();
 
     if (!state.labels.length) {
@@ -233,17 +248,48 @@
     state.labels.forEach((label) => {
       const li = document.createElement("li");
       li.className = "labels-list__item";
+      li.dataset.labelId = String(label.id);
       li.title = label.name;
 
       const idEl = document.createElement("span");
       idEl.className = "labels-list__id";
       idEl.textContent = String(label.id);
 
+      if (options.keepEditing && state.editingLabelId === label.id) {
+        li.classList.add("is-editing");
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "labels-list__edit-input";
+        input.value = label.name;
+        input.maxLength = 80;
+        input.setAttribute("aria-label", "Rename label");
+
+        const saveBtn = document.createElement("button");
+        saveBtn.type = "button";
+        saveBtn.className = "labels-list__save";
+        saveBtn.dataset.labelId = String(label.id);
+        saveBtn.setAttribute("aria-label", "Save");
+        saveBtn.title = "Save";
+        saveBtn.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i>';
+
+        li.append(idEl, input, saveBtn);
+        labelsList.appendChild(li);
+        return;
+      }
+
       const nameEl = document.createElement("span");
       nameEl.className = "labels-list__name";
       nameEl.textContent = label.name;
 
-      li.append(idEl, nameEl);
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "labels-list__delete";
+      deleteBtn.dataset.labelId = String(label.id);
+      deleteBtn.setAttribute("aria-label", `Delete ${label.name}`);
+      deleteBtn.title = "Delete";
+      deleteBtn.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
+
+      li.append(idEl, nameEl, deleteBtn);
       labelsList.appendChild(li);
     });
   }
@@ -251,6 +297,97 @@
   function nextLabelId() {
     if (!state.labels.length) return 0;
     return Math.max(...state.labels.map((label) => label.id)) + 1;
+  }
+
+  async function persistLabels(next, method) {
+    const startedAt = log.enter(method);
+    const updated = await window.visionforge?.updateProject?.(state.filePath, { labels: next });
+    if (!updated?.ok) {
+      log.warn(`${method} persist failed`, { reason: updated?.reason });
+      log.exit(method, startedAt, { ok: false });
+      return false;
+    }
+    renderLabels(updated.project?.labels || next);
+    log.exit(method, startedAt, { ok: true, count: state.labels.length });
+    return true;
+  }
+
+  function cancelLabelEdit() {
+    if (state.editingLabelId == null) return;
+    renderLabels(state.labels);
+  }
+
+  function startLabelEdit(id) {
+    if (!state.filePath) return;
+    closeComposer();
+    state.editingLabelId = id;
+    renderLabels(state.labels, { keepEditing: true });
+    const input = labelsList?.querySelector(".labels-list__edit-input");
+    input?.focus();
+    input?.select();
+  }
+
+  async function confirmRenameLabel() {
+    if (!state.filePath || state.savingLabel || state.editingLabelId == null) return;
+    const input = labelsList?.querySelector(".labels-list__edit-input");
+    const name = String(input?.value || "").trim();
+    if (!name) {
+      input?.focus();
+      return;
+    }
+    const current = state.labels.find((label) => label.id === state.editingLabelId);
+    if (current && current.name === name) {
+      cancelLabelEdit();
+      return;
+    }
+    state.savingLabel = true;
+    try {
+      const next = state.labels.map((label) =>
+        label.id === state.editingLabelId ? { id: label.id, name } : label,
+      );
+      const ok = await persistLabels(next, "confirmRenameLabel");
+      if (ok) log.info("label renamed", { id: current?.id, name });
+    } catch (err) {
+      log.error("confirmRenameLabel failed", { error: String(err?.message || err) });
+    } finally {
+      state.savingLabel = false;
+    }
+  }
+
+  function closeDeleteDialog() {
+    if (deleteLabelOverlay) deleteLabelOverlay.hidden = true;
+    state.pendingDeleteId = null;
+  }
+
+  function openDeleteDialog(id) {
+    const label = state.labels.find((item) => item.id === id);
+    if (!label || !state.filePath) return;
+    cancelLabelEdit();
+    state.pendingDeleteId = id;
+    if (deleteLabelMessage) {
+      deleteLabelMessage.textContent = `Delete "${label.name}"? This cannot be undone.`;
+    }
+    if (deleteLabelOverlay) deleteLabelOverlay.hidden = false;
+  }
+
+  async function confirmDeleteLabel() {
+    if (!state.filePath || state.savingLabel || state.pendingDeleteId == null) return;
+    state.savingLabel = true;
+    if (deleteLabelConfirmBtn) deleteLabelConfirmBtn.disabled = true;
+    try {
+      const id = state.pendingDeleteId;
+      const next = state.labels.filter((label) => label.id !== id);
+      const ok = await persistLabels(next, "confirmDeleteLabel");
+      if (ok) {
+        log.info("label deleted", { id });
+        closeDeleteDialog();
+      }
+    } catch (err) {
+      log.error("confirmDeleteLabel failed", { error: String(err?.message || err) });
+    } finally {
+      state.savingLabel = false;
+      if (deleteLabelConfirmBtn) deleteLabelConfirmBtn.disabled = false;
+    }
   }
 
   function setComposerOpen(open) {
@@ -271,6 +408,7 @@
 
   function openComposer() {
     if (!state.filePath) return;
+    cancelLabelEdit();
     setComposerOpen(true);
   }
 
@@ -447,6 +585,7 @@
       if (breadcrumb) breadcrumb.textContent = state.name;
       closeFileMenu();
       closeComposer();
+      closeDeleteDialog();
       window.selectInspectorTab?.("assets");
       log.info("workspace opened", { filePath: state.filePath, name: state.name });
       renderLabels(result.project?.labels);
@@ -456,6 +595,42 @@
       log.error("showWorkspace failed", { error: String(err?.message || err) });
       log.exit("showWorkspace", startedAt, { error: true });
     }
+  }
+
+  async function closeWorkspace() {
+    if (!state.filePath) return;
+    const startedAt = log.enter("closeWorkspace");
+    stopPlay();
+    closeFileMenu();
+    closeComposer();
+    closeDeleteDialog();
+    window.selectWorkspaceTool?.("cursor");
+    applyImageList("", []);
+    renderLabels([]);
+    state.filePath = "";
+    state.name = "";
+    state.previewToken = 0;
+    state.zoom = 1;
+    state.panX = 0;
+    state.panY = 0;
+    state.editingLabelId = null;
+    state.pendingDeleteId = null;
+    state.addingLabel = false;
+    state.savingLabel = false;
+    panning = false;
+    lastFrameWheelAt = 0;
+    setWorkspaceChrome(false);
+    canvas.hidden = true;
+    if (startPage) startPage.hidden = false;
+    if (breadcrumb) breadcrumb.textContent = "Welcome";
+    try {
+      await window.visionforge?.closeProject?.();
+    } catch (err) {
+      log.warn("closeProject failed", { error: String(err?.message || err) });
+    }
+    window.refreshSolutionHistory?.();
+    log.info("workspace closed");
+    log.exit("closeWorkspace", startedAt, { ok: true });
   }
 
   async function restoreImagesFolder(folderPath) {
@@ -574,6 +749,15 @@
     (event) => {
       if (!currentFile()) return;
       event.preventDefault();
+      if (state.currentTool === "cursor") {
+        const now = Date.now();
+        if (now - lastFrameWheelAt < FRAME_WHEEL_COOLDOWN_MS) return;
+        lastFrameWheelAt = now;
+        stopPlay();
+        setFrame(state.frameIndex + (event.deltaY < 0 ? -1 : 1));
+        return;
+      }
+      if (state.currentTool !== "move") return;
       const rect = stage.getBoundingClientRect();
       const origin = {
         x: event.clientX - rect.left - rect.width / 2,
@@ -665,6 +849,72 @@
     }
   });
 
+  labelsList?.addEventListener("click", (event) => {
+    const deleteBtn = event.target.closest(".labels-list__delete");
+    if (deleteBtn) {
+      event.stopPropagation();
+      openDeleteDialog(Number(deleteBtn.dataset.labelId));
+      return;
+    }
+    const saveBtn = event.target.closest(".labels-list__save");
+    if (saveBtn) {
+      event.stopPropagation();
+      void confirmRenameLabel();
+      return;
+    }
+    const item = event.target.closest(".labels-list__item");
+    if (!item || !labelsList.contains(item) || item.classList.contains("is-editing")) return;
+    startLabelEdit(Number(item.dataset.labelId));
+  });
+
+  labelsList?.addEventListener("keydown", (event) => {
+    if (!event.target.classList?.contains("labels-list__edit-input")) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void confirmRenameLabel();
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelLabelEdit();
+    }
+  });
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (state.editingLabelId == null || state.savingLabel) return;
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        cancelLabelEdit();
+        return;
+      }
+      if (target.closest(".labels-list__item.is-editing")) return;
+      if (target.closest(".labels-list__item")) return;
+      cancelLabelEdit();
+    },
+    true,
+  );
+
+  function isDeleteDialogOpen() {
+    return Boolean(deleteLabelOverlay && !deleteLabelOverlay.hidden);
+  }
+
+  deleteLabelCloseBtn?.addEventListener("click", () => closeDeleteDialog());
+  deleteLabelCancelBtn?.addEventListener("click", () => closeDeleteDialog());
+  deleteLabelConfirmBtn?.addEventListener("click", () => {
+    void confirmDeleteLabel();
+  });
+  deleteLabelOverlay?.addEventListener("click", (event) => {
+    if (event.target === deleteLabelOverlay) closeDeleteDialog();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (isDeleteDialogOpen()) {
+      event.preventDefault();
+      closeDeleteDialog();
+    }
+  });
+
   skipStartBtn?.addEventListener("click", () => setFrame(0));
   rewindBtn?.addEventListener("click", () => setFrame(state.frameIndex - SKIP_STEP));
   stepBackBtn?.addEventListener("click", () => setFrame(state.frameIndex - 1));
@@ -697,6 +947,10 @@
 
   selectFolderMenuItem?.addEventListener("click", () => {
     void selectImagesFolder();
+  });
+
+  gotoStartupMenuItem?.addEventListener("click", () => {
+    void closeWorkspace();
   });
 
   document.addEventListener("click", (event) => {

@@ -4,6 +4,7 @@ const { app, dialog, BrowserWindow } = require("electron");
 const { createLogger } = require("../services/visionforge-logger");
 const { recordSolution } = require("../services/history-solutions-store");
 const { setAllowedImagesDir } = require("../services/image-protocol");
+const { isValidAnnotation } = require("../../shared/enums/annotation-types");
 
 const log = createLogger("project");
 
@@ -78,10 +79,12 @@ async function selectProjectFile(sender) {
   return { ok: true, canceled: false, filePath, name };
 }
 
-function createProject(name, location) {
+function createProject(name, location, annotation) {
   const startedAt = log.enter("createProject");
   const projectName = sanitizeProjectName(name);
   const folderPath = String(location || "").trim();
+  const annotationType = String(annotation?.type || "").trim();
+  const annotationMode = String(annotation?.mode || "").trim();
 
   if (!folderPath) {
     log.exit("createProject", startedAt, { ok: false, reason: "missing-location" });
@@ -91,6 +94,11 @@ function createProject(name, location) {
   if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
     log.exit("createProject", startedAt, { ok: false, reason: "invalid-location" });
     return { ok: false, reason: "invalid-location" };
+  }
+
+  if (!isValidAnnotation(annotationType, annotationMode)) {
+    log.exit("createProject", startedAt, { ok: false, reason: "invalid-annotation" });
+    return { ok: false, reason: "invalid-annotation" };
   }
 
   const fileName = solutionFileName(projectName);
@@ -108,6 +116,8 @@ function createProject(name, location) {
     name: projectName,
     imagesFolder: "",
     labels: [],
+    annotationType,
+    annotationMode,
   };
 
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
@@ -281,6 +291,13 @@ function listImageFolder(folderPath) {
   return { ok: true, folderPath: dir, files };
 }
 
+function closeProject() {
+  const startedAt = log.enter("closeProject");
+  setAllowedImagesDir("");
+  log.exit("closeProject", startedAt, { ok: true });
+  return { ok: true };
+}
+
 module.exports = {
   getDefaultProjectsDir,
   ensureDefaultProjectsDir,
@@ -289,6 +306,7 @@ module.exports = {
   createProject,
   loadProject,
   updateProject,
+  closeProject,
   selectImagesFolder,
   listImageFolder,
 };

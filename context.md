@@ -160,7 +160,7 @@ Minimize button → hide to tray → tray Show/click → `showFromTray` + maximi
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Tool click → selected highlight for Cursor, Box, Hexagon. **Select Images** is a command (shown after a project is open). Inspector tabs: **Assets** (default, first), Labels (list + Add composer; new rows persist only in VFSln `labels`), Detections. Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Move, Zoom, Fit to Screen, Rotate) live on `#view-toolbar` over the stage, not on the left rail.
+Tool click → selected highlight for Cursor, Box, Hexagon. **Select Images** is a command (shown after a project is open). Inspector tabs: **Assets** (default, first), Labels (list + Add composer; click row to rename; hover trash + confirm to delete; all persist only in VFSln `labels`), Detections. Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Move, Zoom, Fit to Screen, Rotate) live on `#view-toolbar` over the stage, not on the left rail.
 
 ---
 
@@ -174,7 +174,7 @@ Tool click → selected highlight for Cursor, Box, Hexagon. **Select Images** is
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Create / Open / Recent → `showWorkspace(filePath)` → hide `#start-page` → load VFSln → restore `imagesFolder` if set → playback range = image count → current frame previewed fit-to-screen via `vfimg:` protocol. File → **Select Image Folder** and the Select Images tool share the same picker. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names; click sets the current frame. When an image is previewed, `#view-toolbar` (top-left of the stage) shows Move, Zoom in/out, Fit to Screen, and Rotate. Mouse wheel also zooms. Rotate overwrites the current image file 90° clockwise and re-fits.
+Create / Open / Recent → `showWorkspace(filePath)` → hide `#start-page` → load VFSln → restore `imagesFolder` if set → playback range = image count → current frame previewed fit-to-screen via `vfimg:` protocol. File → **Select Image Folder** and the Select Images tool share the same picker. File → **Goto Startup page** closes the project (`closeWorkspace` + `closeProject`) and returns to `#start-page`. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names; click sets the current frame. When an image is previewed, `#view-toolbar` (top-left of the stage) shows Move, Zoom in/out, Fit to Screen, and Rotate. Mouse wheel on Cursor steps the asset list; wheel on Move zooms. Box/Hexagon ignore wheel. Rotate overwrites the current image file 90° clockwise and re-fits.
 
 ---
 
@@ -198,11 +198,12 @@ No project selected → `#start-page` visible. **Create new project** opens `#cr
 
 **Primary Files:**
 - `src/renderer/scripts/create-project-dialog.js`
+- `src/shared/enums/annotation-types.js`
 - `src/main/middleware/project-service.js`
 - `src/renderer/index.html` — `#create-project-overlay`
 
 **Workflow:**
-Create new project → modal (name + location) → location click/`...` → `selectProjectFolder` native directory dialog → Next → `createProject` writes `{ProjectName}.VFSln` → record history → close modal → show workspace.
+Create new project → modal (name + location + custom annotation-type dropdown + mode radios) → location click/`...` → `selectProjectFolder` → type change rebuilds radios (none preselected) → Next requires a mode → `createProject(name, location, { type, mode })` validates against the catalog and writes `{ProjectName}.VFSln` (including `annotationType` / `annotationMode`) → record history → close modal → show workspace. Annotation type is a custom dark dropdown (not a native `<select>`). Does not change workspace tools.
 
 ---
 
@@ -230,7 +231,9 @@ Open existing project → `openProjectFile()` → native dialog filtered to `.VF
 - `version` — schema version (`1`)
 - `name` — project display name
 - `imagesFolder` — absolute path to the selected image directory (empty string until chosen)
-- `labels` — `[{ id, name }, …]` class list (`id` from 0). Imported from `{same-folder}/classes.txt` on load only when this array is missing or empty
+- `labels` — `[{ id, name }, …]` class list (`id` from 0). Imported from `{same-folder}/classes.txt` on load only when this array is missing or empty. Rename keeps the same `id`; delete removes that row and does not renumber remaining ids. Never written to `classes.txt`.
+- `annotationType` — kebab-case id from the create-project type catalog (e.g. `object-detection-bbox`). Older files may omit this.
+- `annotationMode` — kebab-case id of the selected radio for that type (e.g. `yolo-bounding-box`). Must be a valid pair with `annotationType`. Older files may omit this.
 
 **Rule:** Do not store project config elsewhere (no parallel JSON/DB for project settings). When a new project setting is introduced, add it to the `.VFSln` schema and document the field in this section.
 
@@ -417,13 +420,28 @@ Rules:
 **Purpose:** Main-process business logic (singleton modules). IPC handlers stay thin.
 
 **Primary Files:**
-- `src/main/middleware/project-service.js` — create/load/update `.VFSln`, folder pickers, image listing, `classes.txt` label import
+- `src/main/middleware/project-service.js` — create/load/update/close `.VFSln` session, folder pickers, image listing, `classes.txt` label import
 - `src/main/middleware/image-service.js` — rotate current image 90° CW and overwrite the file
 - `src/main/services/image-protocol.js` — privileged `vfimg:` protocol; only serves files under the allowed images folder
 
 ---
 
 ## Workflow Registry
+
+### Create Project
+
+**Trigger:** Start page → Create new project
+
+**Flow:**
+Modal → name + location + custom annotation-type dropdown + mode radios → Next → `createProject` validates `{ type, mode }` via `isValidAnnotation` → write VFSln (`annotationType`, `annotationMode`) → history → workspace. Reject `invalid-annotation` if the pair is missing or unknown.
+
+**Files:**
+- `src/renderer/scripts/create-project-dialog.js`
+- `src/shared/enums/annotation-types.js`
+- `src/main/middleware/project-service.js`
+- `src/preload/index.js`
+
+---
 
 ### Open Project Workspace
 
@@ -437,6 +455,21 @@ Renderer `showWorkspace(filePath)` → `loadProject` reads VFSln (import `classe
 - `src/renderer/scripts/start-page.js`
 - `src/renderer/scripts/create-project-dialog.js`
 - `src/main/middleware/project-service.js`
+
+---
+
+### Goto Startup page
+
+**Trigger:** File → Goto Startup page (project must be open)
+
+**Flow:**
+`closeWorkspace` → stop playback, clear assets/preview/labels, reset tool to Cursor, hide canvas / show `#start-page`, breadcrumb Welcome → `closeProject` clears `vfimg:` allowed dir → refresh recents. Does not delete the `.VFSln` or history.
+
+**Files:**
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/index.html` — `#btn-goto-startup`
+- `src/main/middleware/project-service.js`
+- `src/preload/index.js`
 
 ---
 
@@ -458,11 +491,39 @@ Read `{vfsln-dir}/classes.txt` (one name per line) → write `labels: [{ id, nam
 **Trigger:** Labels tab → Add (project must be open)
 
 **Flow:**
-Add → inline composer (name + check / cancel) → Enter or check → `updateProject({ labels })` appends `{ id: max+1, name }` to VFSln only → refresh list. Does not write `classes.txt`.
+Add → inline composer (name + check / cancel) → Enter or check → `updateProject({ labels })` appends `{ id: max+1, name }` to VFSln only → refresh list. Does not write `classes.txt`. Opening Add cancels an in-progress row rename.
 
 **Files:**
 - `src/renderer/scripts/workspace-canvas.js`
 - `src/renderer/index.html` — `#panel-labels`
+
+---
+
+### Rename Label
+
+**Trigger:** Labels tab → click a row (id/name, not the trash)
+
+**Flow:**
+Row becomes an inline text field + check. Enter or check → trim name (ignore empty) → `updateProject({ labels })` with the same `id` → refresh list. Escape, click outside, or starting another row/Add cancels without saving. VFSln only; does not write `classes.txt`.
+
+**Files:**
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/index.html` — `#panel-labels`
+- `src/renderer/styles/app.css`
+
+---
+
+### Delete Label
+
+**Trigger:** Labels tab → hover row → trash icon
+
+**Flow:**
+Trash `stopPropagation` (does not enter rename) → `#delete-label-overlay` confirm (`Delete "{name}"? This cannot be undone.`) → Cancel / Escape / overlay click closes with no change → Delete filters that `id` out of `labels` via `updateProject` → refresh list. Remaining ids are not renumbered. VFSln only; does not write `classes.txt`. No annotation cascade.
+
+**Files:**
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/index.html` — `#delete-label-overlay`
+- `src/renderer/styles/app.css`
 
 ---
 
@@ -484,7 +545,7 @@ Native directory dialog → `updateProject({ imagesFolder })` → `listImageFold
 **Trigger:** `#view-toolbar` (visible only while an image is previewed), mouse wheel on stage
 
 **Flow:**
-Toolbar appears at top-left of `#workspace-stage` when a frame image is shown. Zoom in/out multiply view scale; Fit to Screen resets `zoom=1` and pan. Move is a selectable pan mode. Rotate → `rotateImage` (sharp 90° CW overwrite) → reload `vfimg` src with cache-bust → re-fit. Hiding the toolbar while Move is active falls back to the Cursor tool.
+Toolbar appears at top-left of `#workspace-stage` when a frame image is shown. Zoom in/out multiply view scale; Fit to Screen resets `zoom=1` and pan. Move is a selectable pan mode. Stage wheel: Cursor steps `setFrame` ±1 (80ms cooldown); Move `zoomBy` toward pointer; Box/Hexagon no-op. Rotate → `rotateImage` (sharp 90° CW overwrite) → reload `vfimg` src with cache-bust → re-fit. Hiding the toolbar while Move is active falls back to the Cursor tool.
 
 **Files:**
 - `src/renderer/scripts/workspace-canvas.js`
@@ -607,6 +668,7 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | Image rotate service | `src/main/middleware/image-service.js` |
 | Start page | `src/renderer/scripts/start-page.js` |
 | Create project dialog | `src/renderer/scripts/create-project-dialog.js` |
+| Annotation type/mode catalog | `src/shared/enums/annotation-types.js` |
 | Project solution service | `src/main/middleware/project-service.js` |
 | Main UI shell | `src/renderer/index.html` |
 | Splash UI | `src/renderer/splash.html` |
@@ -621,7 +683,7 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | CI release | `.github/workflows/build-windows.yml` |
 | Debug config | `.vscode/launch.json` |
 | Future business logic | `src/main/middleware/` (project-service.js exists) |
-| Future enums/DTOs | `src/shared/enums/` (empty) |
+| Future enums/DTOs | `src/shared/enums/` (`annotation-types.js` exists) |
 | Future about screen | `src/renderer/screens/about/` (empty) |
 | Test placeholders | `tests/main/`, `tests/unit/` |
 
@@ -784,12 +846,19 @@ Renderer
 - Splash version label
 - Future about modal
 
+### `src/shared/enums/annotation-types.js`
+
+**Changing impacts:**
+- Create-project type dropdown and mode radios
+- `createProject` validation (`isValidAnnotation`)
+
 ### `src/main/middleware/project-service.js`
 
 **Changing impacts:**
-- Create / open / load / update `.VFSln`
+- Create / open / load / update / close `.VFSln` session
 - Image folder picker and listing
 - Start page and workspace canvas
+- `vfimg:` allowed directory
 
 ### `package.json` (build block)
 
@@ -849,12 +918,13 @@ Renderer
 | `visionforge:select-project-folder` | invoke | `register.js` | Native open-directory dialog |
 | `visionforge:select-project-file` | invoke | `register.js` | Native open-file dialog (`.VFSln` filter) |
 | `visionforge:get-solution-history` | invoke | `register.js` | Read `history-solutions.vfson` recents |
-| `visionforge:create-project` | invoke | `register.js` | Write `{Name}.VFSln` in chosen folder |
+| `visionforge:create-project` | invoke | `register.js` | Write `{Name}.VFSln` with `annotationType` / `annotationMode` |
 | `visionforge:select-images-folder` | invoke | `register.js` | Native open-directory dialog for images |
 | `visionforge:list-image-folder` | invoke | `register.js` | List image files in a folder (non-recursive) |
 | `visionforge:load-project` | invoke | `register.js` | Read `.VFSln` JSON and record history |
 | `visionforge:update-project` | invoke | `register.js` | Merge keys into `.VFSln` and write |
 | `visionforge:rotate-image` | invoke | `register.js` | Rotate image 90° CW and overwrite file |
+| `visionforge:close-project` | invoke | `register.js` | Clear `vfimg:` allowed dir (end open-project session) |
 
 ---
 
@@ -891,13 +961,14 @@ Renderer
 - **Splash/bootstrap** follows CryptoGenesis-style flow (license gate, 1s transition delay, tray on success)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
-- **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder, labels). All project config belongs in that file.
+- **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder, labels, annotationType, annotationMode). Annotation type/mode come from the create dialog catalog and are required for new projects. All project config belongs in that file.
 - **Open existing project** / **Recent** loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab).
-- **Labels:** if VFSln `labels` is empty, import `{project-folder}/classes.txt` as `{ id, name }` (id from 0) and list them in the Labels tab. Existing labels are never overwritten by that import. **Add** in the Labels tab appends a new `{ id, name }` to VFSln only (never `classes.txt`).
+- **Labels:** if VFSln `labels` is empty, import `{project-folder}/classes.txt` as `{ id, name }` (id from 0) and list them in the Labels tab. Existing labels are never overwritten by that import. **Add**, **rename**, and **delete** write VFSln `labels` only (never `classes.txt`). Rename keeps the same `id`; delete does not renumber remaining ids.
 - **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open.
 - **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Current frame is previewed fit-to-screen via `vfimg:`.
 - **Assets** is the first/default inspector tab.
-- **Zoom / Move / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): Move pans, zoom in/out + wheel, Fit to Screen resets view, Rotate overwrites the current file 90° clockwise (`sharp`).
+- **Zoom / Move / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): Move pans, zoom in/out buttons, Fit to Screen resets view, Rotate overwrites the current file 90° clockwise (`sharp`). Wheel: Cursor steps assets; Move zooms; Box/Hexagon ignore.
+- **Goto Startup page:** File menu item (enabled while a project is open) closes the workspace and returns to `#start-page` without deleting the VFSln or recents.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

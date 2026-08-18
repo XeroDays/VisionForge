@@ -27,6 +27,7 @@
               <button type="button" class="app-menubar__item" id="btn-file-menu" aria-haspopup="true" aria-expanded="false" aria-controls="file-menu-dropdown">File</button>
               <div class="app-menubar__dropdown" id="file-menu-dropdown" hidden role="menu">
                 <button type="button" class="app-menubar__dropdown-item" id="btn-select-image-folder" role="menuitem" disabled>Select Image Folder</button>
+                <button type="button" class="app-menubar__dropdown-item" id="btn-goto-startup" role="menuitem" disabled>Goto Startup page</button>
               </div>
             </div>
             <button type="button" class="app-menubar__item">Edit</button>
@@ -238,6 +239,21 @@
           </div>
         </div>
         <p class="create-project-hint" id="create-project-hint">Project will be created in ""</p>
+        <div class="create-project-field">
+          <span class="create-project-label" id="create-project-type-label">Annotation type</span>
+          <div class="create-project-dropdown" id="create-project-annotation-type">
+            <button type="button" class="create-project-dropdown__button" id="create-project-type-button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="create-project-type-label create-project-type-button-label" aria-describedby="create-project-type-hint">
+              <span class="create-project-dropdown__value" id="create-project-type-button-label"></span>
+              <i class="fa-solid fa-chevron-down create-project-dropdown__chevron" aria-hidden="true"></i>
+            </button>
+            <ul class="create-project-dropdown__list" id="create-project-type-list" role="listbox" aria-labelledby="create-project-type-label" hidden></ul>
+          </div>
+        </div>
+        <p class="create-project-type-hint" id="create-project-type-hint" hidden></p>
+        <fieldset class="create-project-field create-project-modes-field">
+          <legend class="create-project-label">Annotation mode</legend>
+          <div class="create-project-modes" id="create-project-annotation-modes" role="radiogroup" aria-label="Annotation mode"></div>
+        </fieldset>
         <p class="create-project-error" id="create-project-error" hidden></p>
       </div>
       <div class="settings-modal-footer create-project-footer">
@@ -247,10 +263,29 @@
     </div>
   </div>
 
+  <div id="delete-label-overlay" class="settings-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="delete-label-title">
+    <div class="settings-modal settings-modal--compact">
+      <div class="settings-modal-header">
+        <h2 class="settings-modal-title" id="delete-label-title">Delete label</h2>
+        <button type="button" id="btn-delete-label-close" class="icon-btn" aria-label="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="settings-modal-body">
+        <p class="delete-label-message" id="delete-label-message">Delete this label? This cannot be undone.</p>
+      </div>
+      <div class="settings-modal-footer delete-label-footer">
+        <button type="button" id="btn-delete-label-cancel" class="btn-secondary">Cancel</button>
+        <button type="button" id="btn-delete-label-confirm" class="btn-primary btn-danger">Delete</button>
+      </div>
+    </div>
+  </div>
+
   <script src="scripts/renderer-logger.js"></script>
   <script src="scripts/workspace-panels.js"></script>
   <script src="scripts/workspace-canvas.js"></script>
   <script src="scripts/start-page.js"></script>
+  <script src="../shared/enums/annotation-types.js"></script>
   <script src="scripts/create-project-dialog.js"></script>
   <script src="scripts/release-update-panel.js"></script>
   <script src="scripts/window-controls.js"></script>

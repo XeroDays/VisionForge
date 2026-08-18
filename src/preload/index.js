@@ -26,6 +26,7 @@ const CH = {
   LOAD_PROJECT: "visionforge:load-project",
   UPDATE_PROJECT: "visionforge:update-project",
   ROTATE_IMAGE: "visionforge:rotate-image",
+  CLOSE_PROJECT: "visionforge:close-project",
   SPLASH_LOG: "visionforge:splash-log",
 };
 
@@ -47,12 +48,14 @@ contextBridge.exposeInMainWorld("visionforge", {
   selectProjectFolder: () => ipcRenderer.invoke(CH.SELECT_PROJECT_FOLDER),
   openProjectFile: () => ipcRenderer.invoke(CH.SELECT_PROJECT_FILE),
   getSolutionHistory: () => ipcRenderer.invoke(CH.GET_SOLUTION_HISTORY),
-  createProject: (name, location) => ipcRenderer.invoke(CH.CREATE_PROJECT, name, location),
+  createProject: (name, location, annotation) =>
+    ipcRenderer.invoke(CH.CREATE_PROJECT, name, location, annotation),
   selectImagesFolder: (defaultPath) => ipcRenderer.invoke(CH.SELECT_IMAGES_FOLDER, defaultPath),
   listImageFolder: (folderPath) => ipcRenderer.invoke(CH.LIST_IMAGE_FOLDER, folderPath),
   loadProject: (filePath) => ipcRenderer.invoke(CH.LOAD_PROJECT, filePath),
   updateProject: (filePath, patch) => ipcRenderer.invoke(CH.UPDATE_PROJECT, filePath, patch),
   rotateImage: (filePath) => ipcRenderer.invoke(CH.ROTATE_IMAGE, filePath),
+  closeProject: () => ipcRenderer.invoke(CH.CLOSE_PROJECT),
   log(level, namespace, message, meta) {
     ipcRenderer.send(CH.SPLASH_LOG, { level, namespace, message, meta });
   },
