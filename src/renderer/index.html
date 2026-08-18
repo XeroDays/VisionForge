@@ -58,7 +58,7 @@
     </header>
 
     <div class="screen-body" id="screen-body">
-      <aside class="tools-rail" id="tools-rail" aria-label="Tools">
+      <aside class="tools-rail" id="tools-rail" aria-label="Tools" hidden>
         <button type="button" class="tool-btn is-selected" id="tool-cursor" data-tool="cursor" aria-label="Mouse Cursor" title="Mouse Cursor" aria-pressed="true">
           <i class="fa-solid fa-arrow-pointer" aria-hidden="true"></i>
         </button>
@@ -154,9 +154,9 @@
         </div>
       </section>
 
-      <div class="inspector-resize-handle" id="inspector-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize inspector" tabindex="0"></div>
+      <div class="inspector-resize-handle" id="inspector-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize inspector" tabindex="0" hidden></div>
 
-      <aside class="inspector-panel" id="inspector-panel" aria-label="Inspector">
+      <aside class="inspector-panel" id="inspector-panel" aria-label="Inspector" hidden>
         <div class="inspector-tabs" role="tablist" aria-label="Inspector tabs">
           <button type="button" class="inspector-tab is-selected" id="tab-assets" role="tab" aria-selected="true" aria-controls="panel-assets" data-tab="assets">Assets</button>
           <button type="button" class="inspector-tab" id="tab-labels" role="tab" aria-selected="false" aria-controls="panel-labels" data-tab="labels">Labels</button>

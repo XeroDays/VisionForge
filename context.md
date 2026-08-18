@@ -160,7 +160,7 @@ Minimize button → hide to tray → tray Show/click → `showFromTray` + maximi
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Tool click → selected highlight for Cursor, Box, Hexagon. **Select Images** is a command (shown after a project is open). Inspector tabs: **Assets** (default, first), Labels (list + Add composer; click row to rename; hover trash + confirm to delete; all persist only in VFSln `labels`), Detections. Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Move, Zoom, Fit to Screen, Rotate) live on `#view-toolbar` over the stage, not on the left rail.
+Tool click → selected highlight for Cursor, Box, Hexagon. **Select Images** is a command (shown after a project is open). Left tools rail, inspector, and resize handle are hidden until a `.VFSln` is loaded (`setWorkspaceChrome`); Goto Startup page hides them again. Inspector tabs: **Assets** (default, first), Labels (list + Add composer; click row to rename; hover trash + confirm to delete; all persist only in VFSln `labels`), Detections. Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Move, Zoom, Fit to Screen, Rotate) live on `#view-toolbar` over the stage, not on the left rail.
 
 ---
 
@@ -203,7 +203,7 @@ No project selected → `#start-page` visible. **Create new project** opens `#cr
 - `src/renderer/index.html` — `#create-project-overlay`
 
 **Workflow:**
-Create new project → modal (name + location + custom annotation-type dropdown + mode radios) → location click/`...` → `selectProjectFolder` → type change rebuilds radios (none preselected) → Next requires a mode → `createProject(name, location, { type, mode })` validates against the catalog and writes `{ProjectName}.VFSln` (including `annotationType` / `annotationMode`) → record history → close modal → show workspace. Annotation type is a custom dark dropdown (not a native `<select>`). Does not change workspace tools.
+Create new project → modal (name + location + custom annotation-type dropdown + mode radios) → location click/`...` → `selectProjectFolder` → type change rebuilds radios (none preselected) → Next requires a mode → `createProject(name, location, { type, mode })` validates against the catalog and writes `{ProjectName}.VFSln` (including `annotationType` / `annotationMode`) → record history → close modal → show workspace. Close via Cancel, X, or Escape — backdrop click does not dismiss. Annotation type is a custom dark dropdown (not a native `<select>`). Does not change workspace tools.
 
 ---
 

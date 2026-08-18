@@ -319,10 +319,6 @@
   cancelBtn?.addEventListener("click", () => closeDialog());
   closeBtn?.addEventListener("click", () => closeDialog());
 
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) closeDialog();
-  });
-
   document.addEventListener("click", (event) => {
     if (!isTypeOpen()) return;
     if (typeDropdown?.contains(event.target) || typeList?.contains(event.target)) return;

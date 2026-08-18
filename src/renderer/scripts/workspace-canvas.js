@@ -28,6 +28,9 @@
   const breadcrumb = document.getElementById("app-breadcrumb");
   const selectImagesBtn = document.getElementById("tool-select-images");
   const toolsDivider = document.getElementById("tools-rail-divider");
+  const toolsRail = document.getElementById("tools-rail");
+  const inspectorPanel = document.getElementById("inspector-panel");
+  const inspectorResizeHandle = document.getElementById("inspector-resize-handle");
   const fileMenuBtn = document.getElementById("btn-file-menu");
   const fileMenuDropdown = document.getElementById("file-menu-dropdown");
   const selectFolderMenuItem = document.getElementById("btn-select-image-folder");
@@ -168,6 +171,9 @@
   }
 
   function setWorkspaceChrome(visible) {
+    if (toolsRail) toolsRail.hidden = !visible;
+    if (inspectorPanel) inspectorPanel.hidden = !visible;
+    if (inspectorResizeHandle) inspectorResizeHandle.hidden = !visible;
     if (selectImagesBtn) selectImagesBtn.hidden = !visible;
     if (toolsDivider) toolsDivider.hidden = !visible;
     if (selectFolderMenuItem) selectFolderMenuItem.disabled = !visible;
