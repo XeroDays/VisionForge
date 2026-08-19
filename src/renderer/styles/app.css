@@ -772,10 +772,48 @@ body {
   box-sizing: content-box;
 }
 
+.detection-overlay__item {
+  pointer-events: auto;
+}
+
+.workspace-stage.is-move .detection-overlay__item {
+  pointer-events: none;
+}
+
 .detection-overlay__box {
-  fill: none;
-  stroke-width: 2;
+  fill: transparent;
+  stroke-width: 2.2;
+  cursor: move;
+  pointer-events: all;
   vector-effect: non-scaling-stroke;
+}
+
+.detection-overlay__handle {
+  visibility: hidden;
+  stroke: #c8c8c8;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.detection-overlay__item:hover .detection-overlay__handle,
+.detection-overlay__item.is-active .detection-overlay__handle {
+  visibility: visible;
+}
+
+.detection-overlay__handle[data-edge="nw"] {
+  cursor: nw-resize;
+}
+
+.detection-overlay__handle[data-edge="ne"] {
+  cursor: ne-resize;
+}
+
+.detection-overlay__handle[data-edge="sw"] {
+  cursor: sw-resize;
+}
+
+.detection-overlay__handle[data-edge="se"] {
+  cursor: se-resize;
 }
 
 .view-toolbar {

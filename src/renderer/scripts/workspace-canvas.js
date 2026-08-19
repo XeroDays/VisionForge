@@ -20,6 +20,8 @@
   const FRAME_WHEEL_COOLDOWN_MS = 80;
   const SVG_NS = "http://www.w3.org/2000/svg";
   const DETECTION_COLORS = ["#f4b42a", "#38bdf8", "#a78bfa", "#34d399", "#f87171", "#fb923c", "#e879f9"];
+  const BOX_HANDLE_PX = 8;
+  const BOX_MIN_SIZE = 4;
 
   const startPage = document.getElementById("start-page");
   const canvas = document.getElementById("workspace-canvas");
@@ -97,6 +99,7 @@
   let panLastX = 0;
   let panLastY = 0;
   let lastFrameWheelAt = 0;
+  let boxEdit = null;
 
   log.debug("workspace-canvas.js init");
 
@@ -116,6 +119,7 @@
     if (!workspaceView) return;
     const scale = currentScale();
     workspaceView.style.transform = `translate(-50%, -50%) translate(${state.panX}px, ${state.panY}px) scale(${scale})`;
+    refreshHandleSizes();
   }
 
   function computeFitScale() {
@@ -314,6 +318,189 @@
     };
   }
 
+  function isVocValue(value) {
+    if (!value || typeof value !== "object") return false;
+    return [value.xmin, value.ymin, value.xmax, value.ymax].every((part) => Number.isFinite(Number(part)));
+  }
+
+  function rectToValue(rect, imgW, imgH, original) {
+    if (isVocValue(original)) {
+      return {
+        xmin: rect.x,
+        ymin: rect.y,
+        xmax: rect.x + rect.width,
+        ymax: rect.y + rect.height,
+      };
+    }
+    return {
+      xc: (rect.x + rect.width / 2) / imgW,
+      yc: (rect.y + rect.height / 2) / imgH,
+      w: rect.width / imgW,
+      h: rect.height / imgH,
+    };
+  }
+
+  function handleThickness() {
+    return Math.max(4, BOX_HANDLE_PX / Math.max(currentScale(), 0.01));
+  }
+
+  function svgRect(className, attrs) {
+    const el = document.createElementNS(SVG_NS, "rect");
+    el.setAttribute("class", className);
+    Object.entries(attrs).forEach(([key, value]) => {
+      el.setAttribute(key, String(value));
+    });
+    return el;
+  }
+
+  function layoutBoxGroup(group, rect) {
+    const t = handleThickness();
+    const half = t / 2;
+    const body = group.querySelector(".detection-overlay__box");
+    const nw = group.querySelector('[data-edge="nw"]');
+    const ne = group.querySelector('[data-edge="ne"]');
+    const sw = group.querySelector('[data-edge="sw"]');
+    const se = group.querySelector('[data-edge="se"]');
+    if (!body || !nw || !ne || !sw || !se) return;
+    body.setAttribute("x", String(rect.x));
+    body.setAttribute("y", String(rect.y));
+    body.setAttribute("width", String(rect.width));
+    body.setAttribute("height", String(rect.height));
+    const corners = {
+      nw: { x: rect.x - half, y: rect.y - half },
+      ne: { x: rect.x + rect.width - half, y: rect.y - half },
+      sw: { x: rect.x - half, y: rect.y + rect.height - half },
+      se: { x: rect.x + rect.width - half, y: rect.y + rect.height - half },
+    };
+    Object.entries(corners).forEach(([edge, pos]) => {
+      const el = group.querySelector(`[data-edge="${edge}"]`);
+      el.setAttribute("x", String(pos.x));
+      el.setAttribute("y", String(pos.y));
+      el.setAttribute("width", String(t));
+      el.setAttribute("height", String(t));
+    });
+  }
+
+  function refreshHandleSizes() {
+    if (!detectionOverlay) return;
+    detectionOverlay.querySelectorAll(".detection-overlay__item").forEach((group) => {
+      const body = group.querySelector(".detection-overlay__box");
+      if (!body) return;
+      layoutBoxGroup(group, {
+        x: Number(body.getAttribute("x")),
+        y: Number(body.getAttribute("y")),
+        width: Number(body.getAttribute("width")),
+        height: Number(body.getAttribute("height")),
+      });
+    });
+  }
+
+  function clientToImage(clientX, clientY) {
+    if (!imageEl || !imageReady()) return null;
+    const bounds = imageEl.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return null;
+    return {
+      x: ((clientX - bounds.left) / bounds.width) * imageEl.naturalWidth,
+      y: ((clientY - bounds.top) / bounds.height) * imageEl.naturalHeight,
+    };
+  }
+
+  function clampRect(rect, imgW, imgH) {
+    let { x, y, width, height } = rect;
+    if (width < 0) {
+      x += width;
+      width = -width;
+    }
+    if (height < 0) {
+      y += height;
+      height = -height;
+    }
+    width = Math.max(BOX_MIN_SIZE, width);
+    height = Math.max(BOX_MIN_SIZE, height);
+    x = Math.min(Math.max(0, x), Math.max(0, imgW - width));
+    y = Math.min(Math.max(0, y), Math.max(0, imgH - height));
+    return { x, y, width, height };
+  }
+
+  function applyBoxEdge(startRect, edge, dx, dy) {
+    let { x, y, width, height } = startRect;
+    if (edge === "move") {
+      return { x: x + dx, y: y + dy, width, height };
+    }
+    if (edge === "nw") {
+      x += dx;
+      y += dy;
+      width -= dx;
+      height -= dy;
+    } else if (edge === "ne") {
+      y += dy;
+      width += dx;
+      height -= dy;
+    } else if (edge === "sw") {
+      x += dx;
+      width -= dx;
+      height += dy;
+    } else if (edge === "se") {
+      width += dx;
+      height += dy;
+    }
+    return { x, y, width, height };
+  }
+
+  function cancelBoxEdit() {
+    if (!boxEdit) return;
+    boxEdit = null;
+    drawDetectionBoxes();
+  }
+
+  async function persistBoxEdit() {
+    if (!boxEdit) return;
+    const edit = boxEdit;
+    boxEdit = null;
+    edit.group?.classList.remove("is-active");
+    const start = edit.startRect;
+    const next = edit.currentRect;
+    const unchanged =
+      !next ||
+      (start &&
+        next.x === start.x &&
+        next.y === start.y &&
+        next.width === start.width &&
+        next.height === start.height);
+    if (unchanged || !state.filePath) {
+      drawDetectionBoxes();
+      return;
+    }
+    const file = currentFile();
+    const asset = file ? state.assetsByName.get(file.name) : null;
+    const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
+    const prev = detections[edit.index];
+    if (!prev) {
+      drawDetectionBoxes();
+      return;
+    }
+    detections[edit.index] = {
+      ...prev,
+      value: rectToValue(edit.currentRect, imageEl.naturalWidth, imageEl.naturalHeight, prev.value),
+    };
+    const nextAssets = state.assets.map((row) =>
+      row?.name === file.name ? { ...row, detections } : row,
+    );
+    setAssets(nextAssets);
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
+      if (updated?.ok) {
+        setAssets(updated.project?.assets);
+        log.info("detection box updated", { name: file.name, index: edit.index });
+      } else {
+        log.warn("could not persist detection box", { reason: updated?.reason });
+      }
+    } catch (err) {
+      log.error("persistBoxEdit failed", { error: String(err?.message || err) });
+    }
+    drawDetectionBoxes();
+  }
+
   function imageReady() {
     return Boolean(imageEl && imageEl.complete && imageEl.naturalWidth > 0 && imageEl.naturalHeight > 0);
   }
@@ -338,20 +525,25 @@
     if (!syncOverlaySize()) return;
     const imgW = imageEl.naturalWidth;
     const imgH = imageEl.naturalHeight;
-    const boxes = [];
-    currentDetections().forEach((detection) => {
+    const groups = [];
+    currentDetections().forEach((detection, index) => {
       const rect = detectionToRect(detection?.value, imgW, imgH);
       if (!rect || rect.width <= 0 || rect.height <= 0) return;
-      const el = document.createElementNS(SVG_NS, "rect");
-      el.setAttribute("class", "detection-overlay__box");
-      el.setAttribute("x", String(rect.x));
-      el.setAttribute("y", String(rect.y));
-      el.setAttribute("width", String(rect.width));
-      el.setAttribute("height", String(rect.height));
-      el.setAttribute("stroke", colorForLabelId(detection.labelid));
-      boxes.push(el);
+      const color = colorForLabelId(detection.labelid);
+      const group = document.createElementNS(SVG_NS, "g");
+      group.setAttribute("class", "detection-overlay__item");
+      group.dataset.index = String(index);
+      group.append(
+        svgRect("detection-overlay__box", { fill: "transparent", stroke: color }),
+        svgRect("detection-overlay__handle", { "data-edge": "nw", fill: color }),
+        svgRect("detection-overlay__handle", { "data-edge": "ne", fill: color }),
+        svgRect("detection-overlay__handle", { "data-edge": "sw", fill: color }),
+        svgRect("detection-overlay__handle", { "data-edge": "se", fill: color }),
+      );
+      layoutBoxGroup(group, rect);
+      groups.push(group);
     });
-    detectionOverlay.replaceChildren(...boxes);
+    detectionOverlay.replaceChildren(...groups);
   }
 
   function renderDetections() {
@@ -637,6 +829,7 @@
   }
 
   function setFrame(index, options = {}) {
+    if (boxEdit) cancelBoxEdit();
     const max = lastFrameIndex();
     const next = state.files.length === 0 ? 0 : Math.min(max, Math.max(0, Math.round(index)));
     state.frameIndex = next;
@@ -774,6 +967,7 @@
     if (!state.filePath) return;
     const startedAt = log.enter("closeWorkspace");
     stopPlay();
+    boxEdit = null;
     closeFileMenu();
     closeComposer();
     closeDeleteDialog();
@@ -923,6 +1117,56 @@
     clearDetectionOverlay();
   });
 
+  detectionOverlay?.addEventListener("pointerdown", (event) => {
+    if (state.currentTool !== "cursor" || event.button !== 0) return;
+    const item = event.target.closest?.(".detection-overlay__item");
+    if (!item || !detectionOverlay.contains(item) || !imageReady()) return;
+    const index = Number(item.dataset.index);
+    const detection = currentDetections()[index];
+    const rect = detectionToRect(detection?.value, imageEl.naturalWidth, imageEl.naturalHeight);
+    const startPt = clientToImage(event.clientX, event.clientY);
+    if (!rect || !startPt) return;
+    event.preventDefault();
+    event.stopPropagation();
+    stopPlay();
+    const handle = event.target.closest?.(".detection-overlay__handle");
+    boxEdit = {
+      index,
+      edge: handle?.getAttribute("data-edge") || "move",
+      startPt,
+      startRect: { ...rect },
+      currentRect: { ...rect },
+      pointerId: event.pointerId,
+      group: item,
+    };
+    item.classList.add("is-active");
+    detectionOverlay.setPointerCapture?.(event.pointerId);
+  });
+
+  detectionOverlay?.addEventListener("pointermove", (event) => {
+    if (!boxEdit || event.pointerId !== boxEdit.pointerId) return;
+    const pt = clientToImage(event.clientX, event.clientY);
+    if (!pt) return;
+    const next = clampRect(
+      applyBoxEdge(boxEdit.startRect, boxEdit.edge, pt.x - boxEdit.startPt.x, pt.y - boxEdit.startPt.y),
+      imageEl.naturalWidth,
+      imageEl.naturalHeight,
+    );
+    boxEdit.currentRect = next;
+    layoutBoxGroup(boxEdit.group, next);
+  });
+
+  function endBoxPointer(event) {
+    if (!boxEdit || event.pointerId !== boxEdit.pointerId) return;
+    if (detectionOverlay?.hasPointerCapture?.(event.pointerId)) {
+      detectionOverlay.releasePointerCapture(event.pointerId);
+    }
+    void persistBoxEdit();
+  }
+
+  detectionOverlay?.addEventListener("pointerup", endBoxPointer);
+  detectionOverlay?.addEventListener("pointercancel", endBoxPointer);
+
   if (stage && typeof ResizeObserver === "function") {
     new ResizeObserver(() => {
       computeFitScale();
@@ -936,6 +1180,7 @@
       if (!currentFile()) return;
       event.preventDefault();
       if (state.currentTool === "cursor") {
+        if (boxEdit) return;
         const now = Date.now();
         if (now - lastFrameWheelAt < FRAME_WHEEL_COOLDOWN_MS) return;
         lastFrameWheelAt = now;
