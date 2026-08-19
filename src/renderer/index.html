@@ -120,11 +120,20 @@
               <img class="workspace-image" id="workspace-image" alt="" draggable="false" />
               <svg class="detection-overlay" id="detection-overlay" aria-hidden="true"></svg>
               <svg class="box-crosshair" id="box-crosshair" hidden aria-hidden="true">
-                <line class="box-crosshair__line" id="box-crosshair-h" />
-                <line class="box-crosshair__line" id="box-crosshair-v" />
+                <defs>
+                  <pattern id="box-draft-hatch" patternUnits="userSpaceOnUse" width="8" height="8">
+                    <path class="box-crosshair__hatch" id="box-draft-hatch-path" d="M-1,1 l2,-2 M0,8 l8,-8 M7,9 l2,-2" />
+                  </pattern>
+                </defs>
                 <rect class="box-crosshair__draft" id="box-crosshair-draft" hidden />
+                <line class="box-crosshair__diagonal" id="box-crosshair-diagonal" hidden />
+                <circle class="box-crosshair__origin" id="box-crosshair-origin" hidden />
               </svg>
             </div>
+            <svg class="box-guides" id="box-guides" hidden aria-hidden="true">
+              <line class="box-guides__line" id="box-guides-h" />
+              <line class="box-guides__line" id="box-guides-v" />
+            </svg>
           </div>
           <footer class="playback-bar" id="playback-bar">
             <div class="playback-bar__controls">

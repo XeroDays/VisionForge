@@ -30,9 +30,14 @@
   const imageEl = document.getElementById("workspace-image");
   const detectionOverlay = document.getElementById("detection-overlay");
   const boxCrosshair = document.getElementById("box-crosshair");
-  const boxCrosshairH = document.getElementById("box-crosshair-h");
-  const boxCrosshairV = document.getElementById("box-crosshair-v");
+  const boxGuides = document.getElementById("box-guides");
+  const boxGuidesH = document.getElementById("box-guides-h");
+  const boxGuidesV = document.getElementById("box-guides-v");
   const boxCrosshairDraft = document.getElementById("box-crosshair-draft");
+  const boxCrosshairDiagonal = document.getElementById("box-crosshair-diagonal");
+  const boxCrosshairOrigin = document.getElementById("box-crosshair-origin");
+  const boxDraftHatch = document.getElementById("box-draft-hatch");
+  const boxDraftHatchPath = document.getElementById("box-draft-hatch-path");
   const loadingOverlay = document.getElementById("loading-project-overlay");
   const viewToolbar = document.getElementById("view-toolbar");
   const breadcrumb = document.getElementById("app-breadcrumb");
@@ -313,6 +318,9 @@
     detectionOverlay?.querySelectorAll(".detection-overlay__item").forEach((group) => {
       group.classList.toggle("is-selected", Number(group.dataset.index) === state.selectedDetectionIndex);
     });
+    detectionsList?.querySelectorAll(".detections-list__item").forEach((row) => {
+      row.classList.toggle("is-selected", Number(row.dataset.index) === state.selectedDetectionIndex);
+    });
   }
 
   function setSelectedDetection(index, options = {}) {
@@ -373,13 +381,73 @@
     };
   }
 
+  function hideGuides() {
+    if (boxGuides) boxGuides.hidden = true;
+  }
+
   function hideCrosshair() {
-    if (boxCrosshair) boxCrosshair.hidden = true;
+    hideGuides();
     hideDraftRect();
+    if (boxCrosshair) boxCrosshair.hidden = true;
   }
 
   function hideDraftRect() {
     if (boxCrosshairDraft) boxCrosshairDraft.setAttribute("hidden", "");
+    if (boxCrosshairDiagonal) boxCrosshairDiagonal.setAttribute("hidden", "");
+    if (boxCrosshairOrigin) boxCrosshairOrigin.setAttribute("hidden", "");
+  }
+
+  function draftPreviewColor() {
+    return colorForLabelId(state.selectedLabelId ?? 0);
+  }
+
+  function layoutDrawPreview(rect, startPt, endPt) {
+    const color = draftPreviewColor();
+    const scale = Math.max(currentScale(), 0.05);
+    const hatch = Math.max(6 / scale, 2);
+    if (boxDraftHatch) {
+      boxDraftHatch.setAttribute("width", String(hatch));
+      boxDraftHatch.setAttribute("height", String(hatch));
+    }
+    if (boxDraftHatchPath) {
+      boxDraftHatchPath.setAttribute("d", `M-1,1 l2,-2 M0,${hatch} l${hatch},-${hatch} M${hatch - 1},${hatch + 1} l2,-2`);
+      boxDraftHatchPath.setAttribute("stroke", color);
+      boxDraftHatchPath.setAttribute("stroke-opacity", "0.45");
+    }
+    if (startPt && boxCrosshairOrigin) {
+      boxCrosshairOrigin.removeAttribute("hidden");
+      boxCrosshairOrigin.setAttribute("cx", String(startPt.x));
+      boxCrosshairOrigin.setAttribute("cy", String(startPt.y));
+      boxCrosshairOrigin.setAttribute("r", String(4 / scale));
+      boxCrosshairOrigin.setAttribute("fill", color);
+    } else if (boxCrosshairOrigin) {
+      boxCrosshairOrigin.setAttribute("hidden", "");
+    }
+    if (startPt && endPt && boxCrosshairDiagonal) {
+      boxCrosshairDiagonal.removeAttribute("hidden");
+      boxCrosshairDiagonal.setAttribute("x1", String(startPt.x));
+      boxCrosshairDiagonal.setAttribute("y1", String(startPt.y));
+      boxCrosshairDiagonal.setAttribute("x2", String(endPt.x));
+      boxCrosshairDiagonal.setAttribute("y2", String(endPt.y));
+      boxCrosshairDiagonal.setAttribute("stroke", color);
+    } else if (boxCrosshairDiagonal) {
+      boxCrosshairDiagonal.setAttribute("hidden", "");
+    }
+    if (!boxCrosshairDraft) return;
+    if (!rect || rect.width < 1 || rect.height < 1) {
+      boxCrosshairDraft.setAttribute("hidden", "");
+      return;
+    }
+    boxCrosshairDraft.removeAttribute("hidden");
+    boxCrosshairDraft.setAttribute("x", String(rect.x));
+    boxCrosshairDraft.setAttribute("y", String(rect.y));
+    boxCrosshairDraft.setAttribute("width", String(rect.width));
+    boxCrosshairDraft.setAttribute("height", String(rect.height));
+    boxCrosshairDraft.setAttribute("stroke", color);
+  }
+
+  function layoutDraftRect(rect) {
+    layoutDrawPreview(rect, boxDraw?.startPt, boxDraw?.pointerPt);
   }
 
   function syncCrosshairSize() {
@@ -389,44 +457,33 @@
   }
 
   function updateCrosshair(clientX, clientY) {
-    if (state.currentTool !== "box" || !syncCrosshairSize()) {
-      hideCrosshair();
+    if (state.currentTool !== "box" || !currentFile() || !imageReady() || !stage || !boxGuides) {
+      hideGuides();
       return;
     }
-    const pt = clientToImage(clientX, clientY);
-    const imgW = imageEl.naturalWidth;
-    const imgH = imageEl.naturalHeight;
-    if (!pt || pt.x < 0 || pt.y < 0 || pt.x > imgW || pt.y > imgH) {
-      if (!boxDraw) hideCrosshair();
+    const bounds = stage.getBoundingClientRect();
+    const width = bounds.width;
+    const height = bounds.height;
+    const x = clientX - bounds.left;
+    const y = clientY - bounds.top;
+    if (width <= 0 || height <= 0 || x < 0 || y < 0 || x > width || y > height) {
+      hideGuides();
       return;
     }
-    boxCrosshair.hidden = false;
-    if (boxCrosshairH) {
-      boxCrosshairH.setAttribute("x1", "0");
-      boxCrosshairH.setAttribute("x2", String(imgW));
-      boxCrosshairH.setAttribute("y1", String(pt.y));
-      boxCrosshairH.setAttribute("y2", String(pt.y));
+    boxGuides.hidden = false;
+    boxGuides.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    if (boxGuidesH) {
+      boxGuidesH.setAttribute("x1", "0");
+      boxGuidesH.setAttribute("x2", String(width));
+      boxGuidesH.setAttribute("y1", String(y));
+      boxGuidesH.setAttribute("y2", String(y));
     }
-    if (boxCrosshairV) {
-      boxCrosshairV.setAttribute("x1", String(pt.x));
-      boxCrosshairV.setAttribute("x2", String(pt.x));
-      boxCrosshairV.setAttribute("y1", "0");
-      boxCrosshairV.setAttribute("y2", String(imgH));
+    if (boxGuidesV) {
+      boxGuidesV.setAttribute("x1", String(x));
+      boxGuidesV.setAttribute("x2", String(x));
+      boxGuidesV.setAttribute("y1", "0");
+      boxGuidesV.setAttribute("y2", String(height));
     }
-  }
-
-  function layoutDraftRect(rect) {
-    if (!boxCrosshairDraft) return;
-    if (!rect || rect.width < 1 || rect.height < 1) {
-      hideDraftRect();
-      return;
-    }
-    boxCrosshairDraft.removeAttribute("hidden");
-    boxCrosshairDraft.setAttribute("x", String(rect.x));
-    boxCrosshairDraft.setAttribute("y", String(rect.y));
-    boxCrosshairDraft.setAttribute("width", String(rect.width));
-    boxCrosshairDraft.setAttribute("height", String(rect.height));
-    boxCrosshairDraft.setAttribute("stroke", colorForLabelId(state.selectedLabelId ?? 0));
   }
 
   function labelNameForId(labelid) {
@@ -774,6 +831,39 @@
     }
   }
 
+  async function persistDeleteDetection(index) {
+    if (!state.filePath || boxEdit || boxDraw) return;
+    const file = currentFile();
+    if (!file) return;
+    const asset = state.assetsByName.get(file.name);
+    const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
+    if (!Number.isInteger(index) || index < 0 || index >= detections.length) return;
+    detections.splice(index, 1);
+    const nextAssets = state.assets.map((row) =>
+      row?.name === file.name
+        ? formatAsset(row, {
+            width: imageEl.naturalWidth || asset?.width,
+            height: imageEl.naturalHeight || asset?.height,
+            detections,
+          })
+        : row,
+    );
+    setAssets(nextAssets);
+    state.selectedDetectionIndex = null;
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
+      if (updated?.ok) {
+        setAssets(updated.project?.assets);
+        log.info("detection deleted", { name: file.name, index });
+      } else {
+        log.warn("could not delete detection", { reason: updated?.reason });
+      }
+    } catch (err) {
+      log.error("persistDeleteDetection failed", { error: String(err?.message || err) });
+    }
+    renderDetections();
+  }
+
   function imageReady() {
     return Boolean(imageEl && imageEl.complete && imageEl.naturalWidth > 0 && imageEl.naturalHeight > 0);
   }
@@ -839,7 +929,9 @@
       const name = labelNameForId(detection?.labelid);
       const li = document.createElement("li");
       li.className = "detections-list__item";
+      li.dataset.index = String(index);
       li.title = name;
+      if (index === state.selectedDetectionIndex) li.classList.add("is-selected");
 
       const swatch = document.createElement("span");
       swatch.className = "detections-list__swatch";
@@ -849,7 +941,15 @@
       nameEl.className = "detections-list__name";
       nameEl.textContent = `${index + 1}. ${name}`;
 
-      li.append(swatch, nameEl);
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "detections-list__delete";
+      deleteBtn.dataset.index = String(index);
+      deleteBtn.setAttribute("aria-label", `Delete detection ${index + 1}`);
+      deleteBtn.title = "Delete";
+      deleteBtn.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
+
+      li.append(swatch, nameEl, deleteBtn);
       detectionsList.appendChild(li);
     });
 
@@ -1511,11 +1611,12 @@
     boxDraw = {
       pointerId: event.pointerId,
       startPt,
+      pointerPt: startPt,
       currentRect: { x: startPt.x, y: startPt.y, width: 0, height: 0 },
     };
     syncCrosshairSize();
     if (boxCrosshair) boxCrosshair.hidden = false;
-    hideDraftRect();
+    layoutDrawPreview(boxDraw.currentRect, startPt, startPt);
     stage.setPointerCapture?.(event.pointerId);
     return true;
   }
@@ -1524,8 +1625,11 @@
     if (!boxDraw || event.pointerId !== boxDraw.pointerId || !imageReady()) return;
     const raw = clientToImage(event.clientX, event.clientY);
     if (!raw) return;
-    boxDraw.currentRect = rectFromPoints(boxDraw.startPt, raw, imageEl.naturalWidth, imageEl.naturalHeight);
-    layoutDraftRect(boxDraw.currentRect);
+    const imgW = imageEl.naturalWidth;
+    const imgH = imageEl.naturalHeight;
+    boxDraw.pointerPt = clampPointToImage(raw, imgW, imgH);
+    boxDraw.currentRect = rectFromPoints(boxDraw.startPt, boxDraw.pointerPt, imgW, imgH);
+    layoutDrawPreview(boxDraw.currentRect, boxDraw.startPt, boxDraw.pointerPt);
   }
 
   async function endBoxDraw(event) {
@@ -1553,6 +1657,7 @@
     if (event.button === 1) {
       event.preventDefault();
       panning = true;
+      hideGuides();
       panLastX = event.clientX;
       panLastY = event.clientY;
       stage.classList.add("is-panning");
@@ -1580,7 +1685,11 @@
   });
 
   stage?.addEventListener("pointerleave", () => {
-    if (!boxDraw) hideCrosshair();
+    hideGuides();
+    if (!boxDraw) {
+      hideDraftRect();
+      if (boxCrosshair) boxCrosshair.hidden = true;
+    }
   });
 
   stage?.addEventListener("pointerup", (event) => {
@@ -1726,6 +1835,18 @@
     setFrame(Number(frameInput.value));
   });
 
+  detectionsList?.addEventListener("click", (event) => {
+    const deleteBtn = event.target.closest(".detections-list__delete");
+    if (deleteBtn && detectionsList.contains(deleteBtn)) {
+      event.stopPropagation();
+      void persistDeleteDetection(Number(deleteBtn.dataset.index));
+      return;
+    }
+    const item = event.target.closest(".detections-list__item");
+    if (!item || !detectionsList.contains(item)) return;
+    setSelectedDetection(Number(item.dataset.index));
+  });
+
   assetsList?.addEventListener("click", (event) => {
     const item = event.target.closest(".assets-list__item");
     if (!item || !assetsList.contains(item)) return;
@@ -1770,6 +1891,12 @@
     if (isDeleteDialogOpen()) return;
     if (isTypingTarget(event.target)) return;
     const key = event.key;
+    if (key === "Delete" || key === "Backspace") {
+      if (state.selectedDetectionIndex == null || boxEdit || boxDraw) return;
+      event.preventDefault();
+      void persistDeleteDetection(state.selectedDetectionIndex);
+      return;
+    }
     let delta = 0;
     if (key === "a" || key === "A" || key === "ArrowLeft") delta = -1;
     else if (key === "d" || key === "D" || key === "ArrowRight") delta = 1;
