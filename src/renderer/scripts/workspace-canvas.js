@@ -332,10 +332,6 @@
     };
   }
 
-  function decimalsForSize(size) {
-    return Math.max(4, Math.ceil(Math.log10(Math.max(Number(size) || 1, 1))) + 1);
-  }
-
   function clamp01(value) {
     if (!Number.isFinite(value)) return 0;
     return Math.min(1, Math.max(0, value));
@@ -343,7 +339,7 @@
 
   function yoloNorm(pixels, size) {
     const dim = Math.max(Number(size) || 1, 1);
-    return Number(clamp01(pixels / dim).toFixed(decimalsForSize(dim)));
+    return Number(clamp01(pixels / dim).toFixed(6));
   }
 
   function rectToValue(rect, imgW, imgH, original) {
