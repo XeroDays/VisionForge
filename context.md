@@ -232,7 +232,7 @@ Open existing project → `openProjectFile()` → native dialog filtered to `.VF
 - `name` — project display name
 - `imagesFolder` — absolute path to the selected image directory (empty string until chosen)
 - `labels` — `[{ id, name }, …]` class list (`id` from 0). Imported on load (and after setting `imagesFolder`) only when this array is missing or empty, from `{vfsln-dir}/classes.txt` first, then `{imagesFolder}/classes.txt`. Rename keeps the same `id`; delete removes that row and does not renumber remaining ids. Never written to `classes.txt`.
-- `assets` — `[{ name, detections }, …]` append-only image rows. `name` is the file name only (same extensions as `listImageFolder`). `detections` is an array; new rows start as `[]`; `null` or missing is treated as empty. Each detection is `{ labelid, value }` — YOLO `{ xc, yc, w, h }` (normalized 0–1) or VOC `{ xmin, ymin, xmax, ymax }` (pixels). Older files without `assets` treat it as `[]`. Rows are never deleted and non-empty `detections` are never overwritten.
+- `assets` — `[{ name, width, height, detections }, …]` append-only image rows. `name` is the file name only (same extensions as `listImageFolder`). `width` / `height` are image pixels (`0` or missing until the renderer has shown that file). `detections` is an array; new rows start as `[]`; `null` or missing is treated as empty. Each detection is `{ labelid, value }` — YOLO `{ xc, yc, w, h }` (normalized 0–1, quantized to the pixel grid with short decimals on edit) or VOC `{ xmin, ymin, xmax, ymax }` (integer pixels on edit). Older files without `assets` treat it as `[]`. Rows are never deleted and non-empty `detections` are never overwritten by sidecar import.
 - `annotationType` — kebab-case id from the create-project type catalog (e.g. `object-detection-bbox`). Older files may omit this.
 - `annotationMode` — kebab-case id of the selected radio for that type (e.g. `yolo-bounding-box`). Must be a valid pair with `annotationType`. Older files may omit this.
 
@@ -547,7 +547,7 @@ Native directory dialog → **Loading project** overlay → `updateProject({ ima
 **Trigger:** `loadProject` when `imagesFolder` is set; also `updateProject({ imagesFolder })`
 
 **Flow:**
-List image names in `imagesFolder` (same extensions as `listImageFolder`). Existing `assets[].name` kept (including detections). Names not in `assets` appended as `{ name, detections: [] }`. Write only if the array grew or `assets` was missing. Never delete stale rows. Playback still uses `listImageFolder`.
+List image names in `imagesFolder` (same extensions as `listImageFolder`). Existing `assets[].name` kept (including detections and size). Names not in `assets` appended as `{ name, width: 0, height: 0, detections: [] }`. Write only if the array grew or `assets` was missing. Never delete stale rows. Do not probe image dimensions at sync time. Playback still uses `listImageFolder`.
 
 **Files:**
 - `src/main/middleware/project-service.js`
@@ -586,7 +586,7 @@ Show `#loading-project-overlay` (spinner + “Loading project”; not dismissibl
 **Trigger:** After project assets are in renderer state; `setFrame` (playback, Assets click, wheel)
 
 **Flow:**
-Match current `files[frameIndex].name` to `assets[].name` → list that row’s `detections` in `#panel-detections` (label name from `labels` by `labelid`) → draw SVG rects on `#detection-overlay` in image pixel space. YOLO `{ xc, yc, w, h }` normalized → pixel box; VOC `{ xmin, ymin, xmax, ymax }` already pixels. Image and overlay live in `#workspace-view` and share one zoom/pan transform. Stroke 2.2px, unchanged on hover; color from `labelid` via golden-angle HSL (not a fixed palette). Cursor tool: hover shows small corner squares (nw/ne/sw/se); drag body to move, drag a corner to resize; pointer-up writes `value` back via `updateProject({ assets })`. Move tool still pans (boxes ignore pointer).
+Match current `files[frameIndex].name` to `assets[].name` → list that row’s `detections` in `#panel-detections` (label name from `labels` by `labelid`) → draw SVG rects on `#detection-overlay` in image pixel space. YOLO `{ xc, yc, w, h }` normalized → pixel box; VOC `{ xmin, ymin, xmax, ymax }` already pixels. Image and overlay live in `#workspace-view` and share one zoom/pan transform. Stroke 2.2px, unchanged on hover; color from `labelid` via golden-angle HSL (not a fixed palette). Cursor tool: hover shows small corner squares (nw/ne/sw/se); drag body to move, drag a corner to resize; pointer-up snaps the rect to whole pixels then writes YOLO (short decimals) or integer VOC `value` via `updateProject({ assets })`. On image load (and on that persist), write `width`/`height` for that row if missing or different — skip the write when size is already correct. Move tool still pans (boxes ignore pointer).
 
 **Files:**
 - `src/renderer/index.html` — `#panel-detections`, `#workspace-view`, `#detection-overlay`
@@ -1028,10 +1028,10 @@ Renderer
 - **Open existing project** / **Recent** loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab). `loadProject` appends missing image names to `assets` and fills empty `detections` from sidecar txt/xml.
 - **Labels:** if VFSln `labels` is empty, import `{project-folder}/classes.txt` then `{imagesFolder}/classes.txt` as `{ id, name }` (id from 0) and list them in the Labels tab. Existing labels are never overwritten by that import. **Add**, **rename**, and **delete** write VFSln `labels` only (never `classes.txt`). Rename keeps the same `id`; delete does not renumber remaining ids.
 - **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open. That save also syncs `assets` (append-only) and imports empty detections.
-- **Assets (VFSln):** `{ name, detections: [{ labelid, value }] }`. Append-only; playback still lists the folder. YOLO `value` is `{ xc, yc, w, h }`; VOC is `{ xmin, ymin, xmax, ymax }`. Non-empty detections are not overwritten.
+- **Assets (VFSln):** `{ name, width, height, detections: [{ labelid, value }] }`. Append-only; playback still lists the folder. `width`/`height` filled when that image is previewed (or on box persist). YOLO `value` is `{ xc, yc, w, h }` quantized to the pixel grid with short decimals on edit; VOC is integer `{ xmin, ymin, xmax, ymax }`. Non-empty detections are not overwritten by sidecar import.
 - **Loading project overlay:** non-dismissible spinner during `loadProject` / `imagesFolder` save until the image list is ready.
 - **Detections tab:** lists VFSln detections for the current image (label name by `labelid`); refreshes on frame change.
-- **Canvas boxes:** SVG overlay in `#workspace-view` with the image (shared zoom/pan transform). Stroke 2.2px (does not thicken on hover). Color is derived from `labelid` (golden-angle HSL), not a fixed palette. Cursor hover shows small corner squares; drag body to move, drag a corner to resize; persist `value` (YOLO or VOC) on release.
+- **Canvas boxes:** SVG overlay in `#workspace-view` with the image (shared zoom/pan transform). Stroke 2.2px (does not thicken on hover). Color is derived from `labelid` (golden-angle HSL), not a fixed palette. Cursor hover shows small corner squares; drag body to move, drag a corner to resize; persist pixel-snapped `value` (YOLO or VOC) on release.
 - **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Current frame is previewed fit-to-screen via `vfimg:`.
 - **Assets** is the first/default inspector tab.
 - **Zoom / Move / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): Move pans, zoom in/out buttons, Fit to Screen resets view, Rotate overwrites the current file 90° clockwise (`sharp`). Wheel: Cursor steps assets; Move zooms; Box/Hexagon ignore.

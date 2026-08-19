@@ -172,6 +172,7 @@
       computeFitScale();
       applyView();
       drawDetectionBoxes();
+      void persistCurrentAssetSize();
     }
   }
 
@@ -329,20 +330,62 @@
     return [value.xmin, value.ymin, value.xmax, value.ymax].every((part) => Number.isFinite(Number(part)));
   }
 
+  function snapPixelRect(rect) {
+    const x = Math.round(Number(rect?.x) || 0);
+    const y = Math.round(Number(rect?.y) || 0);
+    const x2 = Math.round((Number(rect?.x) || 0) + (Number(rect?.width) || 0));
+    const y2 = Math.round((Number(rect?.y) || 0) + (Number(rect?.height) || 0));
+    return {
+      x,
+      y,
+      width: Math.max(1, x2 - x),
+      height: Math.max(1, y2 - y),
+    };
+  }
+
+  function decimalsForSize(size) {
+    return Math.max(4, Math.ceil(Math.log10(Math.max(Number(size) || 1, 1))) + 1);
+  }
+
+  function normFromPixels(px, size) {
+    const dim = Math.max(Number(size) || 1, 1);
+    return Number((Math.round(px) / dim).toFixed(decimalsForSize(dim)));
+  }
+
   function rectToValue(rect, imgW, imgH, original) {
+    const snapped = snapPixelRect(rect);
     if (isVocValue(original)) {
       return {
-        xmin: rect.x,
-        ymin: rect.y,
-        xmax: rect.x + rect.width,
-        ymax: rect.y + rect.height,
+        xmin: snapped.x,
+        ymin: snapped.y,
+        xmax: snapped.x + snapped.width,
+        ymax: snapped.y + snapped.height,
       };
     }
+    const cx = snapped.x + snapped.width / 2;
+    const cy = snapped.y + snapped.height / 2;
     return {
-      xc: (rect.x + rect.width / 2) / imgW,
-      yc: (rect.y + rect.height / 2) / imgH,
-      w: rect.width / imgW,
-      h: rect.height / imgH,
+      xc: normFromPixels(cx, imgW),
+      yc: normFromPixels(cy, imgH),
+      w: Number((snapped.width / imgW).toFixed(decimalsForSize(imgW))),
+      h: Number((snapped.height / imgH).toFixed(decimalsForSize(imgH))),
+    };
+  }
+
+  function formatAsset(row, patch = {}) {
+    const name = String(patch.name || row?.name || "");
+    const width = Number(patch.width ?? row?.width);
+    const height = Number(patch.height ?? row?.height);
+    const detections = Array.isArray(patch.detections)
+      ? patch.detections
+      : Array.isArray(row?.detections)
+        ? row.detections
+        : [];
+    return {
+      name,
+      width: Number.isFinite(width) && width > 0 ? Math.round(width) : 0,
+      height: Number.isFinite(height) && height > 0 ? Math.round(height) : 0,
+      detections,
     };
   }
 
@@ -490,7 +533,13 @@
       value: rectToValue(edit.currentRect, imageEl.naturalWidth, imageEl.naturalHeight, prev.value),
     };
     const nextAssets = state.assets.map((row) =>
-      row?.name === file.name ? { ...row, detections } : row,
+      row?.name === file.name
+        ? formatAsset(row, {
+            width: imageEl.naturalWidth,
+            height: imageEl.naturalHeight,
+            detections,
+          })
+        : row,
     );
     setAssets(nextAssets);
     try {
@@ -505,6 +554,32 @@
       log.error("persistBoxEdit failed", { error: String(err?.message || err) });
     }
     drawDetectionBoxes();
+  }
+
+  async function persistCurrentAssetSize() {
+    if (!state.filePath || !imageReady()) return;
+    const file = currentFile();
+    if (!file) return;
+    const width = imageEl.naturalWidth;
+    const height = imageEl.naturalHeight;
+    const asset = state.assetsByName.get(file.name);
+    if (!asset) return;
+    if (Number(asset.width) === width && Number(asset.height) === height) return;
+    const nextAssets = state.assets.map((row) =>
+      row?.name === file.name ? formatAsset(row, { width, height }) : row,
+    );
+    setAssets(nextAssets);
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
+      if (updated?.ok) {
+        setAssets(updated.project?.assets);
+        log.debug("asset size saved", { name: file.name, width, height });
+      } else {
+        log.warn("could not persist asset size", { reason: updated?.reason });
+      }
+    } catch (err) {
+      log.error("persistCurrentAssetSize failed", { error: String(err?.message || err) });
+    }
   }
 
   function imageReady() {
@@ -1116,6 +1191,7 @@
     computeFitScale();
     applyView();
     drawDetectionBoxes();
+    void persistCurrentAssetSize();
   });
 
   imageEl?.addEventListener("error", () => {

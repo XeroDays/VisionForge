@@ -267,7 +267,7 @@ function syncAssetsFromFolder(result) {
   let added = 0;
   for (const file of listed.files) {
     if (existing.has(file.name)) continue;
-    assets.push({ name: file.name, detections: [] });
+    assets.push({ name: file.name, width: 0, height: 0, detections: [] });
     existing.add(file.name);
     added += 1;
   }
