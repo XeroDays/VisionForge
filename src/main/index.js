@@ -42,15 +42,11 @@ function loadHeavyModules() {
       const { createMainWindow } = require("./windows/main-window");
       const licenseService = require("./services/license-service");
       const { getAppIcon } = require("./helpers/app-icon");
-      const { createTray, destroyTray, showFromTray } = require("./helpers/tray");
       registerIpcHandlers();
       resolve({
         createMainWindow,
         licenseService,
         getAppIcon,
-        createTray,
-        destroyTray,
-        showFromTray,
       });
     });
   });
@@ -63,22 +59,6 @@ function getMainWindow() {
     return !url.includes("splash.html");
   });
   return windows.length > 0 ? windows[0] : null;
-}
-
-function showAppWindow(deps) {
-  let win = getMainWindow();
-  if (!win || win.isDestroyed()) {
-    win = deps.createMainWindow();
-  }
-  deps.showFromTray(win);
-  if (!win.isMaximized()) {
-    win.maximize();
-  }
-}
-
-function quitApp(deps) {
-  deps.destroyTray();
-  app.quit();
 }
 
 async function bootstrap() {
@@ -178,12 +158,6 @@ async function bootstrap() {
     log.mark("main.maximize + show + focus");
   }
 
-  deps.createTray({
-    onShow: () => showAppWindow(deps),
-    onQuit: () => quitApp(deps),
-  });
-  log.mark("tray.create");
-
   log.exit("bootstrap", bootstrapStartedAt, { outcome: "success" });
 }
 
@@ -202,15 +176,6 @@ app.whenReady().then(() => {
       mainWin.focus();
     }
   });
-});
-
-app.on("before-quit", () => {
-  try {
-    const { destroyTray } = require("./helpers/tray");
-    destroyTray();
-  } catch {
-    // ignore if tray not initialized
-  }
 });
 
 app.on("window-all-closed", () => {

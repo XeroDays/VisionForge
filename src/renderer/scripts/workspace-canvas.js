@@ -15,7 +15,6 @@
   const SKIP_STEP = 10;
   const ZOOM_IN = 1.25;
   const ZOOM_OUT = 0.8;
-  const MIN_ZOOM = 0.25;
   const MAX_ZOOM = 16;
   const FRAME_WHEEL_COOLDOWN_MS = 80;
   const SVG_NS = "http://www.w3.org/2000/svg";
@@ -955,8 +954,12 @@
 
   function zoomBy(factor, origin) {
     if (!currentFile()) return;
+    if (factor < 1 && state.zoom * factor < 1) {
+      fitToScreen();
+      return;
+    }
     const oldScale = currentScale();
-    const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, state.zoom * factor));
+    const nextZoom = Math.min(MAX_ZOOM, state.zoom * factor);
     const newScale = fitScale * nextZoom;
     if (origin && oldScale > 0) {
       const ratio = newScale / oldScale;

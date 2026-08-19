@@ -4,7 +4,6 @@ const licenseService = require("../services/license-service");
 const projectService = require("../middleware/project-service");
 const imageService = require("../middleware/image-service");
 const historyStore = require("../services/history-solutions-store");
-const { hideToTray } = require("../helpers/tray");
 const { ipc: log } = require("../services/visionforge-logger");
 
 let ipcHandlersRegistered = false;
@@ -25,7 +24,7 @@ function registerIpcHandlers() {
   ipcMain.handle(channels.WINDOW_MINIMIZE, (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     log.debug("WINDOW_MINIMIZE");
-    if (win) hideToTray(win);
+    if (win) win.minimize();
     return { ok: true };
   });
 

@@ -76,11 +76,10 @@
 | No bundler | Source files loaded directly by Electron — no Webpack/Vite |
 | Frameless windows | Both splash and main use `frame: false`; custom chrome in renderer |
 | Window security | `contextIsolation: true` on all `BrowserWindow` instances |
-| Lazy bootstrap | Heavy modules loaded via `setImmediate` after splash shows (IPC, windows, license, icon, tray) |
+| Lazy bootstrap | Heavy modules loaded via `setImmediate` after splash shows (IPC, windows, license, icon) |
 | Splash load gate | Wait for splash `did-finish-load` before `splash.show()` |
 | Main presentation | **Maximize** main window after splash (not fullscreen) |
-| Minimize behavior | Main window minimize hides to system tray (`hideToTray`) |
-| Tray | Created after successful bootstrap via `helpers/tray.js` |
+| Minimize behavior | Main window minimize uses `win.minimize()` (taskbar, not tray) |
 | Logo asset | `src/renderer/images/logo/VisionForge.png` (dev + splash); packaged `icon.png` via `helpers/app-icon.js` |
 | Logging | Main + renderer via `visionforge-logger.js` / `renderer-logger.js` (`electron-log`); file at `Documents/VisionForge/Logs/logfile.txt`; level via `VISIONFORGE_LOG_LEVEL` env |
 | Image protocol | Privileged `vfimg:` scheme registered before `app.whenReady`; only paths under the current images folder |
@@ -119,20 +118,7 @@
 - `channels.js`
 
 **Workflow:**
-`app.whenReady` → register splash IPC → create splash → wait splash load → show → `"Starting…"` → lazy-load IPC/windows/license/icon/tray → create hidden main → parallel license register (`"Checking for updates…"`) + main load → on deny stay on splash / on grant `"Loading workspace…"` (1s) → `LICENSE_UPDATE` → close splash → maximize/show main → create tray
-
----
-
-### System Tray
-
-**Purpose:** Minimize-to-tray and restore main window after bootstrap.
-
-**Primary Files:**
-- `src/main/helpers/tray.js`
-- `src/main/ipc/register.js` — `WINDOW_MINIMIZE` → `hideToTray`
-
-**Workflow:**
-Minimize button → hide to tray → tray Show/click → `showFromTray` + maximize
+`app.whenReady` → register splash IPC → create splash → wait splash load → show → `"Starting…"` → lazy-load IPC/windows/license/icon → create hidden main → parallel license register (`"Checking for updates…"`) + main load → on deny stay on splash / on grant `"Loading workspace…"` (1s) → `LICENSE_UPDATE` → close splash → maximize/show main
 
 ---
 
@@ -308,7 +294,7 @@ Main `sendSplashStatus()` → preload `onSplashStatus` → `splash.js` updates U
 - `visionforge:window-is-maximized`
 
 **Workflow:**
-Button click → `window.visionforge.*Window()` → preload invoke → `register.js` → `BrowserWindow` API
+Button click → `window.visionforge.*Window()` → preload invoke → `register.js` → `BrowserWindow` API (minimize → `win.minimize()` / taskbar)
 
 ---
 
@@ -714,7 +700,6 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | Solution history store | `src/main/services/history-solutions-store.js` |
 | Renderer logger | `src/renderer/scripts/renderer-logger.js` |
 | App icon resolver | `src/main/helpers/app-icon.js` |
-| System tray | `src/main/helpers/tray.js` |
 | License registration | `src/main/services/license-service.js` |
 | Release update UI | `src/renderer/scripts/release-update-panel.js` |
 | Workspace canvas / playback | `src/renderer/scripts/workspace-canvas.js` |
@@ -929,7 +914,7 @@ Renderer
 - Installer name/output
 - App ID, product name
 - Packaged file inclusion
-- `extraResources` copies `build/icon.png` → `icon.png` for packaged tray/taskbar icon resolution
+- `extraResources` copies `build/icon.png` → `icon.png` for packaged taskbar/window icon resolution
 - `asarUnpack` for `sharp` / `@img` native binaries
 
 ### `scripts/generate-windows-icon.js` / logo asset
@@ -1021,7 +1006,8 @@ Renderer
 
 ## Current State Notes (as of v1.0.0)
 
-- **Splash/bootstrap** follows CryptoGenesis-style flow (license gate, 1s transition delay, tray on success)
+- **Splash/bootstrap** follows CryptoGenesis-style flow (license gate, 1s transition delay)
+- **Minimize** uses `win.minimize()` so the app stays on the Windows taskbar (no system tray)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
 - **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder, labels, assets, annotationType, annotationMode). Annotation type/mode come from the create dialog catalog and are required for new projects. All project config belongs in that file.
@@ -1034,7 +1020,7 @@ Renderer
 - **Canvas boxes:** SVG overlay in `#workspace-view` with the image (shared zoom/pan transform). Stroke 2.2px (does not thicken on hover). Color is derived from `labelid` (golden-angle HSL), not a fixed palette. Cursor hover shows small corner squares; drag body to move, drag a corner to resize; persist YOLO as `((x1+x2)/2)/imageSize` and `(x2-x1)/imageSize` (0–1, 6 decimal places) or integer VOC on release.
 - **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Current frame is previewed fit-to-screen via `vfimg:`.
 - **Assets** is the first/default inspector tab.
-- **Zoom / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets view; Rotate overwrites the current file 90° clockwise (`sharp`). Cursor is selected on project load. Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps assets; plain wheel does not change the frame; Box/Hexagon ignore.
+- **Zoom / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets view; zoom-out below fit snaps to Fit to Screen. Rotate overwrites the current file 90° clockwise (`sharp`). Cursor is selected on project load. Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps assets; plain wheel does not change the frame; Box/Hexagon ignore.
 - **Goto Startup page:** File menu item (enabled while a project is open) closes the workspace and returns to `#start-page` without deleting the VFSln or recents.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
