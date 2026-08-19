@@ -586,7 +586,7 @@ Show `#loading-project-overlay` (spinner + “Loading project”; not dismissibl
 **Trigger:** After project assets are in renderer state; `setFrame` (playback, Assets click, wheel)
 
 **Flow:**
-Match current `files[frameIndex].name` to `assets[].name` → list that row’s `detections` in `#panel-detections` (label name from `labels` by `labelid`) → draw SVG rects on `#detection-overlay` in image pixel space. YOLO `{ xc, yc, w, h }` normalized → pixel box; VOC `{ xmin, ymin, xmax, ymax }` already pixels. Image and overlay live in `#workspace-view` and share one zoom/pan transform. Dark strokes (2.2px, unchanged on hover). Cursor tool: hover shows small corner squares (nw/ne/sw/se); drag body to move, drag a corner to resize; pointer-up writes `value` back via `updateProject({ assets })`. Move tool still pans (boxes ignore pointer).
+Match current `files[frameIndex].name` to `assets[].name` → list that row’s `detections` in `#panel-detections` (label name from `labels` by `labelid`) → draw SVG rects on `#detection-overlay` in image pixel space. YOLO `{ xc, yc, w, h }` normalized → pixel box; VOC `{ xmin, ymin, xmax, ymax }` already pixels. Image and overlay live in `#workspace-view` and share one zoom/pan transform. Stroke 2.2px, unchanged on hover; color from `labelid` via golden-angle HSL (not a fixed palette). Cursor tool: hover shows small corner squares (nw/ne/sw/se); drag body to move, drag a corner to resize; pointer-up writes `value` back via `updateProject({ assets })`. Move tool still pans (boxes ignore pointer).
 
 **Files:**
 - `src/renderer/index.html` — `#panel-detections`, `#workspace-view`, `#detection-overlay`
@@ -1031,7 +1031,7 @@ Renderer
 - **Assets (VFSln):** `{ name, detections: [{ labelid, value }] }`. Append-only; playback still lists the folder. YOLO `value` is `{ xc, yc, w, h }`; VOC is `{ xmin, ymin, xmax, ymax }`. Non-empty detections are not overwritten.
 - **Loading project overlay:** non-dismissible spinner during `loadProject` / `imagesFolder` save until the image list is ready.
 - **Detections tab:** lists VFSln detections for the current image (label name by `labelid`); refreshes on frame change.
-- **Canvas boxes:** SVG overlay in `#workspace-view` with the image (shared zoom/pan transform). Dark strokes, 2.2px (outline does not thicken on hover). Cursor hover shows small corner squares; drag body to move, drag a corner to resize; persist `value` (YOLO or VOC) on release.
+- **Canvas boxes:** SVG overlay in `#workspace-view` with the image (shared zoom/pan transform). Stroke 2.2px (does not thicken on hover). Color is derived from `labelid` (golden-angle HSL), not a fixed palette. Cursor hover shows small corner squares; drag body to move, drag a corner to resize; persist `value` (YOLO or VOC) on release.
 - **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Current frame is previewed fit-to-screen via `vfimg:`.
 - **Assets** is the first/default inspector tab.
 - **Zoom / Move / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): Move pans, zoom in/out buttons, Fit to Screen resets view, Rotate overwrites the current file 90° clockwise (`sharp`). Wheel: Cursor steps assets; Move zooms; Box/Hexagon ignore.

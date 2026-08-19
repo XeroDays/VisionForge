@@ -19,9 +19,10 @@
   const MAX_ZOOM = 16;
   const FRAME_WHEEL_COOLDOWN_MS = 80;
   const SVG_NS = "http://www.w3.org/2000/svg";
-  const DETECTION_COLORS = ["#f4b42a", "#38bdf8", "#a78bfa", "#34d399", "#f87171", "#fb923c", "#e879f9"];
+  const GOLDEN_ANGLE = 137.508;
   const BOX_HANDLE_PX = 8;
   const BOX_MIN_SIZE = 4;
+  const labelColorCache = new Map();
 
   const startPage = document.getElementById("start-page");
   const canvas = document.getElementById("workspace-canvas");
@@ -291,9 +292,14 @@
   }
 
   function colorForLabelId(labelid) {
-    const id = Number(labelid);
-    if (!Number.isFinite(id)) return DETECTION_COLORS[0];
-    return DETECTION_COLORS[Math.abs(id) % DETECTION_COLORS.length];
+    const id = Number.isFinite(Number(labelid)) ? Math.abs(Number(labelid)) : 0;
+    const cached = labelColorCache.get(id);
+    if (cached) return cached;
+    const hue = (id * GOLDEN_ANGLE) % 360;
+    const light = 58 + (id % 5) * 3;
+    const color = `hsl(${hue.toFixed(1)}, 72%, ${light}%)`;
+    labelColorCache.set(id, color);
+    return color;
   }
 
   function detectionToRect(value, imgW, imgH) {
