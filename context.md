@@ -146,7 +146,7 @@
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Tool click → selected highlight for Cursor, Box, Hexagon. **Select Images** is a command (shown after a project is open). Left tools rail, inspector, and resize handle are hidden until a `.VFSln` is loaded (`setWorkspaceChrome`); Goto Startup page hides them again. Inspector tabs: **Assets** (default, first), Labels (list + Add composer; click row to rename; hover trash + confirm to delete; all persist only in VFSln `labels`), Detections (read-only list of the current image’s VFSln boxes). Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Zoom in/out, Fit to Screen, Rotate) live on `#view-toolbar` over the stage as one-shot actions (never stay selected), not on the left rail.
+Tool click → selected highlight for Cursor, Box, Hexagon. **Select Images** is a command (shown after a project is open). Left tools rail, inspector, and resize handle are hidden until a `.VFSln` is loaded (`setWorkspaceChrome`); Goto Startup page hides them again. Inspector tabs: **Assets** (default, first), Labels (list + Add composer; click row to select class for Box draws; click again to rename; hover trash + confirm to delete; all persist only in VFSln `labels`), Detections (read-only list of the current image’s VFSln boxes). Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Zoom in/out, Fit to Screen, Rotate) live on `#view-toolbar` over the stage as one-shot actions (never stay selected), not on the left rail.
 
 ---
 
@@ -160,7 +160,7 @@ Tool click → selected highlight for Cursor, Box, Hexagon. **Select Images** is
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Create / Open / Recent → `showWorkspace(filePath)` → **Loading project** overlay → load VFSln (append-only `assets` sync + empty-detection sidecar import if `imagesFolder` set) → hide `#start-page` → select Cursor tool → restore `imagesFolder` if set → playback range = image count (`listImageFolder`, not `assets`) → current frame previewed fit-to-screen via `vfimg:` protocol → Detections tab + SVG boxes for that file → hide overlay. File → **Select Image Folder** and the Select Images tool share the same picker (same overlay while sync/import runs). File → **Goto Startup page** closes the project (`closeWorkspace` + `closeProject`) and returns to `#start-page`. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names; click sets the current frame (Detections list and boxes update). When an image is previewed, `#view-toolbar` (top-left of the stage) shows Zoom in/out, Fit to Screen, and Rotate (one-shot). Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps the asset list; plain wheel does not change the frame. Box/Hexagon ignore wheel. Rotate overwrites the current image file 90° clockwise and re-fits. Detection overlay uses the same zoom/pan transform as the image.
+Create / Open / Recent → `showWorkspace(filePath)` → **Loading project** overlay → load VFSln (append-only `assets` sync + empty-detection sidecar import if `imagesFolder` set) → hide `#start-page` → select Cursor tool → restore `imagesFolder` if set → playback range = image count (`listImageFolder`, not `assets`) → current frame previewed fit-to-screen via `vfimg:` protocol → Detections tab + SVG boxes for that file → hide overlay. File → **Select Image Folder** and the Select Images tool share the same picker (same overlay while sync/import runs). File → **Goto Startup page** closes the project (`closeWorkspace` + `closeProject`) and returns to `#start-page`. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names; click sets the current frame (Detections list and boxes update). When an image is previewed, `#view-toolbar` (top-left of the stage) shows Zoom in/out, Fit to Screen, and Rotate (one-shot). Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps the asset list; A / ArrowLeft step back and D / ArrowRight step forward (any tool; ignored while typing). Plain wheel does not change the frame. Box/Hexagon ignore wheel. Rotate overwrites the current image file 90° clockwise and re-fits. Detection overlay uses the same zoom/pan transform as the image.
 
 ---
 
@@ -489,10 +489,10 @@ Add → inline composer (name + check / cancel) → Enter or check → `updatePr
 
 ### Rename Label
 
-**Trigger:** Labels tab → click a row (id/name, not the trash)
+**Trigger:** Labels tab → click the already selected row (id/name, not the trash)
 
 **Flow:**
-Row becomes an inline text field + check. Enter or check → trim name (ignore empty) → `updateProject({ labels })` with the same `id` → refresh list. Escape, click outside, or starting another row/Add cancels without saving. VFSln only; does not write `classes.txt`.
+First click on a row selects it (highlight; used as the class for new Box-tool draws). Click the already selected row to rename: inline text field + check. Enter or check → trim name (ignore empty) → `updateProject({ labels })` with the same `id` → refresh list. Escape, click outside, or starting another row/Add cancels without saving. VFSln only; does not write `classes.txt`.
 
 **Files:**
 - `src/renderer/scripts/workspace-canvas.js`
@@ -569,13 +569,27 @@ Show `#loading-project-overlay` (spinner + “Loading project”; not dismissibl
 
 ### Detections Tab and Canvas Boxes
 
-**Trigger:** After project assets are in renderer state; `setFrame` (playback, Assets click, Shift+wheel)
+**Trigger:** After project assets are in renderer state; `setFrame` (playback, Assets click, Shift+wheel, A/D, Left/Right)
 
 **Flow:**
-Match current `files[frameIndex].name` to `assets[].name` → list that row’s `detections` in `#panel-detections` (label name from `labels` by `labelid`) → draw SVG rects on `#detection-overlay` in image pixel space. YOLO `{ xc, yc, w, h }` normalized → pixel box; VOC `{ xmin, ymin, xmax, ymax }` already pixels. Image and overlay live in `#workspace-view` and share one zoom/pan transform. Stroke 2.2px, unchanged on hover; color from `labelid` via golden-angle HSL (not a fixed palette). Cursor tool: hover shows small corner squares (nw/ne/sw/se); drag body to move, drag a corner to resize; pointer-up snaps corners to whole pixels then writes YOLO `xc/yc/w/h` as `((x1+x2)/2)/imageSize` and `(x2-x1)/imageSize` (clamped 0–1, 6 decimal places) or integer VOC `value` via `updateProject({ assets })`. On image load (and on that persist), write `width`/`height` for that row if missing or different — skip the write when size is already correct.
+Match current `files[frameIndex].name` to `assets[].name` → list that row’s `detections` in `#panel-detections` (label name from `labels` by `labelid`) → draw SVG rects on `#detection-overlay` in image pixel space. YOLO `{ xc, yc, w, h }` normalized → pixel box; VOC `{ xmin, ymin, xmax, ymax }` already pixels. Image and overlay live in `#workspace-view` and share one zoom/pan transform. Stroke 2.2px, unchanged on hover; color from `labelid` via golden-angle HSL (not a fixed palette). Cursor tool: hover shows small corner squares (nw/ne/sw/se); click a box selects it (`is-selected` keeps the corners visible, Labels tab highlights that `labelid`); drag body to move, drag a corner to resize; pointer-up snaps corners to whole pixels then writes YOLO `xc/yc/w/h` as `((x1+x2)/2)/imageSize` and `(x2-x1)/imageSize` (clamped 0–1, 6 decimal places) or integer VOC `value` via `updateProject({ assets })`. On image load (and on that persist), write `width`/`height` for that row if missing or different — skip the write when size is already correct. Frame change clears the selected box.
 
 **Files:**
 - `src/renderer/index.html` — `#panel-detections`, `#workspace-view`, `#detection-overlay`
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/styles/app.css`
+
+---
+
+### Box Tool Draw and Crosshair
+
+**Trigger:** Left rail Box tool selected; image previewed
+
+**Flow:**
+Selecting Box opens the Labels tab and selects the first label if none is selected. A click-drag on the image (clamped to image pixels) creates a detection with the selected `labelid`. YOLO vs VOC follows `annotationMode`. Stay on Box after create (do not switch to Cursor). Existing boxes ignore pointer while Box is active; a press that hits a box still selects it (label + corner handles). A drag too small (`BOX_MIN_SIZE`) or with no labels is discarded. `#box-crosshair` (sibling SVG in `#workspace-view`) shows horizontal/vertical guides at the pointer in image space — visual only, Box tool only, hidden when the pointer leaves the image.
+
+**Files:**
+- `src/renderer/index.html` — `#box-crosshair`
 - `src/renderer/scripts/workspace-canvas.js`
 - `src/renderer/styles/app.css`
 
@@ -586,7 +600,7 @@ Match current `files[frameIndex].name` to `assets[].name` → list that row’s 
 **Trigger:** `#view-toolbar` (visible only while an image is previewed), mouse wheel on stage, middle-button drag
 
 **Flow:**
-Toolbar appears at top-left of `#workspace-stage` when a frame image is shown. Zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets `zoom=1` and pan. Middle-button drag pans the image (any tool). Ctrl+wheel on the stage `zoomBy` toward the pointer (any tool). Shift+wheel on Cursor steps `setFrame` ±1 (80ms cooldown); plain wheel does not change the frame; Box/Hexagon no-op. Rotate → `rotateImage` (sharp 90° CW overwrite) → reload `vfimg` src with cache-bust → re-fit. `#workspace-view` wraps the image and `#detection-overlay` so boxes stay aligned. `showWorkspace` selects the Cursor tool.
+Toolbar appears at top-left of `#workspace-stage` when a frame image is shown. Zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets `zoom=1` and pan. Middle-button drag pans the image (any tool). Ctrl+wheel on the stage `zoomBy` toward the pointer (any tool). Shift+wheel on Cursor steps `setFrame` ±1 (80ms cooldown); A / ArrowLeft and D / ArrowRight step frames (any tool; ignored while typing or when a dialog/input is focused); plain wheel does not change the frame; Box/Hexagon no-op. Rotate → `rotateImage` (sharp 90° CW overwrite) → reload `vfimg` src with cache-bust → re-fit. `#workspace-view` wraps the image and `#detection-overlay` so boxes stay aligned. `showWorkspace` selects the Cursor tool.
 
 **Files:**
 - `src/renderer/scripts/workspace-canvas.js`
@@ -1017,10 +1031,11 @@ Renderer
 - **Assets (VFSln):** `{ name, width, height, detections: [{ labelid, value }] }`. Append-only; playback still lists the folder. `width`/`height` filled when that image is previewed (or on box persist). YOLO `value` is `{ xc, yc, w, h }` with `xc = ((x1+x2)/2)/image_width` (same pattern for `yc`, `w`, `h`), clamped to 0–1 and written to 6 decimal places on edit (LabelImg / Ultralytics style); VOC is integer `{ xmin, ymin, xmax, ymax }`. Non-empty detections are not overwritten by sidecar import.
 - **Loading project overlay:** non-dismissible spinner during `loadProject` / `imagesFolder` save until the image list is ready.
 - **Detections tab:** lists VFSln detections for the current image (label name by `labelid`); refreshes on frame change.
-- **Canvas boxes:** SVG overlay in `#workspace-view` with the image (shared zoom/pan transform). Stroke 2.2px (does not thicken on hover). Color is derived from `labelid` (golden-angle HSL), not a fixed palette. Cursor hover shows small corner squares; drag body to move, drag a corner to resize; persist YOLO as `((x1+x2)/2)/imageSize` and `(x2-x1)/imageSize` (0–1, 6 decimal places) or integer VOC on release.
-- **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Current frame is previewed fit-to-screen via `vfimg:`.
+- **Canvas boxes:** SVG overlay in `#workspace-view` with the image (shared zoom/pan transform). Stroke 2.2px (does not thicken on hover). Color is derived from `labelid` (golden-angle HSL), not a fixed palette. Cursor hover shows small corner squares; the selected box keeps those squares visible. Drag body to move, drag a corner to resize; persist YOLO as `((x1+x2)/2)/imageSize` and `(x2-x1)/imageSize` (0–1, 6 decimal places) or integer VOC on release. Click a box selects it and its Labels-tab class.
+- **Box tool:** click-drag on the image creates a box (clamped to the image) using the selected Labels-tab class; stays on Box after create. Selecting Box opens the Labels tab (first label if none selected). Crosshair lines follow the cursor over the image (visual only).
+- **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Current frame is previewed fit-to-screen via `vfimg:`. A / ArrowLeft and D / ArrowRight step ±1 (ignored while typing).
 - **Assets** is the first/default inspector tab.
-- **Zoom / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets view; zoom-out below fit snaps to Fit to Screen. Rotate overwrites the current file 90° clockwise (`sharp`). Cursor is selected on project load. Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps assets; plain wheel does not change the frame; Box/Hexagon ignore.
+- **Zoom / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets view; zoom-out below fit snaps to Fit to Screen. Rotate overwrites the current file 90° clockwise (`sharp`). Cursor is selected on project load. Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps assets; A / Left and D / Right step frames (any tool); plain wheel does not change the frame; Box/Hexagon ignore.
 - **Goto Startup page:** File menu item (enabled while a project is open) closes the workspace and returns to `#start-page` without deleting the VFSln or recents.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only

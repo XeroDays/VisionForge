@@ -29,6 +29,10 @@
   const workspaceView = document.getElementById("workspace-view");
   const imageEl = document.getElementById("workspace-image");
   const detectionOverlay = document.getElementById("detection-overlay");
+  const boxCrosshair = document.getElementById("box-crosshair");
+  const boxCrosshairH = document.getElementById("box-crosshair-h");
+  const boxCrosshairV = document.getElementById("box-crosshair-v");
+  const boxCrosshairDraft = document.getElementById("box-crosshair-draft");
   const loadingOverlay = document.getElementById("loading-project-overlay");
   const viewToolbar = document.getElementById("view-toolbar");
   const breadcrumb = document.getElementById("app-breadcrumb");
@@ -89,6 +93,9 @@
     editingLabelId: null,
     pendingDeleteId: null,
     savingLabel: false,
+    selectedLabelId: null,
+    selectedDetectionIndex: null,
+    annotationMode: "",
     assets: [],
     assetsByName: new Map(),
   };
@@ -99,6 +106,7 @@
   let panLastY = 0;
   let lastFrameWheelAt = 0;
   let boxEdit = null;
+  let boxDraw = null;
 
   log.debug("workspace-canvas.js init");
 
@@ -150,6 +158,7 @@
       if (workspaceView) workspaceView.hidden = true;
       imageEl.removeAttribute("src");
       clearDetectionOverlay();
+      hideCrosshair();
       setViewToolbarVisible(false);
       return;
     }
@@ -271,6 +280,153 @@
     if (!file) return [];
     const asset = state.assetsByName.get(file.name);
     return Array.isArray(asset?.detections) ? asset.detections : [];
+  }
+
+  function isVocMode() {
+    return /voc|pascal/i.test(state.annotationMode);
+  }
+
+  function refreshLabelSelection() {
+    labelsList?.querySelectorAll(".labels-list__item").forEach((row) => {
+      row.classList.toggle("is-selected", Number(row.dataset.labelId) === state.selectedLabelId);
+    });
+  }
+
+  function setSelectedLabelId(id) {
+    const next = Number(id);
+    state.selectedLabelId = state.labels.some((label) => label.id === next) ? next : null;
+    refreshLabelSelection();
+    return state.selectedLabelId;
+  }
+
+  function ensureSelectedLabel() {
+    if (state.labels.some((label) => label.id === state.selectedLabelId)) return state.selectedLabelId;
+    if (!state.labels.length) {
+      state.selectedLabelId = null;
+      refreshLabelSelection();
+      return null;
+    }
+    return setSelectedLabelId(state.labels[0].id);
+  }
+
+  function refreshDetectionSelection() {
+    detectionOverlay?.querySelectorAll(".detection-overlay__item").forEach((group) => {
+      group.classList.toggle("is-selected", Number(group.dataset.index) === state.selectedDetectionIndex);
+    });
+  }
+
+  function setSelectedDetection(index, options = {}) {
+    const next = Number.isInteger(index) ? index : Number(index);
+    const detections = currentDetections();
+    if (!Number.isInteger(next) || next < 0 || next >= detections.length) {
+      state.selectedDetectionIndex = null;
+      refreshDetectionSelection();
+      return;
+    }
+    state.selectedDetectionIndex = next;
+    const detection = detections[next];
+    if (options.syncLabel !== false && detection) {
+      setSelectedLabelId(detection.labelid);
+      if (options.openTab) window.selectInspectorTab?.("labels");
+    }
+    refreshDetectionSelection();
+  }
+
+  function pointInRect(pt, rect) {
+    return (
+      pt.x >= rect.x &&
+      pt.y >= rect.y &&
+      pt.x <= rect.x + rect.width &&
+      pt.y <= rect.y + rect.height
+    );
+  }
+
+  function hitTestDetection(pt) {
+    if (!pt || !imageReady()) return null;
+    const imgW = imageEl.naturalWidth;
+    const imgH = imageEl.naturalHeight;
+    const items = currentDetections();
+    for (let i = items.length - 1; i >= 0; i -= 1) {
+      const rect = detectionToRect(items[i]?.value, imgW, imgH);
+      if (rect && pointInRect(pt, rect)) return i;
+    }
+    return null;
+  }
+
+  function clampPointToImage(pt, imgW, imgH) {
+    return {
+      x: Math.min(Math.max(0, Number(pt?.x) || 0), imgW),
+      y: Math.min(Math.max(0, Number(pt?.y) || 0), imgH),
+    };
+  }
+
+  function rectFromPoints(a, b, imgW, imgH) {
+    const start = clampPointToImage(a, imgW, imgH);
+    const end = clampPointToImage(b, imgW, imgH);
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
+    return {
+      x,
+      y,
+      width: Math.abs(end.x - start.x),
+      height: Math.abs(end.y - start.y),
+    };
+  }
+
+  function hideCrosshair() {
+    if (boxCrosshair) boxCrosshair.hidden = true;
+    hideDraftRect();
+  }
+
+  function hideDraftRect() {
+    if (boxCrosshairDraft) boxCrosshairDraft.setAttribute("hidden", "");
+  }
+
+  function syncCrosshairSize() {
+    if (!boxCrosshair || !imageEl || !imageReady()) return false;
+    boxCrosshair.setAttribute("viewBox", `0 0 ${imageEl.naturalWidth} ${imageEl.naturalHeight}`);
+    return true;
+  }
+
+  function updateCrosshair(clientX, clientY) {
+    if (state.currentTool !== "box" || !syncCrosshairSize()) {
+      hideCrosshair();
+      return;
+    }
+    const pt = clientToImage(clientX, clientY);
+    const imgW = imageEl.naturalWidth;
+    const imgH = imageEl.naturalHeight;
+    if (!pt || pt.x < 0 || pt.y < 0 || pt.x > imgW || pt.y > imgH) {
+      if (!boxDraw) hideCrosshair();
+      return;
+    }
+    boxCrosshair.hidden = false;
+    if (boxCrosshairH) {
+      boxCrosshairH.setAttribute("x1", "0");
+      boxCrosshairH.setAttribute("x2", String(imgW));
+      boxCrosshairH.setAttribute("y1", String(pt.y));
+      boxCrosshairH.setAttribute("y2", String(pt.y));
+    }
+    if (boxCrosshairV) {
+      boxCrosshairV.setAttribute("x1", String(pt.x));
+      boxCrosshairV.setAttribute("x2", String(pt.x));
+      boxCrosshairV.setAttribute("y1", "0");
+      boxCrosshairV.setAttribute("y2", String(imgH));
+    }
+  }
+
+  function layoutDraftRect(rect) {
+    if (!boxCrosshairDraft) return;
+    if (!rect || rect.width < 1 || rect.height < 1) {
+      hideDraftRect();
+      return;
+    }
+    boxCrosshairDraft.removeAttribute("hidden");
+    boxCrosshairDraft.setAttribute("x", String(rect.x));
+    boxCrosshairDraft.setAttribute("y", String(rect.y));
+    boxCrosshairDraft.setAttribute("width", String(rect.width));
+    boxCrosshairDraft.setAttribute("height", String(rect.height));
+    boxCrosshairDraft.setAttribute("stroke", colorForLabelId(state.selectedLabelId ?? 0));
   }
 
   function labelNameForId(labelid) {
@@ -508,6 +664,7 @@
         next.width === start.width &&
         next.height === start.height);
     if (unchanged || !state.filePath) {
+      setSelectedDetection(edit.index, { openTab: true });
       drawDetectionBoxes();
       return;
     }
@@ -544,7 +701,51 @@
     } catch (err) {
       log.error("persistBoxEdit failed", { error: String(err?.message || err) });
     }
+    setSelectedDetection(edit.index, { openTab: true });
     drawDetectionBoxes();
+  }
+
+  async function persistNewBox(rect) {
+    const labelid = ensureSelectedLabel();
+    if (labelid == null || !state.filePath || !imageReady()) return;
+    const file = currentFile();
+    if (!file) return;
+    const imgW = imageEl.naturalWidth;
+    const imgH = imageEl.naturalHeight;
+    if ((rect?.width || 0) < BOX_MIN_SIZE || (rect?.height || 0) < BOX_MIN_SIZE) return;
+    const asset = state.assetsByName.get(file.name);
+    const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
+    detections.push({
+      labelid,
+      value: rectToValue(rect, imgW, imgH, isVocMode() ? { xmin: 0, ymin: 0, xmax: 1, ymax: 1 } : { xc: 0, yc: 0, w: 0, h: 0 }),
+    });
+    const nextAssets = state.assets.map((row) =>
+      row?.name === file.name
+        ? formatAsset(row, {
+            width: imgW,
+            height: imgH,
+            detections,
+          })
+        : row,
+    );
+    if (!nextAssets.some((row) => row?.name === file.name)) {
+      nextAssets.push(formatAsset({ name: file.name, detections: [] }, { width: imgW, height: imgH, detections }));
+    }
+    setAssets(nextAssets);
+    const newIndex = detections.length - 1;
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
+      if (updated?.ok) {
+        setAssets(updated.project?.assets);
+        log.info("detection box created", { name: file.name, index: newIndex, labelid });
+      } else {
+        log.warn("could not persist new detection box", { reason: updated?.reason });
+      }
+    } catch (err) {
+      log.error("persistNewBox failed", { error: String(err?.message || err) });
+    }
+    setSelectedDetection(newIndex, { openTab: true });
+    renderDetections();
   }
 
   async function persistCurrentAssetSize() {
@@ -605,6 +806,7 @@
       const group = document.createElementNS(SVG_NS, "g");
       group.setAttribute("class", "detection-overlay__item");
       group.dataset.index = String(index);
+      if (index === state.selectedDetectionIndex) group.classList.add("is-selected");
       group.append(
         svgRect("detection-overlay__box", { fill: "transparent", stroke: color }),
         svgRect("detection-overlay__handle", { "data-edge": "nw", fill: color }),
@@ -669,6 +871,7 @@
     if (!state.labels.length) {
       labelsEmpty.hidden = false;
       labelsList.hidden = true;
+      state.selectedLabelId = null;
       return;
     }
 
@@ -722,6 +925,10 @@
       li.append(idEl, nameEl, deleteBtn);
       labelsList.appendChild(li);
     });
+    if (!state.labels.some((label) => label.id === state.selectedLabelId)) {
+      state.selectedLabelId = null;
+    }
+    refreshLabelSelection();
   }
 
   function nextLabelId() {
@@ -738,6 +945,7 @@
       return false;
     }
     renderLabels(updated.project?.labels || next);
+    if (state.currentTool === "box") ensureSelectedLabel();
     renderDetections();
     log.exit(method, startedAt, { ok: true, count: state.labels.length });
     return true;
@@ -902,6 +1110,9 @@
 
   function setFrame(index, options = {}) {
     if (boxEdit) cancelBoxEdit();
+    boxDraw = null;
+    hideDraftRect();
+    state.selectedDetectionIndex = null;
     const max = lastFrameIndex();
     const next = state.files.length === 0 ? 0 : Math.min(max, Math.max(0, Math.round(index)));
     state.frameIndex = next;
@@ -991,6 +1202,13 @@
 
   function setWorkspaceTool(toolId) {
     state.currentTool = toolId || "cursor";
+    stage?.classList.toggle("is-box-tool", state.currentTool === "box");
+    if (state.currentTool === "box") {
+      window.selectInspectorTab?.("labels");
+      ensureSelectedLabel();
+    } else {
+      hideCrosshair();
+    }
   }
 
   async function showWorkspace({ filePath, name } = {}) {
@@ -1012,6 +1230,7 @@
 
       state.filePath = result.filePath;
       state.name = result.name || name || "Untitled";
+      state.annotationMode = String(result.project?.annotationMode || "");
       if (startPage) startPage.hidden = true;
       canvas.hidden = false;
       setWorkspaceChrome(true);
@@ -1039,6 +1258,8 @@
     const startedAt = log.enter("closeWorkspace");
     stopPlay();
     boxEdit = null;
+    boxDraw = null;
+    hideCrosshair();
     closeFileMenu();
     closeComposer();
     closeDeleteDialog();
@@ -1057,6 +1278,9 @@
     state.pendingDeleteId = null;
     state.addingLabel = false;
     state.savingLabel = false;
+    state.selectedLabelId = null;
+    state.selectedDetectionIndex = null;
+    state.annotationMode = "";
     panning = false;
     lastFrameWheelAt = 0;
     setWorkspaceChrome(false);
@@ -1120,6 +1344,7 @@
         if (!updated?.ok) {
           log.warn("could not persist imagesFolder", { reason: updated?.reason });
         } else {
+          state.annotationMode = String(updated.project?.annotationMode || state.annotationMode);
           renderLabels(updated.project?.labels);
           setAssets(updated.project?.assets);
         }
@@ -1187,6 +1412,7 @@
   imageEl?.addEventListener("error", () => {
     log.warn("preview load failed", { src: imageEl?.src || "" });
     clearDetectionOverlay();
+    hideCrosshair();
   });
 
   detectionOverlay?.addEventListener("pointerdown", (event) => {
@@ -1201,6 +1427,7 @@
     event.preventDefault();
     event.stopPropagation();
     stopPlay();
+    setSelectedDetection(index, { openTab: true });
     const handle = event.target.closest?.(".detection-overlay__handle");
     boxEdit = {
       index,
@@ -1260,7 +1487,7 @@
         zoomBy(event.deltaY < 0 ? ZOOM_IN : ZOOM_OUT, origin);
         return;
       }
-      if (!event.shiftKey || state.currentTool !== "cursor" || boxEdit) return;
+      if (!event.shiftKey || state.currentTool !== "cursor" || boxEdit || boxDraw) return;
       const now = Date.now();
       if (now - lastFrameWheelAt < FRAME_WHEEL_COOLDOWN_MS) return;
       lastFrameWheelAt = now;
@@ -1270,24 +1497,47 @@
     { passive: false },
   );
 
-  stage?.addEventListener("pointerdown", (event) => {
-    if (event.button !== 1 || !currentFile()) return;
+  function startBoxDraw(event) {
+    if (state.currentTool !== "box" || event.button !== 0 || !currentFile() || !imageReady()) return false;
+    const raw = clientToImage(event.clientX, event.clientY);
+    const imgW = imageEl.naturalWidth;
+    const imgH = imageEl.naturalHeight;
+    if (!raw || raw.x < 0 || raw.y < 0 || raw.x > imgW || raw.y > imgH) return false;
+    const startPt = clampPointToImage(raw, imgW, imgH);
+    const hit = hitTestDetection(startPt);
+    if (hit != null) setSelectedDetection(hit, { openTab: true });
     event.preventDefault();
-    panning = true;
-    panLastX = event.clientX;
-    panLastY = event.clientY;
-    stage.classList.add("is-panning");
+    stopPlay();
+    boxDraw = {
+      pointerId: event.pointerId,
+      startPt,
+      currentRect: { x: startPt.x, y: startPt.y, width: 0, height: 0 },
+    };
+    syncCrosshairSize();
+    if (boxCrosshair) boxCrosshair.hidden = false;
+    hideDraftRect();
     stage.setPointerCapture?.(event.pointerId);
-  });
+    return true;
+  }
 
-  stage?.addEventListener("pointermove", (event) => {
-    if (!panning) return;
-    state.panX += event.clientX - panLastX;
-    state.panY += event.clientY - panLastY;
-    panLastX = event.clientX;
-    panLastY = event.clientY;
-    applyView();
-  });
+  function moveBoxDraw(event) {
+    if (!boxDraw || event.pointerId !== boxDraw.pointerId || !imageReady()) return;
+    const raw = clientToImage(event.clientX, event.clientY);
+    if (!raw) return;
+    boxDraw.currentRect = rectFromPoints(boxDraw.startPt, raw, imageEl.naturalWidth, imageEl.naturalHeight);
+    layoutDraftRect(boxDraw.currentRect);
+  }
+
+  async function endBoxDraw(event) {
+    if (!boxDraw || (event && event.pointerId !== boxDraw.pointerId)) return;
+    const draw = boxDraw;
+    boxDraw = null;
+    hideDraftRect();
+    if (stage?.hasPointerCapture?.(draw.pointerId)) {
+      stage.releasePointerCapture(draw.pointerId);
+    }
+    await persistNewBox(draw.currentRect);
+  }
 
   function endPan(event) {
     if (!panning) return;
@@ -1298,8 +1548,49 @@
     }
   }
 
-  stage?.addEventListener("pointerup", endPan);
-  stage?.addEventListener("pointercancel", endPan);
+  stage?.addEventListener("pointerdown", (event) => {
+    if (!currentFile()) return;
+    if (event.button === 1) {
+      event.preventDefault();
+      panning = true;
+      panLastX = event.clientX;
+      panLastY = event.clientY;
+      stage.classList.add("is-panning");
+      stage.setPointerCapture?.(event.pointerId);
+      return;
+    }
+    if (startBoxDraw(event)) return;
+  });
+
+  stage?.addEventListener("pointermove", (event) => {
+    if (panning) {
+      state.panX += event.clientX - panLastX;
+      state.panY += event.clientY - panLastY;
+      panLastX = event.clientX;
+      panLastY = event.clientY;
+      applyView();
+      return;
+    }
+    if (boxDraw) {
+      moveBoxDraw(event);
+      updateCrosshair(event.clientX, event.clientY);
+      return;
+    }
+    if (state.currentTool === "box") updateCrosshair(event.clientX, event.clientY);
+  });
+
+  stage?.addEventListener("pointerleave", () => {
+    if (!boxDraw) hideCrosshair();
+  });
+
+  stage?.addEventListener("pointerup", (event) => {
+    endPan(event);
+    void endBoxDraw(event);
+  });
+  stage?.addEventListener("pointercancel", (event) => {
+    endPan(event);
+    void endBoxDraw(event);
+  });
 
   viewToolbar?.addEventListener("pointerdown", (event) => {
     event.stopPropagation();
@@ -1361,7 +1652,12 @@
     }
     const item = event.target.closest(".labels-list__item");
     if (!item || !labelsList.contains(item) || item.classList.contains("is-editing")) return;
-    startLabelEdit(Number(item.dataset.labelId));
+    const id = Number(item.dataset.labelId);
+    if (state.selectedLabelId === id) {
+      startLabelEdit(id);
+      return;
+    }
+    setSelectedLabelId(id);
   });
 
   labelsList?.addEventListener("keydown", (event) => {
@@ -1459,6 +1755,28 @@
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     closeFileMenu();
+  });
+
+  function isTypingTarget(target) {
+    if (!(target instanceof Element)) return false;
+    const tag = target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    return Boolean(target.closest("[contenteditable='true']"));
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (!state.filePath || state.files.length === 0) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (isDeleteDialogOpen()) return;
+    if (isTypingTarget(event.target)) return;
+    const key = event.key;
+    let delta = 0;
+    if (key === "a" || key === "A" || key === "ArrowLeft") delta = -1;
+    else if (key === "d" || key === "D" || key === "ArrowRight") delta = 1;
+    else return;
+    event.preventDefault();
+    stopPlay();
+    setFrame(state.frameIndex + delta);
   });
 
   window.showWorkspace = showWorkspace;
