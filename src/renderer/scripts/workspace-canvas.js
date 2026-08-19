@@ -461,11 +461,11 @@
     boxDraft.setAttribute("viewBox", `0 0 ${bounds.width} ${bounds.height}`);
     boxDraft.classList.add("is-active");
     if (boxDraftHatch) {
-      boxDraftHatch.setAttribute("width", "10");
-      boxDraftHatch.setAttribute("height", "10");
+      boxDraftHatch.setAttribute("width", "14");
+      boxDraftHatch.setAttribute("height", "14");
     }
-    applyHatchPath(boxDraftHatchPath, "M-1,1 l2,-2 M0,10 l10,-10 M9,11 l2,-2", color);
-    applyHatchPath(boxDraftHatchPathB, "M-1,9 l2,2 M0,0 l10,10 M9,-1 l2,2", color);
+    applyHatchPath(boxDraftHatchPath, "M-1,1 l2,-2 M0,14 l14,-14 M13,15 l2,-2", color);
+    applyHatchPath(boxDraftHatchPathB, "M-1,13 l2,2 M0,0 l14,14 M13,-1 l2,2", color);
     if (boxDraftRect) {
       boxDraftRect.setAttribute("x", String(mapped.x));
       boxDraftRect.setAttribute("y", String(mapped.y));
