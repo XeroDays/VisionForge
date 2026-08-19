@@ -461,11 +461,11 @@
     boxDraft.setAttribute("viewBox", `0 0 ${bounds.width} ${bounds.height}`);
     boxDraft.classList.add("is-active");
     if (boxDraftHatch) {
-      boxDraftHatch.setAttribute("width", "14");
-      boxDraftHatch.setAttribute("height", "14");
+      boxDraftHatch.setAttribute("width", "13");
+      boxDraftHatch.setAttribute("height", "13");
     }
-    applyHatchPath(boxDraftHatchPath, "M-1,1 l2,-2 M0,14 l14,-14 M13,15 l2,-2", color);
-    applyHatchPath(boxDraftHatchPathB, "M-1,13 l2,2 M0,0 l14,14 M13,-1 l2,2", color);
+    applyHatchPath(boxDraftHatchPath, "M-1,1 l2,-2 M0,13 l13,-13 M12,14 l2,-2", color);
+    applyHatchPath(boxDraftHatchPathB, "M-1,12 l2,2 M0,0 l13,13 M12,-1 l2,2", color);
     if (boxDraftRect) {
       boxDraftRect.setAttribute("x", String(mapped.x));
       boxDraftRect.setAttribute("y", String(mapped.y));
@@ -826,6 +826,7 @@
     }
     setSelectedDetection(newIndex, { openTab: true });
     renderDetections();
+    window.selectWorkspaceTool?.("cursor");
   }
 
   async function persistDetectionLabel(index, labelid) {
@@ -1951,6 +1952,11 @@
       if (state.selectedDetectionIndex == null || boxEdit || boxDraw) return;
       event.preventDefault();
       void persistDeleteDetection(state.selectedDetectionIndex);
+      return;
+    }
+    if (key === "w" || key === "W") {
+      event.preventDefault();
+      window.selectWorkspaceTool?.(state.currentTool === "box" ? "cursor" : "box");
       return;
     }
     let delta = 0;
