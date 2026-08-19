@@ -735,11 +735,7 @@ body {
   background: #121214;
 }
 
-.workspace-stage.is-move {
-  cursor: grab;
-}
-
-.workspace-stage.is-move.is-panning {
+.workspace-stage.is-panning {
   cursor: grabbing;
 }
 
@@ -774,10 +770,6 @@ body {
 
 .detection-overlay__item {
   pointer-events: auto;
-}
-
-.workspace-stage.is-move .detection-overlay__item {
-  pointer-events: none;
 }
 
 .detection-overlay__box {
@@ -849,11 +841,6 @@ body {
 .view-toolbar__btn:hover {
   color: #f4b42a;
   background: rgba(244, 180, 42, 0.12);
-}
-
-.view-toolbar__btn.is-selected {
-  background: rgba(244, 180, 42, 0.18);
-  color: #f4b42a;
 }
 
 .playback-bar {

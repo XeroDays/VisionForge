@@ -32,7 +32,6 @@
   const detectionOverlay = document.getElementById("detection-overlay");
   const loadingOverlay = document.getElementById("loading-project-overlay");
   const viewToolbar = document.getElementById("view-toolbar");
-  const viewMoveBtn = document.getElementById("view-tool-move");
   const breadcrumb = document.getElementById("app-breadcrumb");
   const selectImagesBtn = document.getElementById("tool-select-images");
   const toolsDivider = document.getElementById("tools-rail-divider");
@@ -143,16 +142,6 @@
 
   function setViewToolbarVisible(visible) {
     if (viewToolbar) viewToolbar.hidden = !visible;
-    if (!visible && state.currentTool === "move") {
-      window.selectWorkspaceTool?.("cursor");
-    }
-  }
-
-  function updateMoveHighlight() {
-    const selected = state.currentTool === "move";
-    if (!viewMoveBtn) return;
-    viewMoveBtn.classList.toggle("is-selected", selected);
-    viewMoveBtn.setAttribute("aria-pressed", selected ? "true" : "false");
   }
 
   function loadPreview() {
@@ -347,28 +336,35 @@
     return Math.max(4, Math.ceil(Math.log10(Math.max(Number(size) || 1, 1))) + 1);
   }
 
-  function normFromPixels(px, size) {
+  function clamp01(value) {
+    if (!Number.isFinite(value)) return 0;
+    return Math.min(1, Math.max(0, value));
+  }
+
+  function yoloNorm(pixels, size) {
     const dim = Math.max(Number(size) || 1, 1);
-    return Number((Math.round(px) / dim).toFixed(decimalsForSize(dim)));
+    return Number(clamp01(pixels / dim).toFixed(decimalsForSize(dim)));
   }
 
   function rectToValue(rect, imgW, imgH, original) {
     const snapped = snapPixelRect(rect);
+    const x1 = snapped.x;
+    const y1 = snapped.y;
+    const x2 = snapped.x + snapped.width;
+    const y2 = snapped.y + snapped.height;
     if (isVocValue(original)) {
       return {
-        xmin: snapped.x,
-        ymin: snapped.y,
-        xmax: snapped.x + snapped.width,
-        ymax: snapped.y + snapped.height,
+        xmin: x1,
+        ymin: y1,
+        xmax: x2,
+        ymax: y2,
       };
     }
-    const cx = snapped.x + snapped.width / 2;
-    const cy = snapped.y + snapped.height / 2;
     return {
-      xc: normFromPixels(cx, imgW),
-      yc: normFromPixels(cy, imgH),
-      w: Number((snapped.width / imgW).toFixed(decimalsForSize(imgW))),
-      h: Number((snapped.height / imgH).toFixed(decimalsForSize(imgH))),
+      xc: yoloNorm((x1 + x2) / 2, imgW),
+      yc: yoloNorm((y1 + y2) / 2, imgH),
+      w: yoloNorm(x2 - x1, imgW),
+      h: yoloNorm(y2 - y1, imgH),
     };
   }
 
@@ -996,12 +992,6 @@
 
   function setWorkspaceTool(toolId) {
     state.currentTool = toolId || "cursor";
-    stage?.classList.toggle("is-move", state.currentTool === "move");
-    if (state.currentTool !== "move") {
-      panning = false;
-      stage?.classList.remove("is-panning");
-    }
-    updateMoveHighlight();
   }
 
   async function showWorkspace({ filePath, name } = {}) {
@@ -1030,6 +1020,7 @@
       closeFileMenu();
       closeComposer();
       closeDeleteDialog();
+      window.selectWorkspaceTool?.("cursor");
       window.selectInspectorTab?.("assets");
       log.info("workspace opened", { filePath: state.filePath, name: state.name });
       setAssets(result.project?.assets);
@@ -1261,29 +1252,27 @@
     (event) => {
       if (!currentFile()) return;
       event.preventDefault();
-      if (state.currentTool === "cursor") {
-        if (boxEdit) return;
-        const now = Date.now();
-        if (now - lastFrameWheelAt < FRAME_WHEEL_COOLDOWN_MS) return;
-        lastFrameWheelAt = now;
-        stopPlay();
-        setFrame(state.frameIndex + (event.deltaY < 0 ? -1 : 1));
+      if (event.ctrlKey) {
+        const rect = stage.getBoundingClientRect();
+        const origin = {
+          x: event.clientX - rect.left - rect.width / 2,
+          y: event.clientY - rect.top - rect.height / 2,
+        };
+        zoomBy(event.deltaY < 0 ? ZOOM_IN : ZOOM_OUT, origin);
         return;
       }
-      if (state.currentTool !== "move") return;
-      const rect = stage.getBoundingClientRect();
-      const origin = {
-        x: event.clientX - rect.left - rect.width / 2,
-        y: event.clientY - rect.top - rect.height / 2,
-      };
-      zoomBy(event.deltaY < 0 ? ZOOM_IN : ZOOM_OUT, origin);
+      if (!event.shiftKey || state.currentTool !== "cursor" || boxEdit) return;
+      const now = Date.now();
+      if (now - lastFrameWheelAt < FRAME_WHEEL_COOLDOWN_MS) return;
+      lastFrameWheelAt = now;
+      stopPlay();
+      setFrame(state.frameIndex + (event.deltaY < 0 ? -1 : 1));
     },
     { passive: false },
   );
 
   stage?.addEventListener("pointerdown", (event) => {
-    if (state.currentTool !== "move" || event.button !== 0) return;
-    if (!currentFile()) return;
+    if (event.button !== 1 || !currentFile()) return;
     event.preventDefault();
     panning = true;
     panLastX = event.clientX;
@@ -1321,10 +1310,6 @@
     const btn = event.target.closest("[data-view-tool]");
     if (!btn || !viewToolbar.contains(btn)) return;
     const action = btn.dataset.viewTool;
-    if (action === "move") {
-      window.selectWorkspaceTool?.("move");
-      return;
-    }
     if (action === "zoom-in") {
       zoomIn();
       return;
