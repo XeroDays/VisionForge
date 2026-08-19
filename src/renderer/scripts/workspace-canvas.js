@@ -29,13 +29,13 @@
   const workspaceView = document.getElementById("workspace-view");
   const imageEl = document.getElementById("workspace-image");
   const detectionOverlay = document.getElementById("detection-overlay");
-  const boxCrosshair = document.getElementById("box-crosshair");
   const boxGuides = document.getElementById("box-guides");
   const boxGuidesH = document.getElementById("box-guides-h");
   const boxGuidesV = document.getElementById("box-guides-v");
-  const boxCrosshairDraft = document.getElementById("box-crosshair-draft");
-  const boxCrosshairDiagonal = document.getElementById("box-crosshair-diagonal");
-  const boxCrosshairOrigin = document.getElementById("box-crosshair-origin");
+  const boxDraft = document.getElementById("box-draft");
+  const boxDraftRect = document.getElementById("box-draft-rect");
+  const boxDraftDiagonal = document.getElementById("box-draft-diagonal");
+  const boxDraftOrigin = document.getElementById("box-draft-origin");
   const boxDraftHatch = document.getElementById("box-draft-hatch");
   const boxDraftHatchPath = document.getElementById("box-draft-hatch-path");
   const boxDraftHatchPathB = document.getElementById("box-draft-hatch-path-b");
@@ -134,6 +134,9 @@
     const scale = currentScale();
     workspaceView.style.transform = `translate(-50%, -50%) translate(${state.panX}px, ${state.panY}px) scale(${scale})`;
     refreshHandleSizes();
+    if (boxDraw) {
+      layoutDrawPreview(boxDraw.currentRect, boxDraw.startPt, boxDraw.pointerPt);
+    }
   }
 
   function computeFitScale() {
@@ -390,13 +393,22 @@
   function hideCrosshair() {
     hideGuides();
     hideDraftRect();
-    if (boxCrosshair) boxCrosshair.hidden = true;
   }
 
   function hideDraftRect() {
-    if (boxCrosshairDraft) boxCrosshairDraft.setAttribute("hidden", "");
-    if (boxCrosshairDiagonal) boxCrosshairDiagonal.setAttribute("hidden", "");
-    if (boxCrosshairOrigin) boxCrosshairOrigin.setAttribute("hidden", "");
+    boxDraft?.classList.remove("is-active");
+  }
+
+  function imagePointToStage(pt) {
+    if (!imageEl || !stage || !imageReady()) return null;
+    const img = imageEl.getBoundingClientRect();
+    const st = stage.getBoundingClientRect();
+    const sx = img.width / imageEl.naturalWidth;
+    const sy = img.height / imageEl.naturalHeight;
+    return {
+      x: img.left - st.left + pt.x * sx,
+      y: img.top - st.top + pt.y * sy,
+    };
   }
 
   function draftPreviewColor() {
@@ -411,67 +423,70 @@
   }
 
   function layoutDrawPreview(rect, startPt, endPt) {
+    if (!boxDraft || !stage || !startPt) {
+      hideDraftRect();
+      return;
+    }
+    const bounds = stage.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) {
+      hideDraftRect();
+      return;
+    }
     const color = draftPreviewColor();
-    const scale = Math.max(currentScale(), 0.05);
-    const hatch = Math.max(8 / scale, 3);
+    const origin = imagePointToStage(startPt);
+    const tip = imagePointToStage(endPt || startPt);
+    if (!origin || !tip) {
+      hideDraftRect();
+      return;
+    }
+    const min = 8;
+    const mapped =
+      rect && (rect.width >= 1 || rect.height >= 1)
+        ? (() => {
+            const a = imagePointToStage({ x: rect.x, y: rect.y });
+            const b = imagePointToStage({ x: rect.x + rect.width, y: rect.y + rect.height });
+            if (!a || !b) return null;
+            return {
+              x: Math.min(a.x, b.x),
+              y: Math.min(a.y, b.y),
+              width: Math.max(Math.abs(b.x - a.x), min),
+              height: Math.max(Math.abs(b.y - a.y), min),
+            };
+          })()
+        : { x: origin.x, y: origin.y, width: min, height: min };
+    if (!mapped) {
+      hideDraftRect();
+      return;
+    }
+    boxDraft.setAttribute("viewBox", `0 0 ${bounds.width} ${bounds.height}`);
+    boxDraft.classList.add("is-active");
     if (boxDraftHatch) {
-      boxDraftHatch.setAttribute("width", String(hatch));
-      boxDraftHatch.setAttribute("height", String(hatch));
+      boxDraftHatch.setAttribute("width", "10");
+      boxDraftHatch.setAttribute("height", "10");
     }
-    applyHatchPath(
-      boxDraftHatchPath,
-      `M-1,1 l2,-2 M0,${hatch} l${hatch},-${hatch} M${hatch - 1},${hatch + 1} l2,-2`,
-      color,
-    );
-    applyHatchPath(
-      boxDraftHatchPathB,
-      `M-1,${hatch - 1} l2,2 M0,0 l${hatch},${hatch} M${hatch - 1},-1 l2,2`,
-      color,
-    );
-    if (startPt && boxCrosshairOrigin) {
-      boxCrosshairOrigin.removeAttribute("hidden");
-      boxCrosshairOrigin.setAttribute("cx", String(startPt.x));
-      boxCrosshairOrigin.setAttribute("cy", String(startPt.y));
-      boxCrosshairOrigin.setAttribute("r", String(4 / scale));
-      boxCrosshairOrigin.setAttribute("fill", color);
-    } else if (boxCrosshairOrigin) {
-      boxCrosshairOrigin.setAttribute("hidden", "");
+    applyHatchPath(boxDraftHatchPath, "M-1,1 l2,-2 M0,10 l10,-10 M9,11 l2,-2", color);
+    applyHatchPath(boxDraftHatchPathB, "M-1,9 l2,2 M0,0 l10,10 M9,-1 l2,2", color);
+    if (boxDraftRect) {
+      boxDraftRect.setAttribute("x", String(mapped.x));
+      boxDraftRect.setAttribute("y", String(mapped.y));
+      boxDraftRect.setAttribute("width", String(mapped.width));
+      boxDraftRect.setAttribute("height", String(mapped.height));
+      boxDraftRect.setAttribute("stroke", color);
+      boxDraftRect.setAttribute("fill", "url(#box-draft-hatch)");
     }
-    if (startPt && endPt && boxCrosshairDiagonal) {
-      boxCrosshairDiagonal.removeAttribute("hidden");
-      boxCrosshairDiagonal.setAttribute("x1", String(startPt.x));
-      boxCrosshairDiagonal.setAttribute("y1", String(startPt.y));
-      boxCrosshairDiagonal.setAttribute("x2", String(endPt.x));
-      boxCrosshairDiagonal.setAttribute("y2", String(endPt.y));
-      boxCrosshairDiagonal.setAttribute("stroke", color);
-    } else if (boxCrosshairDiagonal) {
-      boxCrosshairDiagonal.setAttribute("hidden", "");
+    if (boxDraftOrigin) {
+      boxDraftOrigin.setAttribute("cx", String(origin.x));
+      boxDraftOrigin.setAttribute("cy", String(origin.y));
+      boxDraftOrigin.setAttribute("r", "4");
+      boxDraftOrigin.setAttribute("fill", color);
     }
-    if (!boxCrosshairDraft || !startPt) return;
-    const min = Math.max(4, 8 / scale);
-    const preview = {
-      x: rect?.width >= 1 ? rect.x : startPt.x,
-      y: rect?.height >= 1 ? rect.y : startPt.y,
-      width: Math.max(Number(rect?.width) || 0, min),
-      height: Math.max(Number(rect?.height) || 0, min),
-    };
-    if (boxCrosshair) boxCrosshair.hidden = false;
-    boxCrosshairDraft.removeAttribute("hidden");
-    boxCrosshairDraft.setAttribute("x", String(preview.x));
-    boxCrosshairDraft.setAttribute("y", String(preview.y));
-    boxCrosshairDraft.setAttribute("width", String(preview.width));
-    boxCrosshairDraft.setAttribute("height", String(preview.height));
-    boxCrosshairDraft.setAttribute("stroke", color);
-  }
-
-  function layoutDraftRect(rect) {
-    layoutDrawPreview(rect, boxDraw?.startPt, boxDraw?.pointerPt);
-  }
-
-  function syncCrosshairSize() {
-    if (!boxCrosshair || !imageEl || !imageReady()) return false;
-    boxCrosshair.setAttribute("viewBox", `0 0 ${imageEl.naturalWidth} ${imageEl.naturalHeight}`);
-    return true;
+    if (boxDraftDiagonal) {
+      boxDraftDiagonal.setAttribute("x1", String(origin.x));
+      boxDraftDiagonal.setAttribute("y1", String(origin.y));
+      boxDraftDiagonal.setAttribute("x2", String(tip.x));
+      boxDraftDiagonal.setAttribute("y2", String(tip.y));
+      boxDraftDiagonal.setAttribute("stroke", color);
+    }
   }
 
   function updateCrosshair(clientX, clientY) {
@@ -1657,8 +1672,6 @@
       pointerPt: startPt,
       currentRect: { x: startPt.x, y: startPt.y, width: 0, height: 0 },
     };
-    syncCrosshairSize();
-    if (boxCrosshair) boxCrosshair.hidden = false;
     layoutDrawPreview(boxDraw.currentRect, startPt, startPt);
     stage.setPointerCapture?.(event.pointerId);
     return true;
@@ -1729,10 +1742,7 @@
 
   stage?.addEventListener("pointerleave", () => {
     hideGuides();
-    if (!boxDraw) {
-      hideDraftRect();
-      if (boxCrosshair) boxCrosshair.hidden = true;
-    }
+    if (!boxDraw) hideDraftRect();
   });
 
   stage?.addEventListener("pointerup", (event) => {

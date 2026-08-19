@@ -586,10 +586,10 @@ Match current `files[frameIndex].name` to `assets[].name` → list that row’s 
 **Trigger:** Left rail Box tool selected; image previewed
 
 **Flow:**
-Selecting Box opens the Labels tab and selects the first label if none is selected. A click-drag on the image (clamped to image pixels) creates a detection with the selected `labelid`. YOLO vs VOC follows `annotationMode`. Stay on Box after create (do not switch to Cursor). Existing boxes ignore pointer while Box is active; a press that hits a box still selects it (label + corner handles). A drag too small (`BOX_MIN_SIZE`) or with no labels is discarded. From pointerdown until release, `#box-crosshair` shows a meshed creation box (two-way hatch, origin, diagonal) that is not in `detections` yet. `#box-guides` on `#workspace-stage` draws thin black H/V lines through the cursor tip across the full canvas (Box tool only; hidden when the pointer leaves the stage). With a box selected, clicking a different Labels row writes that detection’s `labelid` (same `value`); no selected box only changes the class for the next draw.
+Selecting Box opens the Labels tab and selects the first label if none is selected. A click-drag on the image (clamped to image pixels) creates a detection with the selected `labelid`. YOLO vs VOC follows `annotationMode`. Stay on Box after create (do not switch to Cursor). Existing boxes ignore pointer while Box is active; a press that hits a box still selects it (label + corner handles). A drag too small (`BOX_MIN_SIZE`) or with no labels is discarded. From pointerdown until release, stage overlay `#box-draft` shows a meshed creation box (two-way hatch, origin, diagonal) in screen pixels — image rect mapped via image/stage `getBoundingClientRect()`, toggled with `is-active` (never `[hidden]`). The draft is not in `detections` yet; persist happens on release only. `#box-guides` on `#workspace-stage` draws thin black H/V lines through the cursor tip across the full canvas (Box tool only; hidden when the pointer leaves the stage). Leaving the stage does not hide `#box-draft` while a draw is active. With a box selected, clicking a different Labels row writes that detection’s `labelid` (same `value`); no selected box only changes the class for the next draw.
 
 **Files:**
-- `src/renderer/index.html` — `#box-crosshair`, `#box-guides`
+- `src/renderer/index.html` — `#box-draft`, `#box-guides`
 - `src/renderer/scripts/workspace-canvas.js`
 - `src/renderer/styles/app.css`
 

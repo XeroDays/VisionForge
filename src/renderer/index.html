@@ -119,18 +119,18 @@
             <div class="workspace-view" id="workspace-view" hidden>
               <img class="workspace-image" id="workspace-image" alt="" draggable="false" />
               <svg class="detection-overlay" id="detection-overlay" aria-hidden="true"></svg>
-              <svg class="box-crosshair" id="box-crosshair" hidden aria-hidden="true">
-                <defs>
-                  <pattern id="box-draft-hatch" patternUnits="userSpaceOnUse" width="8" height="8">
-                    <path class="box-crosshair__hatch" id="box-draft-hatch-path" d="M-1,1 l2,-2 M0,8 l8,-8 M7,9 l2,-2" />
-                    <path class="box-crosshair__hatch" id="box-draft-hatch-path-b" d="M-1,7 l2,2 M0,0 l8,8 M7,-1 l2,2" />
-                  </pattern>
-                </defs>
-                <rect class="box-crosshair__draft" id="box-crosshair-draft" hidden />
-                <line class="box-crosshair__diagonal" id="box-crosshair-diagonal" hidden />
-                <circle class="box-crosshair__origin" id="box-crosshair-origin" hidden />
-              </svg>
             </div>
+            <svg class="box-draft" id="box-draft" aria-hidden="true">
+              <defs>
+                <pattern id="box-draft-hatch" patternUnits="userSpaceOnUse" width="10" height="10">
+                  <path class="box-draft__hatch" id="box-draft-hatch-path" d="M-1,1 l2,-2 M0,10 l10,-10 M9,11 l2,-2" />
+                  <path class="box-draft__hatch" id="box-draft-hatch-path-b" d="M-1,9 l2,2 M0,0 l10,10 M9,-1 l2,2" />
+                </pattern>
+              </defs>
+              <rect class="box-draft__rect" id="box-draft-rect" fill="url(#box-draft-hatch)" />
+              <line class="box-draft__diagonal" id="box-draft-diagonal" />
+              <circle class="box-draft__origin" id="box-draft-origin" />
+            </svg>
             <div class="box-guides" id="box-guides" hidden aria-hidden="true">
               <div class="box-guides__line box-guides__line--h" id="box-guides-h"></div>
               <div class="box-guides__line box-guides__line--v" id="box-guides-v"></div>
