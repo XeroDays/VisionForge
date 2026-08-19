@@ -1276,7 +1276,7 @@
     state.frameIndex = next;
     syncPlaybackControls();
     highlightCurrentAsset();
-    if (!options.keepView) {
+    if (options.resetView) {
       state.zoom = 1;
       state.panX = 0;
       state.panY = 0;
@@ -1316,7 +1316,7 @@
     state.files = Array.isArray(files) ? files : [];
     state.previewToken = 0;
     stopPlay();
-    setFrame(0);
+    setFrame(0, { resetView: true });
     renderAssets();
     log.info("image folder loaded", { folderPath: state.imagesFolder, count: state.files.length });
   }
