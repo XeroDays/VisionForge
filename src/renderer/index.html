@@ -123,6 +123,7 @@
                 <defs>
                   <pattern id="box-draft-hatch" patternUnits="userSpaceOnUse" width="8" height="8">
                     <path class="box-crosshair__hatch" id="box-draft-hatch-path" d="M-1,1 l2,-2 M0,8 l8,-8 M7,9 l2,-2" />
+                    <path class="box-crosshair__hatch" id="box-draft-hatch-path-b" d="M-1,7 l2,2 M0,0 l8,8 M7,-1 l2,2" />
                   </pattern>
                 </defs>
                 <rect class="box-crosshair__draft" id="box-crosshair-draft" hidden />
@@ -130,10 +131,10 @@
                 <circle class="box-crosshair__origin" id="box-crosshair-origin" hidden />
               </svg>
             </div>
-            <svg class="box-guides" id="box-guides" hidden aria-hidden="true">
-              <line class="box-guides__line" id="box-guides-h" />
-              <line class="box-guides__line" id="box-guides-v" />
-            </svg>
+            <div class="box-guides" id="box-guides" hidden aria-hidden="true">
+              <div class="box-guides__line box-guides__line--h" id="box-guides-h"></div>
+              <div class="box-guides__line box-guides__line--v" id="box-guides-v"></div>
+            </div>
           </div>
           <footer class="playback-bar" id="playback-bar">
             <div class="playback-bar__controls">

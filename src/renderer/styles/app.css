@@ -826,9 +826,23 @@ body {
 }
 
 .box-guides__line {
-  stroke: #111;
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
+  position: absolute;
+  background: #111;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.box-guides__line--h {
+  left: 0;
+  right: 0;
+  height: 1px;
+  transform: translateY(-0.5px);
+}
+
+.box-guides__line--v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-0.5px);
 }
 
 .box-crosshair__draft {

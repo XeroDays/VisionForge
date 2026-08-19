@@ -38,6 +38,7 @@
   const boxCrosshairOrigin = document.getElementById("box-crosshair-origin");
   const boxDraftHatch = document.getElementById("box-draft-hatch");
   const boxDraftHatchPath = document.getElementById("box-draft-hatch-path");
+  const boxDraftHatchPathB = document.getElementById("box-draft-hatch-path-b");
   const loadingOverlay = document.getElementById("loading-project-overlay");
   const viewToolbar = document.getElementById("view-toolbar");
   const breadcrumb = document.getElementById("app-breadcrumb");
@@ -112,6 +113,7 @@
   let lastFrameWheelAt = 0;
   let boxEdit = null;
   let boxDraw = null;
+  let lastStagePointer = null;
 
   log.debug("workspace-canvas.js init");
 
@@ -401,19 +403,31 @@
     return colorForLabelId(state.selectedLabelId ?? 0);
   }
 
+  function applyHatchPath(el, d, color) {
+    if (!el) return;
+    el.setAttribute("d", d);
+    el.setAttribute("stroke", color);
+    el.setAttribute("stroke-opacity", "0.7");
+  }
+
   function layoutDrawPreview(rect, startPt, endPt) {
     const color = draftPreviewColor();
     const scale = Math.max(currentScale(), 0.05);
-    const hatch = Math.max(6 / scale, 2);
+    const hatch = Math.max(8 / scale, 3);
     if (boxDraftHatch) {
       boxDraftHatch.setAttribute("width", String(hatch));
       boxDraftHatch.setAttribute("height", String(hatch));
     }
-    if (boxDraftHatchPath) {
-      boxDraftHatchPath.setAttribute("d", `M-1,1 l2,-2 M0,${hatch} l${hatch},-${hatch} M${hatch - 1},${hatch + 1} l2,-2`);
-      boxDraftHatchPath.setAttribute("stroke", color);
-      boxDraftHatchPath.setAttribute("stroke-opacity", "0.45");
-    }
+    applyHatchPath(
+      boxDraftHatchPath,
+      `M-1,1 l2,-2 M0,${hatch} l${hatch},-${hatch} M${hatch - 1},${hatch + 1} l2,-2`,
+      color,
+    );
+    applyHatchPath(
+      boxDraftHatchPathB,
+      `M-1,${hatch - 1} l2,2 M0,0 l${hatch},${hatch} M${hatch - 1},-1 l2,2`,
+      color,
+    );
     if (startPt && boxCrosshairOrigin) {
       boxCrosshairOrigin.removeAttribute("hidden");
       boxCrosshairOrigin.setAttribute("cx", String(startPt.x));
@@ -433,16 +447,20 @@
     } else if (boxCrosshairDiagonal) {
       boxCrosshairDiagonal.setAttribute("hidden", "");
     }
-    if (!boxCrosshairDraft) return;
-    if (!rect || rect.width < 1 || rect.height < 1) {
-      boxCrosshairDraft.setAttribute("hidden", "");
-      return;
-    }
+    if (!boxCrosshairDraft || !startPt) return;
+    const min = Math.max(4, 8 / scale);
+    const preview = {
+      x: rect?.width >= 1 ? rect.x : startPt.x,
+      y: rect?.height >= 1 ? rect.y : startPt.y,
+      width: Math.max(Number(rect?.width) || 0, min),
+      height: Math.max(Number(rect?.height) || 0, min),
+    };
+    if (boxCrosshair) boxCrosshair.hidden = false;
     boxCrosshairDraft.removeAttribute("hidden");
-    boxCrosshairDraft.setAttribute("x", String(rect.x));
-    boxCrosshairDraft.setAttribute("y", String(rect.y));
-    boxCrosshairDraft.setAttribute("width", String(rect.width));
-    boxCrosshairDraft.setAttribute("height", String(rect.height));
+    boxCrosshairDraft.setAttribute("x", String(preview.x));
+    boxCrosshairDraft.setAttribute("y", String(preview.y));
+    boxCrosshairDraft.setAttribute("width", String(preview.width));
+    boxCrosshairDraft.setAttribute("height", String(preview.height));
     boxCrosshairDraft.setAttribute("stroke", color);
   }
 
@@ -457,6 +475,7 @@
   }
 
   function updateCrosshair(clientX, clientY) {
+    lastStagePointer = { x: clientX, y: clientY };
     if (state.currentTool !== "box" || !currentFile() || !imageReady() || !stage || !boxGuides) {
       hideGuides();
       return;
@@ -471,19 +490,8 @@
       return;
     }
     boxGuides.hidden = false;
-    boxGuides.setAttribute("viewBox", `0 0 ${width} ${height}`);
-    if (boxGuidesH) {
-      boxGuidesH.setAttribute("x1", "0");
-      boxGuidesH.setAttribute("x2", String(width));
-      boxGuidesH.setAttribute("y1", String(y));
-      boxGuidesH.setAttribute("y2", String(y));
-    }
-    if (boxGuidesV) {
-      boxGuidesV.setAttribute("x1", String(x));
-      boxGuidesV.setAttribute("x2", String(x));
-      boxGuidesV.setAttribute("y1", "0");
-      boxGuidesV.setAttribute("y2", String(height));
-    }
+    if (boxGuidesH) boxGuidesH.style.top = `${y}px`;
+    if (boxGuidesV) boxGuidesV.style.left = `${x}px`;
   }
 
   function labelNameForId(labelid) {
@@ -802,6 +810,40 @@
       log.error("persistNewBox failed", { error: String(err?.message || err) });
     }
     setSelectedDetection(newIndex, { openTab: true });
+    renderDetections();
+  }
+
+  async function persistDetectionLabel(index, labelid) {
+    if (!state.filePath || boxEdit || boxDraw) return;
+    const file = currentFile();
+    if (!file) return;
+    const asset = state.assetsByName.get(file.name);
+    const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
+    const prev = detections[index];
+    if (!prev || Number(prev.labelid) === Number(labelid)) return;
+    detections[index] = { ...prev, labelid };
+    const nextAssets = state.assets.map((row) =>
+      row?.name === file.name
+        ? formatAsset(row, {
+            width: imageEl.naturalWidth || asset?.width,
+            height: imageEl.naturalHeight || asset?.height,
+            detections,
+          })
+        : row,
+    );
+    setAssets(nextAssets);
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
+      if (updated?.ok) {
+        setAssets(updated.project?.assets);
+        log.info("detection label updated", { name: file.name, index, labelid });
+      } else {
+        log.warn("could not update detection label", { reason: updated?.reason });
+      }
+    } catch (err) {
+      log.error("persistDetectionLabel failed", { error: String(err?.message || err) });
+    }
+    state.selectedDetectionIndex = index;
     renderDetections();
   }
 
@@ -1306,6 +1348,7 @@
     if (state.currentTool === "box") {
       window.selectInspectorTab?.("labels");
       ensureSelectedLabel();
+      if (lastStagePointer) updateCrosshair(lastStagePointer.x, lastStagePointer.y);
     } else {
       hideCrosshair();
     }
@@ -1767,6 +1810,9 @@
       return;
     }
     setSelectedLabelId(id);
+    if (state.selectedDetectionIndex != null) {
+      void persistDetectionLabel(state.selectedDetectionIndex, id);
+    }
   });
 
   labelsList?.addEventListener("keydown", (event) => {
