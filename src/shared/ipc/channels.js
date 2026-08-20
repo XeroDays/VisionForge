@@ -28,4 +28,5 @@ module.exports = {
   UPDATE_PROJECT: "visionforge:update-project",
   ROTATE_IMAGE: "visionforge:rotate-image",
   CLOSE_PROJECT: "visionforge:close-project",
+  EXPORT_ANNOTATIONS: "visionforge:export-annotations",
 };

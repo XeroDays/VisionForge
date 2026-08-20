@@ -27,6 +27,7 @@ const CH = {
   UPDATE_PROJECT: "visionforge:update-project",
   ROTATE_IMAGE: "visionforge:rotate-image",
   CLOSE_PROJECT: "visionforge:close-project",
+  EXPORT_ANNOTATIONS: "visionforge:export-annotations",
   SPLASH_LOG: "visionforge:splash-log",
 };
 
@@ -56,6 +57,8 @@ contextBridge.exposeInMainWorld("visionforge", {
   updateProject: (filePath, patch) => ipcRenderer.invoke(CH.UPDATE_PROJECT, filePath, patch),
   rotateImage: (filePath) => ipcRenderer.invoke(CH.ROTATE_IMAGE, filePath),
   closeProject: () => ipcRenderer.invoke(CH.CLOSE_PROJECT),
+  exportAnnotations: (filePath, destFolder, mode) =>
+    ipcRenderer.invoke(CH.EXPORT_ANNOTATIONS, filePath, destFolder, mode),
   log(level, namespace, message, meta) {
     ipcRenderer.send(CH.SPLASH_LOG, { level, namespace, message, meta });
   },

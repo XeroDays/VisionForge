@@ -102,6 +102,7 @@
     savingLabel: false,
     selectedLabelId: null,
     selectedDetectionIndex: null,
+    annotationType: "",
     annotationMode: "",
     assets: [],
     assetsByName: new Map(),
@@ -1391,6 +1392,7 @@
 
       state.filePath = result.filePath;
       state.name = result.name || name || "Untitled";
+      state.annotationType = String(result.project?.annotationType || "");
       state.annotationMode = String(result.project?.annotationMode || "");
       if (startPage) startPage.hidden = true;
       canvas.hidden = false;
@@ -1441,6 +1443,7 @@
     state.savingLabel = false;
     state.selectedLabelId = null;
     state.selectedDetectionIndex = null;
+    state.annotationType = "";
     state.annotationMode = "";
     panning = false;
     lastFrameWheelAt = 0;
@@ -1505,6 +1508,7 @@
         if (!updated?.ok) {
           log.warn("could not persist imagesFolder", { reason: updated?.reason });
         } else {
+          state.annotationType = String(updated.project?.annotationType || state.annotationType);
           state.annotationMode = String(updated.project?.annotationMode || state.annotationMode);
           renderLabels(updated.project?.labels);
           setAssets(updated.project?.assets);
@@ -1972,6 +1976,12 @@
 
   window.showWorkspace = showWorkspace;
   window.selectImagesFolder = selectImagesFolder;
+  window.getWorkspaceExportContext = () => ({
+    filePath: state.filePath,
+    imagesFolder: state.imagesFolder,
+    annotationType: state.annotationType,
+    annotationMode: state.annotationMode,
+  });
   window.setWorkspaceTool = setWorkspaceTool;
   window.zoomWorkspace = (direction) => {
     if (direction < 0) zoomOut();

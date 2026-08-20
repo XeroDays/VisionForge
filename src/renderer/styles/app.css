@@ -1248,6 +1248,11 @@ body {
   border-color: rgba(244, 180, 42, 0.55);
 }
 
+.create-project-input.is-locked {
+  opacity: 0.65;
+  cursor: default;
+}
+
 .create-project-dropdown {
   position: relative;
   z-index: 1;

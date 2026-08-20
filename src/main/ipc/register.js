@@ -3,6 +3,7 @@ const channels = require("../../shared/ipc/channels");
 const licenseService = require("../services/license-service");
 const projectService = require("../middleware/project-service");
 const imageService = require("../middleware/image-service");
+const exportService = require("../middleware/export-service");
 const historyStore = require("../services/history-solutions-store");
 const { ipc: log } = require("../services/visionforge-logger");
 
@@ -125,6 +126,11 @@ function registerIpcHandlers() {
   ipcMain.handle(channels.CLOSE_PROJECT, async () => {
     log.info("CLOSE_PROJECT");
     return projectService.closeProject();
+  });
+
+  ipcMain.handle(channels.EXPORT_ANNOTATIONS, async (_event, filePath, destFolder, mode) => {
+    log.info("EXPORT_ANNOTATIONS", { destFolder, mode });
+    return exportService.exportAnnotations(filePath, destFolder, mode);
   });
 }
 

@@ -160,7 +160,7 @@ Tool click → selected highlight for Cursor, Box, Hexagon. **W** toggles Cursor
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Create / Open / Recent → `showWorkspace(filePath)` → **Loading project** overlay → load VFSln (append-only `assets` sync + empty-detection sidecar import if `imagesFolder` set) → hide `#start-page` → select Cursor tool → restore `imagesFolder` if set → playback range = image count (`listImageFolder`, not `assets`) → current frame previewed fit-to-screen via `vfimg:` protocol → Detections tab + SVG boxes for that file → hide overlay. File → **Select Image Folder** and the Select Images tool share the same picker (same overlay while sync/import runs). File → **Export** is enabled while a project is open (UI only; no export yet). File → **Goto Startup page** closes the project (`closeWorkspace` + `closeProject`) and returns to `#start-page`. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names; click sets the current frame (Detections list and boxes update). When an image is previewed, `#view-toolbar` (top-left of the stage) shows Zoom in/out, Fit to Screen, and Rotate (one-shot). Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps the asset list; A / ArrowLeft step back and D / ArrowRight step forward (any tool; ignored while typing). Plain wheel does not change the frame. Box/Hexagon ignore wheel. Rotate overwrites the current image file 90° clockwise and re-fits. Detection overlay uses the same zoom/pan transform as the image.
+Create / Open / Recent → `showWorkspace(filePath)` → **Loading project** overlay → load VFSln (append-only `assets` sync + empty-detection sidecar import if `imagesFolder` set) → hide `#start-page` → select Cursor tool → restore `imagesFolder` if set → playback range = image count (`listImageFolder`, not `assets`) → current frame previewed fit-to-screen via `vfimg:` protocol → Detections tab + SVG boxes for that file → hide overlay. File → **Select Image Folder** and the Select Images tool share the same picker (same overlay while sync/import runs). File → **Export** opens the export dialog (destination folder, locked annotation type, changeable mode) and writes one sidecar per image. File → **Goto Startup page** closes the project (`closeWorkspace` + `closeProject`) and returns to `#start-page`. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names; click sets the current frame (Detections list and boxes update). When an image is previewed, `#view-toolbar` (top-left of the stage) shows Zoom in/out, Fit to Screen, and Rotate (one-shot). Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps the asset list; A / ArrowLeft step back and D / ArrowRight step forward (any tool; ignored while typing). Plain wheel does not change the frame. Box/Hexagon ignore wheel. Rotate overwrites the current image file 90° clockwise and re-fits. Detection overlay uses the same zoom/pan transform as the image.
 
 ---
 
@@ -528,6 +528,21 @@ Native directory dialog → **Loading project** overlay → `updateProject({ ima
 
 ---
 
+### Export Annotations
+
+**Trigger:** File → Export (project must be open)
+
+**Flow:**
+`#export-overlay` → pick destination folder (`selectImagesFolder`) → annotation type is locked to VFSln `annotationType` → choose annotation mode (catalog radios for that type; does not write VFSln) → Export → `exportAnnotations(vfslnPath, destFolder, mode)` writes one sidecar per image in `imagesFolder` (empty file if that image has no boxes). Mode matching `/yolo/i` → `{basename}.txt` lines `labelid xc yc w h` (6 decimals; VOC boxes converted). Any other mode → Pascal VOC `{basename}.xml` (`folder`, `filename`, `path` = image path, `size`, `object`/`bndbox` integers; YOLO converted; `truncated` if the box touches an edge). Missing `width`/`height` probed with `sharp`. Overwrites existing sidecars. Renderer does not use `fs`.
+
+**Files:**
+- `src/renderer/index.html` — `#export-overlay`, `#btn-export`
+- `src/renderer/scripts/export-dialog.js`
+- `src/main/middleware/export-service.js`
+- `src/preload/index.js`
+
+---
+
 ### Sync Assets from Image Folder
 
 **Trigger:** `loadProject` when `imagesFolder` is set; also `updateProject({ imagesFolder })`
@@ -717,6 +732,7 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | License registration | `src/main/services/license-service.js` |
 | Release update UI | `src/renderer/scripts/release-update-panel.js` |
 | Workspace canvas / playback | `src/renderer/scripts/workspace-canvas.js` |
+| Export annotations | `src/renderer/scripts/export-dialog.js`, `src/main/middleware/export-service.js` |
 | Workspace panels | `src/renderer/scripts/workspace-panels.js` |
 | Image protocol (`vfimg:`) | `src/main/services/image-protocol.js` |
 | Image rotate service | `src/main/middleware/image-service.js` |
@@ -867,6 +883,7 @@ Renderer
 - `src/renderer/scripts/window-controls.js`
 - `src/renderer/scripts/start-page.js`
 - `src/renderer/scripts/create-project-dialog.js`
+- `src/renderer/scripts/export-dialog.js`
 - `src/renderer/scripts/workspace-canvas.js`
 
 ### `src/preload/splash-preload.js`
@@ -987,6 +1004,7 @@ Renderer
 | `visionforge:update-project` | invoke | `register.js` | Merge keys into `.VFSln` and write (`imagesFolder` also syncs assets + detections) |
 | `visionforge:rotate-image` | invoke | `register.js` | Rotate image 90° CW and overwrite file |
 | `visionforge:close-project` | invoke | `register.js` | Clear `vfimg:` allowed dir (end open-project session) |
+| `visionforge:export-annotations` | invoke | `register.js` | Write YOLO `.txt` or Pascal VOC `.xml` sidecars into a folder |
 
 ---
 
@@ -1036,7 +1054,7 @@ Renderer
 - **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Current frame is previewed via `vfimg:`. Frame changes keep zoom/pan; Fit to Screen and a new folder/project load still fit. A / ArrowLeft and D / ArrowRight step ±1 (ignored while typing).
 - **Assets** is the first/default inspector tab.
 - **Zoom / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets view; zoom-out below fit snaps to Fit to Screen. Changing images keeps the current zoom and pan. Rotate overwrites the current file 90° clockwise (`sharp`). Cursor is selected on project load. Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps assets; A / Left and D / Right step frames (any tool); plain wheel does not change the frame; Box/Hexagon ignore.
-- **Export:** File → Export (enabled while a project is open). Placeholder only; no export yet.
+- **Export:** File → Export (enabled while a project is open). Dialog picks a destination folder; annotation type is locked; mode can change for that export only. Writes one sidecar per image in `imagesFolder` (empty if no boxes): YOLO `.txt` (`labelid xc yc w h`) or Pascal VOC `.xml`.
 - **Goto Startup page:** File menu item (enabled while a project is open) closes the workspace and returns to `#start-page` without deleting the VFSln or recents.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only

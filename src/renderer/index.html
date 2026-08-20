@@ -309,12 +309,46 @@
     </div>
   </div>
 
+  <div id="export-overlay" class="settings-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="export-title">
+    <div class="settings-modal create-project-modal">
+      <div class="settings-modal-header">
+        <h2 class="settings-modal-title" id="export-title">Export</h2>
+        <button type="button" id="btn-export-close" class="icon-btn" aria-label="Close export dialog">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="settings-modal-body create-project-body">
+        <div class="create-project-field">
+          <span class="create-project-label">Location</span>
+          <div class="create-project-location-row">
+            <input type="text" id="export-location" class="create-project-input" readonly aria-label="Location" />
+            <button type="button" id="btn-export-browse" class="create-project-browse" aria-label="Choose folder">...</button>
+          </div>
+        </div>
+        <div class="create-project-field">
+          <span class="create-project-label">Annotation type</span>
+          <input type="text" id="export-annotation-type" class="create-project-input is-locked" readonly tabindex="-1" aria-readonly="true" />
+        </div>
+        <fieldset class="create-project-field create-project-modes-field">
+          <legend class="create-project-label">Annotation mode</legend>
+          <div class="create-project-modes" id="export-annotation-modes" role="radiogroup" aria-label="Annotation mode"></div>
+        </fieldset>
+        <p class="create-project-error" id="export-error" hidden></p>
+      </div>
+      <div class="settings-modal-footer create-project-footer">
+        <button type="button" id="btn-export-cancel" class="btn-secondary">Cancel</button>
+        <button type="button" id="btn-export-confirm" class="btn-primary" disabled>Export</button>
+      </div>
+    </div>
+  </div>
+
   <script src="scripts/renderer-logger.js"></script>
   <script src="scripts/workspace-panels.js"></script>
   <script src="scripts/workspace-canvas.js"></script>
   <script src="scripts/start-page.js"></script>
   <script src="../shared/enums/annotation-types.js"></script>
   <script src="scripts/create-project-dialog.js"></script>
+  <script src="scripts/export-dialog.js"></script>
   <script src="scripts/release-update-panel.js"></script>
   <script src="scripts/window-controls.js"></script>
   <script>
