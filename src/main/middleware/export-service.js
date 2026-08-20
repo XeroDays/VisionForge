@@ -218,6 +218,23 @@ function reportProgress(onProgress, current, total) {
   }
 }
 
+function writeClassesTxt(destPath, labels) {
+  const rows = Array.isArray(labels) ? labels : [];
+  const byId = new Map();
+  let maxId = -1;
+  rows.forEach((row) => {
+    const id = Number(row?.id);
+    if (!Number.isInteger(id) || id < 0) return;
+    byId.set(id, String(row?.name || "").trim());
+    if (id > maxId) maxId = id;
+  });
+  const lines = [];
+  for (let id = 0; id <= maxId; id += 1) {
+    lines.push(byId.has(id) ? byId.get(id) : "");
+  }
+  fs.writeFileSync(destPath, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
+}
+
 async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
   const startedAt = log.enter("exportAnnotations");
   const dest = String(destFolder || "").trim();
@@ -255,7 +272,8 @@ async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
   }
 
   const files = listImageFiles(imagesFolder);
-  reportProgress(onProgress, 0, files.length);
+  const total = files.length + 1;
+  reportProgress(onProgress, 0, total);
   const assetsByName = new Map();
   (Array.isArray(loaded.project?.assets) ? loaded.project.assets : []).forEach((row) => {
     if (row?.name) assetsByName.set(String(row.name), row);
@@ -291,8 +309,12 @@ async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
       });
     }
     count += 1;
-    reportProgress(onProgress, count, files.length);
+    reportProgress(onProgress, count, total);
   }
+
+  writeClassesTxt(path.join(dest, "classes.txt"), labels);
+  count += 1;
+  reportProgress(onProgress, count, total);
 
   log.info("exported annotations", { dest, mode: exportMode, count, yolo });
   log.exit("exportAnnotations", startedAt, { ok: true, count });
