@@ -334,6 +334,13 @@
           <div class="create-project-modes" id="export-annotation-modes" role="radiogroup" aria-label="Annotation mode"></div>
         </fieldset>
         <p class="create-project-error" id="export-error" hidden></p>
+        <div class="export-progress" id="export-progress" hidden>
+          <div class="release-progress-track" aria-hidden="true">
+            <div class="release-progress-bar" id="export-progress-bar"></div>
+          </div>
+          <span class="release-download-percent" id="export-progress-percent">0%</span>
+        </div>
+        <p class="export-status" id="export-status" hidden></p>
       </div>
       <div class="settings-modal-footer create-project-footer">
         <button type="button" id="btn-export-cancel" class="btn-secondary">Cancel</button>

@@ -28,6 +28,7 @@ const CH = {
   ROTATE_IMAGE: "visionforge:rotate-image",
   CLOSE_PROJECT: "visionforge:close-project",
   EXPORT_ANNOTATIONS: "visionforge:export-annotations",
+  EXPORT_PROGRESS: "visionforge:export-progress",
   SPLASH_LOG: "visionforge:splash-log",
 };
 
@@ -71,5 +72,10 @@ contextBridge.exposeInMainWorld("visionforge", {
     const subscription = (_event, payload) => callback(payload);
     ipcRenderer.on(CH.LICENSE_DOWNLOAD_PROGRESS, subscription);
     return () => ipcRenderer.removeListener(CH.LICENSE_DOWNLOAD_PROGRESS, subscription);
+  },
+  onExportProgress(callback) {
+    const subscription = (_event, payload) => callback(payload);
+    ipcRenderer.on(CH.EXPORT_PROGRESS, subscription);
+    return () => ipcRenderer.removeListener(CH.EXPORT_PROGRESS, subscription);
   },
 });

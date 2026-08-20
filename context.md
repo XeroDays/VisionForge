@@ -533,7 +533,7 @@ Native directory dialog → **Loading project** overlay → `updateProject({ ima
 **Trigger:** File → Export (project must be open)
 
 **Flow:**
-`#export-overlay` → pick destination folder (`selectImagesFolder`) → annotation type is locked to VFSln `annotationType` → choose annotation mode (catalog radios for that type; does not write VFSln) → Export → `exportAnnotations(vfslnPath, destFolder, mode)` writes one sidecar per image in `imagesFolder` (empty file if that image has no boxes). Mode matching `/yolo/i` → `{basename}.txt` lines `labelid xc yc w h` (6 decimals; VOC boxes converted). Any other mode → Pascal VOC `{basename}.xml` (`folder`, `filename`, `path` = image path, `size`, `object`/`bndbox` integers; YOLO converted; `truncated` if the box touches an edge). Missing `width`/`height` probed with `sharp`. Overwrites existing sidecars. Renderer does not use `fs`.
+`#export-overlay` → pick destination folder (`selectImagesFolder`) → annotation type is locked to VFSln `annotationType` → choose annotation mode (catalog radios for that type; does not write VFSln) → Export → progress bar (`visionforge:export-progress` current/total) while `exportAnnotations` writes one sidecar per image in `imagesFolder` (empty file if that image has no boxes) → **Exported N files.** → auto-close after 1.5s. Failure hides the bar and keeps the dialog open. Mode matching `/yolo/i` → `{basename}.txt` lines `labelid xc yc w h` (6 decimals; VOC boxes converted). Any other mode → Pascal VOC `{basename}.xml` (`folder`, `filename`, `path` = image path, `size`, `object`/`bndbox` integers; YOLO converted; `truncated` if the box touches an edge). Missing `width`/`height` probed with `sharp`. Overwrites existing sidecars. Renderer does not use `fs`.
 
 **Files:**
 - `src/renderer/index.html` — `#export-overlay`, `#btn-export`
@@ -1005,6 +1005,7 @@ Renderer
 | `visionforge:rotate-image` | invoke | `register.js` | Rotate image 90° CW and overwrite file |
 | `visionforge:close-project` | invoke | `register.js` | Clear `vfimg:` allowed dir (end open-project session) |
 | `visionforge:export-annotations` | invoke | `register.js` | Write YOLO `.txt` or Pascal VOC `.xml` sidecars into a folder |
+| `visionforge:export-progress` | push (main→renderer) | `register.js` send | Export sidecar progress `{ current, total }` |
 
 ---
 
@@ -1054,7 +1055,7 @@ Renderer
 - **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Current frame is previewed via `vfimg:`. Frame changes keep zoom/pan; Fit to Screen and a new folder/project load still fit. A / ArrowLeft and D / ArrowRight step ±1 (ignored while typing).
 - **Assets** is the first/default inspector tab.
 - **Zoom / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets view; zoom-out below fit snaps to Fit to Screen. Changing images keeps the current zoom and pan. Rotate overwrites the current file 90° clockwise (`sharp`). Cursor is selected on project load. Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps assets; A / Left and D / Right step frames (any tool); plain wheel does not change the frame; Box/Hexagon ignore.
-- **Export:** File → Export (enabled while a project is open). Dialog picks a destination folder; annotation type is locked; mode can change for that export only. Writes one sidecar per image in `imagesFolder` (empty if no boxes): YOLO `.txt` (`labelid xc yc w h`) or Pascal VOC `.xml`.
+- **Export:** File → Export (enabled while a project is open). Dialog picks a destination folder; annotation type is locked; mode can change for that export only. Writes one sidecar per image in `imagesFolder` (empty if no boxes): YOLO `.txt` (`labelid xc yc w h`) or Pascal VOC `.xml`. A progress bar runs during the write; **Exported N files.** then the dialog closes.
 - **Goto Startup page:** File menu item (enabled while a project is open) closes the workspace and returns to `#start-page` without deleting the VFSln or recents.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only

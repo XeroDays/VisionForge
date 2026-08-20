@@ -16,6 +16,10 @@
   const typeInput = document.getElementById("export-annotation-type");
   const modesEl = document.getElementById("export-annotation-modes");
   const errorEl = document.getElementById("export-error");
+  const progressEl = document.getElementById("export-progress");
+  const progressBar = document.getElementById("export-progress-bar");
+  const progressPercent = document.getElementById("export-progress-percent");
+  const statusEl = document.getElementById("export-status");
   const browseBtn = document.getElementById("btn-export-browse");
   const confirmBtn = document.getElementById("btn-export-confirm");
   const cancelBtn = document.getElementById("btn-export-cancel");
@@ -25,8 +29,11 @@
   if (!overlay) return;
 
   const TYPES = window.VisionForgeAnnotationTypes?.TYPES || [];
+  const DONE_CLOSE_MS = 1500;
   let destFolder = "";
   let busy = false;
+  let closeTimer = 0;
+  let stopProgress = null;
 
   log.debug("export-dialog.js init");
 
@@ -41,8 +48,41 @@
     errorEl.textContent = message;
   }
 
+  function setStatus(message) {
+    if (!statusEl) return;
+    if (!message) {
+      statusEl.hidden = true;
+      statusEl.textContent = "";
+      return;
+    }
+    statusEl.hidden = false;
+    statusEl.textContent = message;
+  }
+
+  function setProgress(current, total) {
+    const max = Math.max(Number(total) || 0, 0);
+    const value = Math.min(Math.max(Number(current) || 0, 0), max);
+    const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+    if (progressBar) progressBar.style.width = `${pct}%`;
+    if (progressPercent) progressPercent.textContent = `${pct}%`;
+  }
+
+  function showProgress(visible) {
+    if (progressEl) progressEl.hidden = !visible;
+    if (!visible) setProgress(0, 0);
+  }
+
   function selectedMode() {
     return modesEl?.querySelector('input[name="export-annotation-mode"]:checked')?.value || "";
+  }
+
+  function setFormEnabled(enabled) {
+    if (locationInput) locationInput.style.pointerEvents = enabled ? "" : "none";
+    if (browseBtn) browseBtn.disabled = !enabled;
+    if (cancelBtn) cancelBtn.disabled = !enabled;
+    modesEl?.querySelectorAll('input[name="export-annotation-mode"]').forEach((input) => {
+      input.disabled = !enabled;
+    });
   }
 
   function syncConfirm() {
@@ -81,12 +121,23 @@
     });
   }
 
-  function closeDialog() {
-    if (busy) return;
-    overlay.hidden = true;
+  function resetDialog() {
     destFolder = "";
     if (locationInput) locationInput.value = "";
     setError("");
+    setStatus("");
+    showProgress(false);
+    setFormEnabled(true);
+  }
+
+  function closeDialog() {
+    if (busy) return;
+    if (closeTimer) {
+      window.clearTimeout(closeTimer);
+      closeTimer = 0;
+    }
+    overlay.hidden = true;
+    resetDialog();
     log.debug("export dialog closed");
   }
 
@@ -102,17 +153,20 @@
     const ctx = window.getWorkspaceExportContext?.() || {};
     if (!ctx.filePath) return;
     closeFileMenu();
-    destFolder = "";
-    if (locationInput) locationInput.value = "";
+    if (closeTimer) {
+      window.clearTimeout(closeTimer);
+      closeTimer = 0;
+    }
+    resetDialog();
     if (typeInput) typeInput.value = typeLabel(ctx.annotationType);
     renderModes(ctx.annotationType, ctx.annotationMode);
-    setError("");
     overlay.hidden = false;
     syncConfirm();
     log.debug("export dialog opened", { type: ctx.annotationType, mode: ctx.annotationMode });
   }
 
   async function pickFolder() {
+    if (busy) return;
     const ctx = window.getWorkspaceExportContext?.() || {};
     const startedAt = log.enter("pickExportFolder");
     try {
@@ -148,8 +202,16 @@
     }
 
     busy = true;
-    syncConfirm();
     setError("");
+    setStatus("");
+    showProgress(true);
+    setProgress(0, 0);
+    setFormEnabled(false);
+    syncConfirm();
+    stopProgress = window.visionforge?.onExportProgress?.((payload) => {
+      setProgress(payload?.current, payload?.total);
+    });
+
     const startedAt = log.enter("exportAnnotations");
     try {
       const result = await window.visionforge?.exportAnnotations?.(ctx.filePath, destFolder, mode);
@@ -162,21 +224,35 @@
           "missing-images-folder": "Select an image folder first.",
           "missing-mode": "Select an annotation mode.",
         };
+        showProgress(false);
         setError(reasons[result?.reason] || "Export failed.");
         log.exit("exportAnnotations", startedAt, { ok: false, reason: result?.reason });
         return;
       }
-      log.info("annotations exported", { destFolder, mode, count: result.count });
-      log.exit("exportAnnotations", startedAt, { ok: true, count: result.count });
-      busy = false;
-      closeDialog();
+      const count = Number(result.count) || 0;
+      setProgress(count, count);
+      showProgress(false);
+      setStatus(`Exported ${count} files.`);
+      log.info("annotations exported", { destFolder, mode, count });
+      log.exit("exportAnnotations", startedAt, { ok: true, count });
+      closeTimer = window.setTimeout(() => {
+        closeTimer = 0;
+        busy = false;
+        closeDialog();
+      }, DONE_CLOSE_MS);
     } catch (err) {
+      showProgress(false);
       setError("Export failed.");
       log.error("exportAnnotations failed", { error: String(err?.message || err) });
       log.exit("exportAnnotations", startedAt, { error: true });
     } finally {
-      busy = false;
-      syncConfirm();
+      stopProgress?.();
+      stopProgress = null;
+      if (!closeTimer) {
+        busy = false;
+        setFormEnabled(true);
+        syncConfirm();
+      }
     }
   }
 

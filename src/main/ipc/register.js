@@ -128,9 +128,11 @@ function registerIpcHandlers() {
     return projectService.closeProject();
   });
 
-  ipcMain.handle(channels.EXPORT_ANNOTATIONS, async (_event, filePath, destFolder, mode) => {
+  ipcMain.handle(channels.EXPORT_ANNOTATIONS, async (event, filePath, destFolder, mode) => {
     log.info("EXPORT_ANNOTATIONS", { destFolder, mode });
-    return exportService.exportAnnotations(filePath, destFolder, mode);
+    return exportService.exportAnnotations(filePath, destFolder, mode, (progress) => {
+      event.sender.send(channels.EXPORT_PROGRESS, progress);
+    });
   });
 }
 

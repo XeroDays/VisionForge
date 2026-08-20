@@ -209,7 +209,16 @@ function writeVocXml({ destPath, folder, filename, imagePath, width, height, det
   fs.writeFileSync(destPath, xml, "utf8");
 }
 
-async function exportAnnotations(vfslnPath, destFolder, mode) {
+function reportProgress(onProgress, current, total) {
+  if (typeof onProgress !== "function") return;
+  try {
+    onProgress({ current, total });
+  } catch {
+    // ignore listener errors
+  }
+}
+
+async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
   const startedAt = log.enter("exportAnnotations");
   const dest = String(destFolder || "").trim();
   const exportMode = String(mode || "").trim();
@@ -246,6 +255,7 @@ async function exportAnnotations(vfslnPath, destFolder, mode) {
   }
 
   const files = listImageFiles(imagesFolder);
+  reportProgress(onProgress, 0, files.length);
   const assetsByName = new Map();
   (Array.isArray(loaded.project?.assets) ? loaded.project.assets : []).forEach((row) => {
     if (row?.name) assetsByName.set(String(row.name), row);
@@ -281,6 +291,7 @@ async function exportAnnotations(vfslnPath, destFolder, mode) {
       });
     }
     count += 1;
+    reportProgress(onProgress, count, files.length);
   }
 
   log.info("exported annotations", { dest, mode: exportMode, count, yolo });

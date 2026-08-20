@@ -1492,6 +1492,18 @@ body {
   color: #f87171;
 }
 
+.export-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.export-status {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #e7ecf3;
+}
+
 .create-project-footer {
   flex-direction: row;
   justify-content: flex-end;
