@@ -1071,7 +1071,7 @@
         saveBtn.title = "Save";
         saveBtn.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i>';
 
-        li.append(swatch, idEl, input, saveBtn);
+        li.append(idEl, swatch, input, saveBtn);
         labelsList.appendChild(li);
         return;
       }
@@ -1088,7 +1088,7 @@
       deleteBtn.title = "Delete";
       deleteBtn.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
 
-      li.append(swatch, idEl, nameEl, deleteBtn);
+      li.append(idEl, swatch, nameEl, deleteBtn);
       labelsList.appendChild(li);
     });
     if (!state.labels.some((label) => label.id === state.selectedLabelId)) {
