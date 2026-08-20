@@ -1045,6 +1045,11 @@
       li.dataset.labelId = String(label.id);
       li.title = label.name;
 
+      const swatch = document.createElement("span");
+      swatch.className = "labels-list__swatch";
+      swatch.style.background = colorForLabelId(label.id);
+      swatch.setAttribute("aria-hidden", "true");
+
       const idEl = document.createElement("span");
       idEl.className = "labels-list__id";
       idEl.textContent = String(label.id);
@@ -1066,7 +1071,7 @@
         saveBtn.title = "Save";
         saveBtn.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i>';
 
-        li.append(idEl, input, saveBtn);
+        li.append(swatch, idEl, input, saveBtn);
         labelsList.appendChild(li);
         return;
       }
@@ -1083,7 +1088,7 @@
       deleteBtn.title = "Delete";
       deleteBtn.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
 
-      li.append(idEl, nameEl, deleteBtn);
+      li.append(swatch, idEl, nameEl, deleteBtn);
       labelsList.appendChild(li);
     });
     if (!state.labels.some((label) => label.id === state.selectedLabelId)) {
