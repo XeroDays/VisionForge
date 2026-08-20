@@ -50,6 +50,7 @@
   const fileMenuBtn = document.getElementById("btn-file-menu");
   const fileMenuDropdown = document.getElementById("file-menu-dropdown");
   const selectFolderMenuItem = document.getElementById("btn-select-image-folder");
+  const exportMenuItem = document.getElementById("btn-export");
   const gotoStartupMenuItem = document.getElementById("btn-goto-startup");
   const skipStartBtn = document.getElementById("playback-skip-start");
   const rewindBtn = document.getElementById("playback-rewind");
@@ -205,6 +206,7 @@
     if (selectImagesBtn) selectImagesBtn.hidden = !visible;
     if (toolsDivider) toolsDivider.hidden = !visible;
     if (selectFolderMenuItem) selectFolderMenuItem.disabled = !visible;
+    if (exportMenuItem) exportMenuItem.disabled = !visible;
     if (gotoStartupMenuItem) gotoStartupMenuItem.disabled = !visible;
     if (labelsAddBtn) labelsAddBtn.disabled = !visible;
   }
