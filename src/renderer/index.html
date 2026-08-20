@@ -78,6 +78,9 @@
         <button type="button" class="tool-btn tool-btn--command" id="tool-process-image" data-tool="process-image" aria-label="Process Image" title="Process Image" hidden>
           <i class="fa-solid fa-image" aria-hidden="true"></i>
         </button>
+        <button type="button" class="tool-btn tool-btn--command" id="tool-magic" data-tool="magic" aria-label="Auto detect" title="Auto detect" hidden>
+          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+        </button>
       </aside>
 
       <section class="screen-section screen-section--main">
@@ -172,30 +175,29 @@
           </footer>
         </div>
         <div class="process-image-screen" id="process-image-screen" hidden>
-          <div class="process-image-preview">
-            <img class="process-image-preview__img" id="process-image-preview" alt="" draggable="false" />
+          <div class="process-image-preview" id="process-image-pane">
+            <div class="process-image-stage" id="process-image-stage">
+              <img class="process-image-preview__img" id="process-image-preview" alt="" draggable="false" />
+              <svg class="process-image-overlay" id="process-image-overlay" aria-hidden="true"></svg>
+            </div>
           </div>
           <aside class="process-image-panel" aria-label="Process configuration">
             <div class="process-image-panel__header">
               <h2 class="process-image-panel__title">Process Image</h2>
               <button type="button" class="btn-secondary process-image-panel__back" id="btn-process-image-back">Back</button>
             </div>
-            <div class="process-image-panel__body">
-              <div class="create-project-field">
-                <span class="create-project-label">Load ONNX model</span>
-                <div class="create-project-location-row">
-                  <input type="text" id="process-image-model-path" class="create-project-input" readonly aria-label="ONNX model path" />
-                  <button type="button" id="btn-process-image-model-browse" class="create-project-browse" aria-label="Choose ONNX model">...</button>
-                </div>
-              </div>
-              <div class="create-project-field">
-                <span class="create-project-label">Select classes path</span>
-                <div class="create-project-location-row">
-                  <input type="text" id="process-image-classes-path" class="create-project-input" readonly aria-label="Classes path" />
-                  <button type="button" id="btn-process-image-classes-browse" class="create-project-browse" aria-label="Choose classes.txt">...</button>
-                </div>
-              </div>
-              <button type="button" class="btn-primary" id="btn-process-image-run" disabled>Process</button>
+            <div class="process-image-panel__tabs" role="tablist" aria-label="Process tabs">
+              <button type="button" class="inspector-tab is-selected" id="process-tab-setup" role="tab" aria-selected="true" aria-controls="process-pane-setup" data-process-tab="setup">Setup</button>
+              <button type="button" class="inspector-tab" id="process-tab-detections" role="tab" aria-selected="false" aria-controls="process-pane-detections" data-process-tab="detections">Detections</button>
+            </div>
+            <div class="process-image-panel__body" id="process-pane-setup" role="tabpanel" aria-labelledby="process-tab-setup">
+              <p class="process-image-hint">Uses the AI model from Settings.</p>
+              <button type="button" class="btn-primary" id="btn-process-image-run">Process</button>
+              <p class="process-image-status" id="process-image-status" hidden></p>
+            </div>
+            <div class="process-image-panel__body process-image-panel__body--list" id="process-pane-detections" role="tabpanel" aria-labelledby="process-tab-detections" hidden>
+              <p class="process-detections-empty" id="process-detections-empty">No detections</p>
+              <ul class="process-detections-list" id="process-detections-list" hidden></ul>
             </div>
           </aside>
         </div>
@@ -264,6 +266,56 @@
           <span id="release-download-percent" class="release-download-percent">0%</span>
         </div>
         <button type="button" id="btn-release-download" class="btn-primary">Download Now</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-overlay" class="settings-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="settings-title">
+    <div class="settings-modal settings-dialog">
+      <div class="settings-modal-header">
+        <h2 class="settings-modal-title" id="settings-title">Settings</h2>
+        <button type="button" id="btn-settings-close" class="icon-btn" aria-label="Close settings">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="settings-modal-body settings-dialog__body">
+        <nav class="settings-dialog__nav" aria-label="Settings sections">
+          <button type="button" class="settings-dialog__section is-selected" data-settings-section="ai-model" aria-selected="true">AI Model</button>
+        </nav>
+        <div class="settings-dialog__pane" id="settings-pane-ai-model" role="tabpanel">
+          <div class="create-project-field">
+            <span class="create-project-label">ONNX model</span>
+            <div class="create-project-location-row">
+              <input type="text" id="settings-model-path" class="create-project-input" readonly aria-label="ONNX model path" />
+              <button type="button" id="btn-settings-model-browse" class="create-project-browse" aria-label="Choose ONNX model">...</button>
+            </div>
+          </div>
+          <label class="create-project-field">
+            <span class="create-project-label">Model type</span>
+            <select id="settings-model-type" class="settings-dialog__select" aria-label="Model type"></select>
+          </label>
+        </div>
+      </div>
+      <div class="settings-modal-footer create-project-footer">
+        <button type="button" id="btn-settings-cancel" class="btn-secondary">Cancel</button>
+        <button type="button" id="btn-settings-apply" class="btn-primary">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-alert-overlay" class="settings-overlay" hidden aria-modal="true" role="alertdialog" aria-labelledby="app-alert-title">
+    <div class="settings-modal settings-modal--compact">
+      <div class="settings-modal-header">
+        <h2 class="settings-modal-title" id="app-alert-title">Error</h2>
+        <button type="button" id="btn-app-alert-close" class="icon-btn" aria-label="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="settings-modal-body">
+        <p class="delete-label-message" id="app-alert-message"></p>
+      </div>
+      <div class="settings-modal-footer create-project-footer">
+        <button type="button" id="btn-app-alert-ok" class="btn-primary">OK</button>
       </div>
     </div>
   </div>
@@ -386,6 +438,9 @@
   <script src="scripts/process-image-screen.js"></script>
   <script src="scripts/start-page.js"></script>
   <script src="../shared/enums/annotation-types.js"></script>
+  <script src="../shared/enums/ai-model-types.js"></script>
+  <script src="scripts/settings-dialog.js"></script>
+  <script src="scripts/magic-detect.js"></script>
   <script src="scripts/create-project-dialog.js"></script>
   <script src="scripts/export-dialog.js"></script>
   <script src="scripts/release-update-panel.js"></script>

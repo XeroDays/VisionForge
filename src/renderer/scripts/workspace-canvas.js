@@ -44,6 +44,7 @@
   const breadcrumb = document.getElementById("app-breadcrumb");
   const selectImagesBtn = document.getElementById("tool-select-images");
   const processImageBtn = document.getElementById("tool-process-image");
+  const magicBtn = document.getElementById("tool-magic");
   const toolsDivider = document.getElementById("tools-rail-divider");
   const toolsRail = document.getElementById("tools-rail");
   const inspectorPanel = document.getElementById("inspector-panel");
@@ -165,8 +166,9 @@
   }
 
   function setProcessImageBtnVisible() {
-    if (!processImageBtn) return;
-    processImageBtn.hidden = !(state.filePath && currentFile());
+    const visible = Boolean(state.filePath && currentFile());
+    if (processImageBtn) processImageBtn.hidden = !visible;
+    if (magicBtn) magicBtn.hidden = !visible;
   }
 
   function loadPreview() {
@@ -216,6 +218,7 @@
     if (toolsDivider) toolsDivider.hidden = !visible;
     if (!visible) {
       if (processImageBtn) processImageBtn.hidden = true;
+      if (magicBtn) magicBtn.hidden = true;
     } else {
       setProcessImageBtnVisible();
     }
@@ -799,6 +802,70 @@
     }
     setSelectedDetection(edit.index, { openTab: true });
     drawDetectionBoxes();
+  }
+
+  async function applyWorkspaceDetections(items) {
+    const startedAt = log.enter("applyWorkspaceDetections");
+    const file = currentFile();
+    if (!file || !state.filePath || !imageReady()) {
+      log.exit("applyWorkspaceDetections", startedAt, { ok: false, reason: "no-image" });
+      return { ok: false, reason: "no-image" };
+    }
+    const imgW = imageEl.naturalWidth;
+    const imgH = imageEl.naturalHeight;
+    const template = isVocMode()
+      ? { xmin: 0, ymin: 0, xmax: 1, ymax: 1 }
+      : { xc: 0, yc: 0, w: 0, h: 0 };
+    const detections = (Array.isArray(items) ? items : [])
+      .map((item) => {
+        const xmin = Number(item?.xmin);
+        const ymin = Number(item?.ymin);
+        const xmax = Number(item?.xmax);
+        const ymax = Number(item?.ymax);
+        if (![xmin, ymin, xmax, ymax].every(Number.isFinite)) return null;
+        const value = rectToValue(
+          { x: xmin, y: ymin, width: xmax - xmin, height: ymax - ymin },
+          imgW,
+          imgH,
+          template,
+        );
+        return {
+          labelid: Number.isInteger(Number(item.labelid)) ? Number(item.labelid) : 0,
+          value,
+        };
+      })
+      .filter(Boolean);
+
+    const nextAssets = state.assets.map((row) =>
+      row?.name === file.name
+        ? formatAsset(row, { width: imgW, height: imgH, detections })
+        : row,
+    );
+    if (!nextAssets.some((row) => row?.name === file.name)) {
+      nextAssets.push(formatAsset({ name: file.name, detections: [] }, { width: imgW, height: imgH, detections }));
+    }
+    setAssets(nextAssets);
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
+      if (updated?.ok) {
+        setAssets(updated.project?.assets);
+      } else {
+        log.warn("could not persist auto detections", { reason: updated?.reason });
+        log.exit("applyWorkspaceDetections", startedAt, { ok: false, reason: updated?.reason });
+        return { ok: false, reason: updated?.reason || "persist-failed" };
+      }
+    } catch (err) {
+      log.error("applyWorkspaceDetections failed", { error: String(err?.message || err) });
+      log.exit("applyWorkspaceDetections", startedAt, { error: true });
+      return { ok: false, reason: "persist-failed" };
+    }
+    setSelectedDetection(null);
+    renderDetections();
+    drawDetectionBoxes();
+    window.selectInspectorTab?.("detections");
+    log.info("auto detections applied", { name: file.name, count: detections.length });
+    log.exit("applyWorkspaceDetections", startedAt, { ok: true, count: detections.length });
+    return { ok: true, count: detections.length };
   }
 
   async function persistNewBox(rect) {
@@ -2008,6 +2075,9 @@
       previewSrc: previewSrc(file.filePath, state.previewToken),
     };
   };
+  window.getWorkspaceLabels = () =>
+    state.labels.map((label) => ({ id: label.id, name: label.name }));
+  window.applyWorkspaceDetections = applyWorkspaceDetections;
   window.getWorkspaceExportContext = () => ({
     filePath: state.filePath,
     imagesFolder: state.imagesFolder,

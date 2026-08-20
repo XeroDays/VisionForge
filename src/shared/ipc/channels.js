@@ -21,6 +21,8 @@ module.exports = {
   SELECT_PROJECT_FOLDER: "visionforge:select-project-folder",
   SELECT_PROJECT_FILE: "visionforge:select-project-file",
   GET_SOLUTION_HISTORY: "visionforge:get-solution-history",
+  GET_CONFIGURATION: "visionforge:get-configuration",
+  UPDATE_CONFIGURATION: "visionforge:update-configuration",
   CREATE_PROJECT: "visionforge:create-project",
   SELECT_IMAGES_FOLDER: "visionforge:select-images-folder",
   LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
@@ -31,4 +33,5 @@ module.exports = {
   EXPORT_ANNOTATIONS: "visionforge:export-annotations",
   EXPORT_PROGRESS: "visionforge:export-progress",
   SELECT_OPEN_FILE: "visionforge:select-open-file",
+  RUN_ONNX_DETECT: "visionforge:run-onnx-detect",
 };

@@ -25,7 +25,7 @@
     assets: document.getElementById("panel-assets"),
   };
 
-  const COMMAND_TOOLS = new Set(["select-images", "process-image"]);
+  const COMMAND_TOOLS = new Set(["select-images", "process-image", "magic"]);
 
   log.debug("workspace-panels.js init");
 
@@ -106,6 +106,10 @@
     }
     if (tool === "process-image") {
       window.openProcessImageScreen?.();
+      return;
+    }
+    if (tool === "magic") {
+      void window.runMagicDetect?.();
       return;
     }
     if (window.isProcessImageScreenOpen?.()) return;

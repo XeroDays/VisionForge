@@ -4,7 +4,9 @@ const licenseService = require("../services/license-service");
 const projectService = require("../middleware/project-service");
 const imageService = require("../middleware/image-service");
 const exportService = require("../middleware/export-service");
+const onnxDetectService = require("../middleware/onnx-detect-service");
 const historyStore = require("../services/history-solutions-store");
+const configurationStore = require("../services/configuration-store");
 const { ipc: log } = require("../services/visionforge-logger");
 
 let ipcHandlersRegistered = false;
@@ -88,6 +90,16 @@ function registerIpcHandlers() {
     return historyStore.readHistory();
   });
 
+  ipcMain.handle(channels.GET_CONFIGURATION, async () => {
+    log.debug("GET_CONFIGURATION");
+    return configurationStore.readConfiguration();
+  });
+
+  ipcMain.handle(channels.UPDATE_CONFIGURATION, async (_event, patch) => {
+    log.info("UPDATE_CONFIGURATION");
+    return configurationStore.updateConfiguration(patch);
+  });
+
   ipcMain.handle(channels.CREATE_PROJECT, async (_event, name, location, annotation) => {
     log.info("CREATE_PROJECT", {
       name,
@@ -138,6 +150,11 @@ function registerIpcHandlers() {
   ipcMain.handle(channels.SELECT_OPEN_FILE, async (event, options) => {
     log.debug("SELECT_OPEN_FILE");
     return projectService.selectOpenFile(event.sender, options);
+  });
+
+  ipcMain.handle(channels.RUN_ONNX_DETECT, async (_event, imagePath, modelPath, labels) => {
+    log.info("RUN_ONNX_DETECT");
+    return onnxDetectService.runOnnxDetect(imagePath, modelPath, labels);
   });
 }
 

@@ -20,6 +20,8 @@ const CH = {
   SELECT_PROJECT_FOLDER: "visionforge:select-project-folder",
   SELECT_PROJECT_FILE: "visionforge:select-project-file",
   GET_SOLUTION_HISTORY: "visionforge:get-solution-history",
+  GET_CONFIGURATION: "visionforge:get-configuration",
+  UPDATE_CONFIGURATION: "visionforge:update-configuration",
   CREATE_PROJECT: "visionforge:create-project",
   SELECT_IMAGES_FOLDER: "visionforge:select-images-folder",
   LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
@@ -30,6 +32,7 @@ const CH = {
   EXPORT_ANNOTATIONS: "visionforge:export-annotations",
   EXPORT_PROGRESS: "visionforge:export-progress",
   SELECT_OPEN_FILE: "visionforge:select-open-file",
+  RUN_ONNX_DETECT: "visionforge:run-onnx-detect",
   SPLASH_LOG: "visionforge:splash-log",
 };
 
@@ -51,6 +54,8 @@ contextBridge.exposeInMainWorld("visionforge", {
   selectProjectFolder: () => ipcRenderer.invoke(CH.SELECT_PROJECT_FOLDER),
   openProjectFile: () => ipcRenderer.invoke(CH.SELECT_PROJECT_FILE),
   getSolutionHistory: () => ipcRenderer.invoke(CH.GET_SOLUTION_HISTORY),
+  getConfiguration: () => ipcRenderer.invoke(CH.GET_CONFIGURATION),
+  updateConfiguration: (patch) => ipcRenderer.invoke(CH.UPDATE_CONFIGURATION, patch),
   createProject: (name, location, annotation) =>
     ipcRenderer.invoke(CH.CREATE_PROJECT, name, location, annotation),
   selectImagesFolder: (defaultPath) => ipcRenderer.invoke(CH.SELECT_IMAGES_FOLDER, defaultPath),
@@ -62,6 +67,8 @@ contextBridge.exposeInMainWorld("visionforge", {
   exportAnnotations: (filePath, destFolder, mode) =>
     ipcRenderer.invoke(CH.EXPORT_ANNOTATIONS, filePath, destFolder, mode),
   selectOpenFile: (options) => ipcRenderer.invoke(CH.SELECT_OPEN_FILE, options),
+  runOnnxDetect: (imagePath, modelPath, labels) =>
+    ipcRenderer.invoke(CH.RUN_ONNX_DETECT, imagePath, modelPath, labels),
   log(level, namespace, message, meta) {
     ipcRenderer.send(CH.SPLASH_LOG, { level, namespace, message, meta });
   },

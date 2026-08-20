@@ -54,7 +54,7 @@
 | **External services** | Font Awesome CDN (main UI icons only) |
 | **Deployment** | Windows NSIS installer via `electron-builder`; GitHub Actions manual release |
 | **App ID** | `com.visionforge.app` |
-| **Storage (planned)** | Project config in `{folder}/{Name}.VFSln`; recents in `Documents/VisionForge/history-solutions.vfson`; logs at `Documents/VisionForge/Logs/` |
+| **Storage (planned)** | Project config in `{folder}/{Name}.VFSln`; recents in `Documents/VisionForge/history-solutions.vfson`; app settings in `Documents/VisionForge/configuration.vfson`; logs at `Documents/VisionForge/Logs/` |
 | **Entry point** | `src/main/index.js` |
 | **Preload global** | `window.visionforge` |
 | **IPC namespace** | `visionforge:*` |
@@ -146,7 +146,7 @@
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Tool click → selected highlight for Cursor, Box, Hexagon. **W** toggles Cursor and Box (ignored while typing or when a dialog is focused). **Select Images** is a command (shown after a project is open). **Process Image** (`fa-image`) is a command shown only when a project is open **and** the canvas is previewing an image; it opens `#process-image-screen`. Drawing-tool clicks are ignored while that screen is open. Left tools rail, inspector, and resize handle are hidden until a `.VFSln` is loaded (`setWorkspaceChrome`); Goto Startup page hides them again. Inspector tabs: **Assets** (default, first), Labels (list + Add composer; each row has a color circle matching that `id`’s boxes; click row to select class for Box draws; click again to rename; hover trash + confirm to delete; all persist only in VFSln `labels`), Detections (read-only list of the current image’s VFSln boxes, same color circles). Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Zoom in/out, Fit to Screen, Rotate) live on `#view-toolbar` over the stage as one-shot actions (never stay selected), not on the left rail.
+Tool click → selected highlight for Cursor, Box, Hexagon. **W** toggles Cursor and Box (ignored while typing or when a dialog is focused). **Select Images** is a command (shown after a project is open). **Process Image** (`fa-image`) is a command shown only when a project is open **and** the canvas is previewing an image; it opens `#process-image-screen` (preview-only; uses Settings AI Model). **Auto detect** (`fa-wand-magic-sparkles`) is the same visibility; it runs object detection on the current image and **replaces** that asset’s VFSln detections. Drawing-tool clicks are ignored while the Process screen is open. Titlebar gear opens Settings (`#settings-overlay`: left sections / right pane; **AI Model** path + type; Apply writes `configuration.vfson`). Left tools rail, inspector, and resize handle are hidden until a `.VFSln` is loaded (`setWorkspaceChrome`); Goto Startup page hides them again. Inspector tabs: **Assets** (default, first), Labels (list + Add composer; each row has a color circle matching that `id`’s boxes; click row to select class for Box draws; click again to rename; hover trash + confirm to delete; all persist only in VFSln `labels`), Detections (read-only list of the current image’s VFSln boxes, same color circles). Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Zoom in/out, Fit to Screen, Rotate) live on `#view-toolbar` over the stage as one-shot actions (never stay selected), not on the left rail.
 
 ---
 
@@ -239,6 +239,23 @@ Open existing project → `openProjectFile()` → native dialog filtered to `.VF
 
 **Workflow:**
 Create or open a `.VFSln` → `recordSolution` upserts history → start page `getSolutionHistory()` renders Recent projects.
+
+---
+
+### App configuration (`configuration.vfson`)
+
+**Purpose:** App-level software settings (not project / VFSln). Edited from the titlebar Settings dialog.
+
+**Location:** `Documents/VisionForge/configuration.vfson` (same folder as `Logs/` and `history-solutions.vfson`)
+
+**Schema:**
+- `format` — `"vfson"`
+- `version` — `1`
+- `onnxModelPath` — last applied ONNX model path (empty string if none)
+- `onnxModelType` — `object-detection` (default) | `image-classification` | `oriented-object-detection` | `instance-segmentation`
+
+**Workflow:**
+First `getConfiguration` creates the file with defaults if missing. Invalid/corrupt file is rewritten with defaults. Unknown `onnxModelType` falls back to `object-detection`. Settings → AI Model → Apply writes `updateConfiguration({ onnxModelPath, onnxModelType })`. Process Image and Auto detect read this file; only `object-detection` runs inference.
 
 ---
 
@@ -416,7 +433,7 @@ Rules:
 
 ### Process Image Screen
 
-**Purpose:** In-window view to preview the current canvas image and pick an ONNX model + `classes.txt` path. Process is a UI stub (no inference yet).
+**Purpose:** In-window view to preview the current canvas image, run a YOLO ONNX detector, and list preview-only boxes. Does not write VFSln `assets`.
 
 **Primary Files:**
 - `src/renderer/index.html` — `#tool-process-image`, `#process-image-screen`
@@ -426,12 +443,15 @@ Rules:
 - `src/renderer/styles/app.css`
 
 **Related Files:**
+- `src/main/middleware/onnx-detect-service.js`
 - `src/main/middleware/project-service.js` — `selectOpenFile`
+- `src/main/services/configuration-store.js`
 - `src/preload/index.js`
 - `src/shared/ipc/channels.js`
+- `src/shared/enums/ai-model-types.js`
 
 **Workflow:**
-Image rail button (visible only with a project + canvas preview) → hide canvas/inspector → show `#process-image-screen` with the same `vfimg:` snapshot → pick ONNX model (`.onnx` only) and `classes.txt` via `selectOpenFile` → Process logs only. Back / Escape restore the workspace. File → Goto Startup page closes this screen first. Paths stay in memory (not written to VFSln).
+Image rail button (visible only with a project + canvas preview) → hide canvas/inspector → show `#process-image-screen` with the same `vfimg:` snapshot (fit-to-screen in the left pane). Process reads `onnxModelPath` / `onnxModelType` from Settings (`configuration.vfson`). Missing path or a type other than `object-detection` shows a status error. Otherwise `runOnnxDetect` in main (`onnxruntime-node`, letterbox, YOLO decode, NMS) uses VFSln `labels` (unknown ids as `class_N`) → SVG boxes on the preview + Detections tab (id, color, name, score). Preview only (not VFSln). Back / Escape restore the workspace. File → Goto Startup page closes this screen first.
 
 ---
 
@@ -652,7 +672,7 @@ Toolbar appears at top-left of `#workspace-stage` when a frame image is shown. Z
 **Trigger:** Left-rail Image command (`#tool-process-image`); project open and a canvas image is previewed
 
 **Flow:**
-Stop playback → snapshot current frame `vfimg:` src → hide `#workspace-canvas` / inspector / resize handle → show `#process-image-screen` (left preview, right config). Browse ONNX model (`.onnx` only) or classes via `selectOpenFile`. Process is enabled when both paths are set and only logs. Back or Escape restores canvas + inspector. Canvas shortcuts (W / A / D / Delete) are ignored while this screen is open. Paths stay in the fields until Goto Startup clears them. Not written to VFSln.
+Stop playback → snapshot current frame `vfimg:` src → hide `#workspace-canvas` / inspector / resize handle → show `#process-image-screen` (left preview fit-to-screen + overlay, right Setup / Detections tabs). Process reads Settings (`onnxModelPath`, `onnxModelType`). Missing path or unsupported type → status error. Otherwise `visionforge:run-onnx-detect` with VFSln `labels` (`getWorkspaceLabels`) draws preview boxes and switches to Detections (id, circle, name, score; unknown class as `class_N`). Back or Escape restores canvas + inspector. Canvas shortcuts (W / A / D / Delete) are ignored while this screen is open. Not written to VFSln.
 
 **Files:**
 - `src/renderer/scripts/process-image-screen.js`
@@ -660,7 +680,42 @@ Stop playback → snapshot current frame `vfimg:` src → hide `#workspace-canva
 - `src/renderer/scripts/workspace-canvas.js`
 - `src/renderer/index.html` — `#process-image-screen`, `#tool-process-image`
 - `src/main/middleware/project-service.js`
+- `src/main/middleware/onnx-detect-service.js`
+- `src/main/services/configuration-store.js`
 - `src/preload/index.js`
+- `src/shared/enums/ai-model-types.js`
+
+---
+
+### Open Settings
+
+**Trigger:** Titlebar gear (`#btn-settings`); available on start page and workspace
+
+**Flow:**
+Open `#settings-overlay` (left section list, right pane). Load `configuration.vfson` into **AI Model** (ONNX path + type). Browse `.onnx` via `selectOpenFile` (not saved until Apply). Apply writes `onnxModelPath` / `onnxModelType`. Cancel / Escape / X discard unsaved edits.
+
+**Files:**
+- `src/renderer/scripts/settings-dialog.js`
+- `src/renderer/index.html` — `#settings-overlay`, `#btn-settings`
+- `src/main/services/configuration-store.js`
+- `src/shared/enums/ai-model-types.js`
+- `src/preload/index.js`
+
+---
+
+### Auto detect (magic wand)
+
+**Trigger:** Left-rail `#tool-magic`; project open and a canvas image is previewed
+
+**Flow:**
+If Process Image screen is open, ignore. Read Settings config. No `onnxModelPath` → alert “Select an AI model in Settings first.” Type other than `object-detection` → alert “This model type is not supported yet.” Else `runOnnxDetect` on the current image with VFSln labels → map pixel boxes to YOLO or VOC via `rectToValue` → **replace** that asset’s `detections` → `updateProject` → redraw canvas boxes and Detections tab.
+
+**Files:**
+- `src/renderer/scripts/magic-detect.js`
+- `src/renderer/scripts/workspace-canvas.js` — `applyWorkspaceDetections`
+- `src/renderer/scripts/workspace-panels.js`
+- `src/main/middleware/onnx-detect-service.js`
+- `src/main/services/configuration-store.js`
 
 ---
 
@@ -766,12 +821,17 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | Logging service | `src/main/services/visionforge-logger.js` |
 | Log file store | `src/main/services/log-file-store.js` |
 | Solution history store | `src/main/services/history-solutions-store.js` |
+| App configuration store | `src/main/services/configuration-store.js` |
 | Renderer logger | `src/renderer/scripts/renderer-logger.js` |
 | App icon resolver | `src/main/helpers/app-icon.js` |
 | License registration | `src/main/services/license-service.js` |
 | Release update UI | `src/renderer/scripts/release-update-panel.js` |
 | Workspace canvas / playback | `src/renderer/scripts/workspace-canvas.js` |
 | Process Image screen | `src/renderer/scripts/process-image-screen.js` |
+| Settings dialog | `src/renderer/scripts/settings-dialog.js` |
+| Auto detect (magic) | `src/renderer/scripts/magic-detect.js` |
+| AI model type catalog | `src/shared/enums/ai-model-types.js` |
+| ONNX detect | `src/main/middleware/onnx-detect-service.js` |
 | Export annotations | `src/renderer/scripts/export-dialog.js`, `src/main/middleware/export-service.js` |
 | Workspace panels | `src/renderer/scripts/workspace-panels.js` |
 | Image protocol (`vfimg:`) | `src/main/services/image-protocol.js` |
@@ -926,6 +986,8 @@ Renderer
 - `src/renderer/scripts/export-dialog.js`
 - `src/renderer/scripts/workspace-canvas.js`
 - `src/renderer/scripts/process-image-screen.js`
+- `src/renderer/scripts/settings-dialog.js`
+- `src/renderer/scripts/magic-detect.js`
 
 ### `src/preload/splash-preload.js`
 
@@ -973,7 +1035,15 @@ Renderer
 - Append-only `assets` sync
 - Start page and workspace canvas
 - `vfimg:` allowed directory
-- Generic open-file picker (`selectOpenFile`) used by Process Image paths
+- Generic open-file picker (`selectOpenFile`) used by Process Image ONNX path
+
+### `src/main/services/configuration-store.js`
+
+**Changing impacts:**
+- `Documents/VisionForge/configuration.vfson`
+- Process Image / Auto detect model path and type
+- Settings → AI Model Apply
+- `visionforge:get-configuration` / `visionforge:update-configuration`
 
 ### `src/main/middleware/detection-import-service.js`
 
@@ -1039,6 +1109,8 @@ Renderer
 | `visionforge:select-project-folder` | invoke | `register.js` | Native open-directory dialog |
 | `visionforge:select-project-file` | invoke | `register.js` | Native open-file dialog (`.VFSln` filter) |
 | `visionforge:get-solution-history` | invoke | `register.js` | Read `history-solutions.vfson` recents |
+| `visionforge:get-configuration` | invoke | `register.js` | Read `configuration.vfson` (create defaults if missing) |
+| `visionforge:update-configuration` | invoke | `register.js` | Merge known keys into `configuration.vfson` |
 | `visionforge:create-project` | invoke | `register.js` | Write `{Name}.VFSln` with `annotationType` / `annotationMode` / `assets: []` |
 | `visionforge:select-images-folder` | invoke | `register.js` | Native open-directory dialog for images |
 | `visionforge:list-image-folder` | invoke | `register.js` | List image files in a folder (non-recursive) |
@@ -1049,6 +1121,7 @@ Renderer
 | `visionforge:export-annotations` | invoke | `register.js` | Write YOLO `.txt` or Pascal VOC `.xml` sidecars into a folder |
 | `visionforge:export-progress` | push (main→renderer) | `register.js` send | Export sidecar progress `{ current, total }` |
 | `visionforge:select-open-file` | invoke | `register.js` | Native open-file dialog (`title`, `filters`, `defaultPath`) |
+| `visionforge:run-onnx-detect` | invoke | `register.js` | Run YOLO ONNX on an image using VFSln `labels`; return preview detections |
 
 ---
 
@@ -1082,7 +1155,7 @@ Renderer
 
 ## Current State Notes (as of v1.0.0)
 
-- **Splash/bootstrap** follows CryptoGenesis-style flow (license gate, 1s transition delay)
+- **Splash/bootstrap**  -style flow (license gate, 1s transition delay)
 - **Minimize** uses `win.minimize()` so the app stays on the Windows taskbar (no system tray)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
@@ -1100,7 +1173,9 @@ Renderer
 - **Zoom / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets view; zoom-out below fit snaps to Fit to Screen. Changing images keeps the current zoom and pan. Rotate overwrites the current file 90° clockwise (`sharp`). Cursor is selected on project load. Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps assets; A / Left and D / Right step frames (any tool); plain wheel does not change the frame; Box/Hexagon ignore.
 - **Export:** File → Export (enabled while a project is open). Location defaults to `imagesFolder` (browse can change it); annotation type is locked; mode can change for that export only. Writes one sidecar per image (empty if no boxes): YOLO `.txt` (`labelid xc yc w h`) or Pascal VOC `.xml`, plus `classes.txt` (one name per line by `id`). A progress bar runs during the write; **Exported N files.** then the dialog closes.
 - **Goto Startup page:** File menu item (enabled while a project is open) closes the workspace and returns to `#start-page` without deleting the VFSln or recents.
-- **Process Image:** left-rail `fa-image` command (visible only when a project is open and a canvas image is previewed). Opens `#process-image-screen` with that same `vfimg:` snapshot on the left and ONNX (`.onnx`) / `classes.txt` path pickers plus a stub Process button on the right. Back / Escape return to the workspace. Paths are in-memory only (not VFSln). Process does not run inference yet.
+- **Settings:** titlebar gear opens `#settings-overlay` (left sections / right pane). **AI Model** sets ONNX path and type; Apply writes `Documents/VisionForge/configuration.vfson`. Cancel / Escape discard unsaved edits.
+- **Process Image:** left-rail `fa-image` command (visible only when a project is open and a canvas image is previewed). Opens `#process-image-screen` with that `vfimg:` snapshot fit-to-screen. Process uses the Settings AI Model (`object-detection` only), runs YOLO ONNX in main, and draws preview-only boxes plus a Detections tab. Does not write VFSln. Back / Escape return to the workspace.
+- **Auto detect:** left-rail `fa-wand-magic-sparkles` (same visibility). If no model is set, shows an error. If the type is not object detection, shows an error. Otherwise runs ONNX on the current image, **replaces** that asset’s VFSln detections, and redraws canvas boxes / Detections tab.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**
