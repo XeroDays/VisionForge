@@ -146,7 +146,7 @@
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Tool click → selected highlight for Cursor, Box, Hexagon. **W** toggles Cursor and Box (ignored while typing or when a dialog is focused). **Select Images** is a command (shown after a project is open). Left tools rail, inspector, and resize handle are hidden until a `.VFSln` is loaded (`setWorkspaceChrome`); Goto Startup page hides them again. Inspector tabs: **Assets** (default, first), Labels (list + Add composer; each row has a color circle matching that `id`’s boxes; click row to select class for Box draws; click again to rename; hover trash + confirm to delete; all persist only in VFSln `labels`), Detections (read-only list of the current image’s VFSln boxes, same color circles). Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Zoom in/out, Fit to Screen, Rotate) live on `#view-toolbar` over the stage as one-shot actions (never stay selected), not on the left rail.
+Tool click → selected highlight for Cursor, Box, Hexagon. **W** toggles Cursor and Box (ignored while typing or when a dialog is focused). **Select Images** is a command (shown after a project is open). **Process Image** (`fa-image`) is a command shown only when a project is open **and** the canvas is previewing an image; it opens `#process-image-screen`. Drawing-tool clicks are ignored while that screen is open. Left tools rail, inspector, and resize handle are hidden until a `.VFSln` is loaded (`setWorkspaceChrome`); Goto Startup page hides them again. Inspector tabs: **Assets** (default, first), Labels (list + Add composer; each row has a color circle matching that `id`’s boxes; click row to select class for Box draws; click again to rename; hover trash + confirm to delete; all persist only in VFSln `labels`), Detections (read-only list of the current image’s VFSln boxes, same color circles). Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Zoom in/out, Fit to Screen, Rotate) live on `#view-toolbar` over the stage as one-shot actions (never stay selected), not on the left rail.
 
 ---
 
@@ -407,10 +407,31 @@ Rules:
 **Purpose:** Main-process business logic (singleton modules). IPC handlers stay thin.
 
 **Primary Files:**
-- `src/main/middleware/project-service.js` — create/load/update/close `.VFSln` session, folder pickers, image listing, `classes.txt` label import, append-only `assets` sync
+- `src/main/middleware/project-service.js` — create/load/update/close `.VFSln` session, folder/file pickers, image listing, `classes.txt` label import, append-only `assets` sync
 - `src/main/middleware/detection-import-service.js` — YOLO txt / Pascal VOC xml sidecar parse into empty `assets[].detections`
 - `src/main/middleware/image-service.js` — rotate current image 90° CW and overwrite the file
 - `src/main/services/image-protocol.js` — privileged `vfimg:` protocol; only serves files under the allowed images folder
+
+---
+
+### Process Image Screen
+
+**Purpose:** In-window view to preview the current canvas image and pick an ONNX model + `classes.txt` path. Process is a UI stub (no inference yet).
+
+**Primary Files:**
+- `src/renderer/index.html` — `#tool-process-image`, `#process-image-screen`
+- `src/renderer/scripts/process-image-screen.js`
+- `src/renderer/scripts/workspace-panels.js`
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/styles/app.css`
+
+**Related Files:**
+- `src/main/middleware/project-service.js` — `selectOpenFile`
+- `src/preload/index.js`
+- `src/shared/ipc/channels.js`
+
+**Workflow:**
+Image rail button (visible only with a project + canvas preview) → hide canvas/inspector → show `#process-image-screen` with the same `vfimg:` snapshot → pick ONNX model (`.onnx` only) and `classes.txt` via `selectOpenFile` → Process logs only. Back / Escape restore the workspace. File → Goto Startup page closes this screen first. Paths stay in memory (not written to VFSln).
 
 ---
 
@@ -451,10 +472,11 @@ Renderer `showWorkspace(filePath)` → show **Loading project** overlay → `loa
 **Trigger:** File → Goto Startup page (project must be open)
 
 **Flow:**
-`closeWorkspace` → stop playback, clear assets/preview/labels, reset tool to Cursor, hide canvas / show `#start-page`, breadcrumb Welcome → `closeProject` clears `vfimg:` allowed dir → refresh recents. Does not delete the `.VFSln` or history.
+`closeWorkspace` → close Process Image screen (no restore) → stop playback, clear assets/preview/labels, reset tool to Cursor, hide canvas / show `#start-page`, breadcrumb Welcome → `closeProject` clears `vfimg:` allowed dir → refresh recents. Does not delete the `.VFSln` or history.
 
 **Files:**
 - `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/scripts/process-image-screen.js`
 - `src/renderer/index.html` — `#btn-goto-startup`
 - `src/main/middleware/project-service.js`
 - `src/preload/index.js`
@@ -625,6 +647,23 @@ Toolbar appears at top-left of `#workspace-stage` when a frame image is shown. Z
 
 ---
 
+### Open Process Image Screen
+
+**Trigger:** Left-rail Image command (`#tool-process-image`); project open and a canvas image is previewed
+
+**Flow:**
+Stop playback → snapshot current frame `vfimg:` src → hide `#workspace-canvas` / inspector / resize handle → show `#process-image-screen` (left preview, right config). Browse ONNX model (`.onnx` only) or classes via `selectOpenFile`. Process is enabled when both paths are set and only logs. Back or Escape restores canvas + inspector. Canvas shortcuts (W / A / D / Delete) are ignored while this screen is open. Paths stay in the fields until Goto Startup clears them. Not written to VFSln.
+
+**Files:**
+- `src/renderer/scripts/process-image-screen.js`
+- `src/renderer/scripts/workspace-panels.js`
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/index.html` — `#process-image-screen`, `#tool-process-image`
+- `src/main/middleware/project-service.js`
+- `src/preload/index.js`
+
+---
+
 ### App Startup
 
 **Trigger:** `npm start` or packaged app launch
@@ -732,6 +771,7 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | License registration | `src/main/services/license-service.js` |
 | Release update UI | `src/renderer/scripts/release-update-panel.js` |
 | Workspace canvas / playback | `src/renderer/scripts/workspace-canvas.js` |
+| Process Image screen | `src/renderer/scripts/process-image-screen.js` |
 | Export annotations | `src/renderer/scripts/export-dialog.js`, `src/main/middleware/export-service.js` |
 | Workspace panels | `src/renderer/scripts/workspace-panels.js` |
 | Image protocol (`vfimg:`) | `src/main/services/image-protocol.js` |
@@ -885,6 +925,7 @@ Renderer
 - `src/renderer/scripts/create-project-dialog.js`
 - `src/renderer/scripts/export-dialog.js`
 - `src/renderer/scripts/workspace-canvas.js`
+- `src/renderer/scripts/process-image-screen.js`
 
 ### `src/preload/splash-preload.js`
 
@@ -932,6 +973,7 @@ Renderer
 - Append-only `assets` sync
 - Start page and workspace canvas
 - `vfimg:` allowed directory
+- Generic open-file picker (`selectOpenFile`) used by Process Image paths
 
 ### `src/main/middleware/detection-import-service.js`
 
@@ -1006,6 +1048,7 @@ Renderer
 | `visionforge:close-project` | invoke | `register.js` | Clear `vfimg:` allowed dir (end open-project session) |
 | `visionforge:export-annotations` | invoke | `register.js` | Write YOLO `.txt` or Pascal VOC `.xml` sidecars into a folder |
 | `visionforge:export-progress` | push (main→renderer) | `register.js` send | Export sidecar progress `{ current, total }` |
+| `visionforge:select-open-file` | invoke | `register.js` | Native open-file dialog (`title`, `filters`, `defaultPath`) |
 
 ---
 
@@ -1057,6 +1100,7 @@ Renderer
 - **Zoom / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets view; zoom-out below fit snaps to Fit to Screen. Changing images keeps the current zoom and pan. Rotate overwrites the current file 90° clockwise (`sharp`). Cursor is selected on project load. Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps assets; A / Left and D / Right step frames (any tool); plain wheel does not change the frame; Box/Hexagon ignore.
 - **Export:** File → Export (enabled while a project is open). Location defaults to `imagesFolder` (browse can change it); annotation type is locked; mode can change for that export only. Writes one sidecar per image (empty if no boxes): YOLO `.txt` (`labelid xc yc w h`) or Pascal VOC `.xml`, plus `classes.txt` (one name per line by `id`). A progress bar runs during the write; **Exported N files.** then the dialog closes.
 - **Goto Startup page:** File menu item (enabled while a project is open) closes the workspace and returns to `#start-page` without deleting the VFSln or recents.
+- **Process Image:** left-rail `fa-image` command (visible only when a project is open and a canvas image is previewed). Opens `#process-image-screen` with that same `vfimg:` snapshot on the left and ONNX (`.onnx`) / `classes.txt` path pickers plus a stub Process button on the right. Back / Escape return to the workspace. Paths are in-memory only (not VFSln). Process does not run inference yet.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

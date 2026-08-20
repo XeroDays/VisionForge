@@ -30,4 +30,5 @@ module.exports = {
   CLOSE_PROJECT: "visionforge:close-project",
   EXPORT_ANNOTATIONS: "visionforge:export-annotations",
   EXPORT_PROGRESS: "visionforge:export-progress",
+  SELECT_OPEN_FILE: "visionforge:select-open-file",
 };

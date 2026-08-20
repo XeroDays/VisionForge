@@ -75,6 +75,9 @@
         <button type="button" class="tool-btn tool-btn--command" id="tool-select-images" data-tool="select-images" aria-label="Select Images" title="Select Images" hidden>
           <i class="fa-solid fa-images" aria-hidden="true"></i>
         </button>
+        <button type="button" class="tool-btn tool-btn--command" id="tool-process-image" data-tool="process-image" aria-label="Process Image" title="Process Image" hidden>
+          <i class="fa-solid fa-image" aria-hidden="true"></i>
+        </button>
       </aside>
 
       <section class="screen-section screen-section--main">
@@ -167,6 +170,34 @@
               <input type="number" class="playback-frame__input" id="playback-frame" min="0" max="0" value="0" step="1" />
             </label>
           </footer>
+        </div>
+        <div class="process-image-screen" id="process-image-screen" hidden>
+          <div class="process-image-preview">
+            <img class="process-image-preview__img" id="process-image-preview" alt="" draggable="false" />
+          </div>
+          <aside class="process-image-panel" aria-label="Process configuration">
+            <div class="process-image-panel__header">
+              <h2 class="process-image-panel__title">Process Image</h2>
+              <button type="button" class="btn-secondary process-image-panel__back" id="btn-process-image-back">Back</button>
+            </div>
+            <div class="process-image-panel__body">
+              <div class="create-project-field">
+                <span class="create-project-label">Load ONNX model</span>
+                <div class="create-project-location-row">
+                  <input type="text" id="process-image-model-path" class="create-project-input" readonly aria-label="ONNX model path" />
+                  <button type="button" id="btn-process-image-model-browse" class="create-project-browse" aria-label="Choose ONNX model">...</button>
+                </div>
+              </div>
+              <div class="create-project-field">
+                <span class="create-project-label">Select classes path</span>
+                <div class="create-project-location-row">
+                  <input type="text" id="process-image-classes-path" class="create-project-input" readonly aria-label="Classes path" />
+                  <button type="button" id="btn-process-image-classes-browse" class="create-project-browse" aria-label="Choose classes.txt">...</button>
+                </div>
+              </div>
+              <button type="button" class="btn-primary" id="btn-process-image-run" disabled>Process</button>
+            </div>
+          </aside>
         </div>
       </section>
 
@@ -352,6 +383,7 @@
   <script src="scripts/renderer-logger.js"></script>
   <script src="scripts/workspace-panels.js"></script>
   <script src="scripts/workspace-canvas.js"></script>
+  <script src="scripts/process-image-screen.js"></script>
   <script src="scripts/start-page.js"></script>
   <script src="../shared/enums/annotation-types.js"></script>
   <script src="scripts/create-project-dialog.js"></script>

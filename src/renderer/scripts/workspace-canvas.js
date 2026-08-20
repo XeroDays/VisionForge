@@ -43,6 +43,7 @@
   const viewToolbar = document.getElementById("view-toolbar");
   const breadcrumb = document.getElementById("app-breadcrumb");
   const selectImagesBtn = document.getElementById("tool-select-images");
+  const processImageBtn = document.getElementById("tool-process-image");
   const toolsDivider = document.getElementById("tools-rail-divider");
   const toolsRail = document.getElementById("tools-rail");
   const inspectorPanel = document.getElementById("inspector-panel");
@@ -163,6 +164,11 @@
     if (viewToolbar) viewToolbar.hidden = !visible;
   }
 
+  function setProcessImageBtnVisible() {
+    if (!processImageBtn) return;
+    processImageBtn.hidden = !(state.filePath && currentFile());
+  }
+
   function loadPreview() {
     if (!imageEl) return;
     const file = currentFile();
@@ -172,11 +178,13 @@
       clearDetectionOverlay();
       hideCrosshair();
       setViewToolbarVisible(false);
+      setProcessImageBtnVisible();
       return;
     }
     if (workspaceView) workspaceView.hidden = false;
     imageEl.src = previewSrc(file.filePath, state.previewToken);
     setViewToolbarVisible(true);
+    setProcessImageBtnVisible();
     if (imageReady()) {
       computeFitScale();
       applyView();
@@ -206,6 +214,11 @@
     if (inspectorResizeHandle) inspectorResizeHandle.hidden = !visible;
     if (selectImagesBtn) selectImagesBtn.hidden = !visible;
     if (toolsDivider) toolsDivider.hidden = !visible;
+    if (!visible) {
+      if (processImageBtn) processImageBtn.hidden = true;
+    } else {
+      setProcessImageBtnVisible();
+    }
     if (selectFolderMenuItem) selectFolderMenuItem.disabled = !visible;
     if (exportMenuItem) exportMenuItem.disabled = !visible;
     if (gotoStartupMenuItem) gotoStartupMenuItem.disabled = !visible;
@@ -1385,6 +1398,7 @@
       log.exit("showWorkspace", startedAt, { ok: false, reason: "missing-file" });
       return;
     }
+    window.closeProcessImageScreen?.({ restoreWorkspace: false });
 
     try {
       await showLoadingOverlay();
@@ -1424,6 +1438,7 @@
   async function closeWorkspace() {
     if (!state.filePath) return;
     const startedAt = log.enter("closeWorkspace");
+    window.closeProcessImageScreen?.({ restoreWorkspace: false });
     stopPlay();
     boxEdit = null;
     boxDraw = null;
@@ -1957,6 +1972,7 @@
     if (!state.filePath || state.files.length === 0) return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (isDeleteDialogOpen()) return;
+    if (window.isProcessImageScreenOpen?.()) return;
     if (isTypingTarget(event.target)) return;
     const key = event.key;
     if (key === "Delete" || key === "Backspace") {
@@ -1981,6 +1997,17 @@
 
   window.showWorkspace = showWorkspace;
   window.selectImagesFolder = selectImagesFolder;
+  window.stopWorkspacePlayback = stopPlay;
+  window.isWorkspaceOpen = () => Boolean(state.filePath);
+  window.getCurrentWorkspaceImage = () => {
+    const file = currentFile();
+    if (!file?.filePath) return null;
+    return {
+      filePath: file.filePath,
+      name: file.name || "",
+      previewSrc: previewSrc(file.filePath, state.previewToken),
+    };
+  };
   window.getWorkspaceExportContext = () => ({
     filePath: state.filePath,
     imagesFolder: state.imagesFolder,

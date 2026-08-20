@@ -54,6 +54,43 @@ async function selectProjectFolder(sender) {
   return { ok: true, canceled: false, folderPath };
 }
 
+function sanitizeOpenFileFilters(filters) {
+  if (!Array.isArray(filters)) return undefined;
+  const cleaned = filters
+    .map((item) => ({
+      name: String(item?.name || "File").trim() || "File",
+      extensions: Array.isArray(item?.extensions)
+        ? item.extensions.map((ext) => String(ext || "").replace(/^\./, "").trim()).filter(Boolean)
+        : [],
+    }))
+    .filter((item) => item.extensions.length);
+  return cleaned.length ? cleaned : undefined;
+}
+
+async function selectOpenFile(sender, options = {}) {
+  const startedAt = log.enter("selectOpenFile");
+  const win = BrowserWindow.fromWebContents(sender);
+  const title = String(options?.title || "Select file").trim() || "Select file";
+  const defaultPath = resolveDialogDefault(options?.defaultPath);
+  const filters = sanitizeOpenFileFilters(options?.filters);
+
+  const result = await dialog.showOpenDialog(win || undefined, {
+    title,
+    defaultPath,
+    properties: ["openFile"],
+    ...(filters ? { filters } : {}),
+  });
+
+  if (result.canceled || !result.filePaths?.[0]) {
+    log.exit("selectOpenFile", startedAt, { canceled: true });
+    return { ok: true, canceled: true };
+  }
+
+  const filePath = result.filePaths[0];
+  log.exit("selectOpenFile", startedAt, { filePath });
+  return { ok: true, canceled: false, filePath };
+}
+
 async function selectProjectFile(sender) {
   const startedAt = log.enter("selectProjectFile");
   const win = BrowserWindow.fromWebContents(sender);
@@ -422,6 +459,7 @@ module.exports = {
   ensureDefaultProjectsDir,
   selectProjectFolder,
   selectProjectFile,
+  selectOpenFile,
   createProject,
   loadProject,
   updateProject,

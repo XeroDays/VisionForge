@@ -134,6 +134,11 @@ function registerIpcHandlers() {
       event.sender.send(channels.EXPORT_PROGRESS, progress);
     });
   });
+
+  ipcMain.handle(channels.SELECT_OPEN_FILE, async (event, options) => {
+    log.debug("SELECT_OPEN_FILE");
+    return projectService.selectOpenFile(event.sender, options);
+  });
 }
 
 module.exports = { registerIpcHandlers };

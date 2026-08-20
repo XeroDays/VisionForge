@@ -29,6 +29,7 @@ const CH = {
   CLOSE_PROJECT: "visionforge:close-project",
   EXPORT_ANNOTATIONS: "visionforge:export-annotations",
   EXPORT_PROGRESS: "visionforge:export-progress",
+  SELECT_OPEN_FILE: "visionforge:select-open-file",
   SPLASH_LOG: "visionforge:splash-log",
 };
 
@@ -60,6 +61,7 @@ contextBridge.exposeInMainWorld("visionforge", {
   closeProject: () => ipcRenderer.invoke(CH.CLOSE_PROJECT),
   exportAnnotations: (filePath, destFolder, mode) =>
     ipcRenderer.invoke(CH.EXPORT_ANNOTATIONS, filePath, destFolder, mode),
+  selectOpenFile: (options) => ipcRenderer.invoke(CH.SELECT_OPEN_FILE, options),
   log(level, namespace, message, meta) {
     ipcRenderer.send(CH.SPLASH_LOG, { level, namespace, message, meta });
   },

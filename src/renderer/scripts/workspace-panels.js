@@ -25,7 +25,7 @@
     assets: document.getElementById("panel-assets"),
   };
 
-  const COMMAND_TOOLS = new Set(["select-images"]);
+  const COMMAND_TOOLS = new Set(["select-images", "process-image"]);
 
   log.debug("workspace-panels.js init");
 
@@ -104,6 +104,11 @@
       window.selectImagesFolder?.();
       return;
     }
+    if (tool === "process-image") {
+      window.openProcessImageScreen?.();
+      return;
+    }
+    if (window.isProcessImageScreenOpen?.()) return;
     selectTool(tool);
   });
 
