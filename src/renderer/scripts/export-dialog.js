@@ -158,11 +158,13 @@
       closeTimer = 0;
     }
     resetDialog();
+    destFolder = String(ctx.imagesFolder || "").trim();
+    if (locationInput) locationInput.value = destFolder;
     if (typeInput) typeInput.value = typeLabel(ctx.annotationType);
     renderModes(ctx.annotationType, ctx.annotationMode);
     overlay.hidden = false;
     syncConfirm();
-    log.debug("export dialog opened", { type: ctx.annotationType, mode: ctx.annotationMode });
+    log.debug("export dialog opened", { type: ctx.annotationType, mode: ctx.annotationMode, destFolder });
   }
 
   async function pickFolder() {
