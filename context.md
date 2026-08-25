@@ -1171,10 +1171,10 @@ Renderer
 
 ---
 
-## Current State Notes (as of v1.0.2, `BUILD_VERSION` 2)
+## Current State Notes (as of v1.0.3, `BUILD_VERSION` 3)
 
 - **Splash/bootstrap** — Flowter-parity: splash shows immediately, license prefetch overlaps heavy IPC load, Register during `"Checking for updates…"`, `LICENSE_UPDATE` before splash close (no 1s delay before the send)
-- **Updates:** `#btn-new-release` (top-right, gold glow) when local `BUILD_VERSION` 2 is less than server `buildVersion`. ForceUpdate locks the start page behind a non-dismissible download modal (`z-index` 1000)
+- **Updates:** `#btn-new-release` (top-right, gold glow) when local `BUILD_VERSION` 3 is less than server `buildVersion`. ForceUpdate locks the start page behind a non-dismissible download modal (`z-index` 1000)
 - **Minimize** uses `win.minimize()` so the app stays on the Windows taskbar (no system tray)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`

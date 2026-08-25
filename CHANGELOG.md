@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-08-25
+
 ### Fixed
 
 - New Release Available and ForceUpdate now follow the Flowter splash handoff: Register during splash, `LICENSE_UPDATE` before the main window shows, gold glow button top-right, and a non-dismissible download modal that blocks Create / Open / Recent.
