@@ -130,6 +130,11 @@ function registerIpcHandlers() {
     return projectService.updateProject(filePath, patch);
   });
 
+  ipcMain.handle(channels.DELETE_ASSET, async (_event, filePath, imageName) => {
+    log.info("DELETE_ASSET", { filePath, imageName });
+    return projectService.deleteAsset(filePath, imageName);
+  });
+
   ipcMain.handle(channels.ROTATE_IMAGE, async (_event, filePath) => {
     log.info("ROTATE_IMAGE", { filePath });
     return imageService.rotateImage(filePath);

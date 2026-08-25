@@ -146,7 +146,7 @@
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Tool click → selected highlight for Cursor, Box, Hexagon. **W** toggles Cursor and Box (ignored while typing or when a dialog is focused). **Select Images** is a command (shown after a project is open). **Process Image** (`fa-image`) is a command shown only when a project is open **and** the canvas is previewing an image; it opens `#process-image-screen` (preview-only; uses Settings AI Model). **Auto detect** (`fa-wand-magic-sparkles`) is the same visibility; it runs object detection on the current image and **replaces** that asset’s VFSln detections. Drawing-tool clicks are ignored while the Process screen is open. Titlebar gear opens Settings (`#settings-overlay`: left sections / right pane; **AI Model** path + type; Apply writes `configuration.vfson`). Left tools rail, inspector, and resize handle are hidden until a `.VFSln` is loaded (`setWorkspaceChrome`); Goto Startup page hides them again. Inspector tabs: **Assets** (default, first), Labels (list + Add composer; each row has a color circle matching that `id`’s boxes; click row to select class for Box draws; click again to rename; hover trash + confirm to delete; all persist only in VFSln `labels`), Detections (read-only list of the current image’s VFSln boxes, same color circles). Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Zoom in/out, Fit to Screen, Rotate) live on `#view-toolbar` over the stage as one-shot actions (never stay selected), not on the left rail.
+Tool click → selected highlight for Cursor, Box, Hexagon. **W** toggles Cursor and Box (ignored while typing or when a dialog is focused). **Select Images** is a command (shown after a project is open). **Process Image** (`fa-image`) is a command shown only when a project is open **and** the canvas is previewing an image; it opens `#process-image-screen` (preview-only; uses Settings AI Model). **Auto detect** (`fa-wand-magic-sparkles`) is the same visibility; it runs object detection on the current image and **replaces** that asset’s VFSln detections (Revert on the view toolbar restores the previous boxes until the image changes). Drawing-tool clicks are ignored while the Process screen is open. Titlebar **Export** (left of Settings) opens the same dialog as File → Export (enabled while a project is open). Titlebar gear opens Settings (`#settings-overlay`: left sections / right pane; **AI Model** path + type; Apply writes `configuration.vfson`). Left tools rail, inspector, and resize handle are hidden until a `.VFSln` is loaded (`setWorkspaceChrome`); Goto Startup page hides them again. Inspector tabs: **Assets** (default, first; each row shows a chip with `assets[].detections.length`; right-click a row → Delete; confirm removes the image file, YOLO/VOC sidecars, and VFSln `assets` row; `setFrame` scrolls the current filename into view with `block: nearest` only while this tab is selected), Labels (list + Add composer; each row has a color circle matching that `id`’s boxes; click row to select class for Box draws; click again to rename; hover trash + confirm to delete; all persist only in VFSln `labels`), Detections (read-only list of the current image’s VFSln boxes, same color circles). Overflow panes use a thin custom scrollbar (webkit + `scrollbar-color`, dark gold theme — not the native Windows bar). Drag handle resizes inspector width (in-memory, 220px–50% of workspace). Image view controls (Zoom in/out, Fit to Screen, Rotate) live on `#view-toolbar` over the stage as one-shot actions (never stay selected), not on the left rail.
 
 ---
 
@@ -160,7 +160,7 @@ Tool click → selected highlight for Cursor, Box, Hexagon. **W** toggles Cursor
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Create / Open / Recent → `showWorkspace(filePath)` → **Loading project** overlay → load VFSln (append-only `assets` sync + empty-detection sidecar import if `imagesFolder` set) → hide `#start-page` → select Cursor tool → restore `imagesFolder` if set → playback range = image count (`listImageFolder`, not `assets`) → current frame previewed fit-to-screen via `vfimg:` protocol → Detections tab + SVG boxes for that file → hide overlay. File → **Select Image Folder** and the Select Images tool share the same picker (same overlay while sync/import runs). File → **Export** opens the export dialog (destination folder, locked annotation type, changeable mode) and writes one sidecar per image. File → **Goto Startup page** closes the project (`closeWorkspace` + `closeProject`) and returns to `#start-page`. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names; click sets the current frame (Detections list and boxes update). When an image is previewed, `#view-toolbar` (top-left of the stage) shows Zoom in/out, Fit to Screen, and Rotate (one-shot). Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps the asset list; A / ArrowLeft step back and D / ArrowRight step forward (any tool; ignored while typing). Plain wheel does not change the frame. Box/Hexagon ignore wheel. Rotate overwrites the current image file 90° clockwise and re-fits. Detection overlay uses the same zoom/pan transform as the image.
+Create / Open / Recent → `showWorkspace(filePath)` → **Loading project** overlay → load VFSln (append-only `assets` sync + empty-detection sidecar import if `imagesFolder` set) → hide `#start-page` → select Cursor tool → restore `imagesFolder` if set → playback range = image count (`listImageFolder`, not `assets`) → current frame previewed fit-to-screen via `vfimg:` protocol → Detections tab + SVG boxes for that file → hide overlay. File → **Select Image Folder** and the Select Images tool share the same picker (same overlay while sync/import runs). File → **Export** opens the export dialog (destination folder, locked annotation type, changeable mode) and writes one sidecar per image. File → **Goto Startup page** closes the project (`closeWorkspace` + `closeProject`) and returns to `#start-page`. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names with a detection-count chip (`assets[].detections.length`); click sets the current frame (Detections list and boxes update). Right-click an asset → Delete → confirm (`#delete-asset-overlay`) → `deleteAsset` unlinks the image, matching `.txt`/`.xml` sidecars (`imagesFolder` and `imagesFolder/labels`), and the VFSln `assets` row. When the inspector is on Assets, `setFrame` scrolls the current filename into view (`block: nearest`); Labels and Detections do not scroll. When an image is previewed, `#view-toolbar` (top-left of the stage) shows Zoom in/out, Fit to Screen, and Rotate (one-shot). Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps the asset list; A / ArrowLeft step back and D / ArrowRight step forward (any tool; ignored while typing). Plain wheel does not change the frame. Box/Hexagon ignore wheel. Rotate overwrites the current image file 90° clockwise and re-fits. Detection overlay uses the same zoom/pan transform as the image.
 
 ---
 
@@ -218,7 +218,7 @@ Open existing project → `openProjectFile()` → native dialog filtered to `.VF
 - `name` — project display name
 - `imagesFolder` — absolute path to the selected image directory (empty string until chosen)
 - `labels` — `[{ id, name }, …]` class list (`id` from 0). Imported on load (and after setting `imagesFolder`) only when this array is missing or empty, from `{vfsln-dir}/classes.txt` first, then `{imagesFolder}/classes.txt`. Rename keeps the same `id`; delete removes that row and does not renumber remaining ids. Never written to `classes.txt`.
-- `assets` — `[{ name, width, height, detections }, …]` append-only image rows. `name` is the file name only (same extensions as `listImageFolder`). `width` / `height` are image pixels (`0` or missing until the renderer has shown that file). `detections` is an array; new rows start as `[]`; `null` or missing is treated as empty. Each detection is `{ labelid, value }` — YOLO `{ xc, yc, w, h }` (`xc = ((x1+x2)/2)/width`, `yc = ((y1+y2)/2)/height`, `w = (x2-x1)/width`, `h = (y2-y1)/height`, clamped to 0–1 and written to 6 decimal places on edit, same as typical YOLO `.txt` exports) or VOC `{ xmin, ymin, xmax, ymax }` (integer pixels on edit). Older files without `assets` treat it as `[]`. Rows are never deleted and non-empty `detections` are never overwritten by sidecar import.
+- `assets` — `[{ name, width, height, detections }, …]` image rows. Folder sync is append-only (new names added; stale names not removed). **Delete Asset** (Assets-tab context menu) may remove a row after unlinking the image and sidecars. `name` is the file name only (same extensions as `listImageFolder`). `width` / `height` are image pixels (`0` or missing until the renderer has shown that file). `detections` is an array; new rows start as `[]`; `null` or missing is treated as empty. Each detection is `{ labelid, value }` — YOLO `{ xc, yc, w, h }` (`xc = ((x1+x2)/2)/width`, `yc = ((y1+y2)/2)/height`, `w = (x2-x1)/width`, `h = (y2-y1)/height`, clamped to 0–1 and written to 6 decimal places on edit, same as typical YOLO `.txt` exports) or VOC `{ xmin, ymin, xmax, ymax }` (integer pixels on edit). Older files without `assets` treat it as `[]`. Non-empty `detections` are never overwritten by sidecar import.
 - `annotationType` — kebab-case id from the create-project type catalog (e.g. `object-detection-bbox`). Older files may omit this.
 - `annotationMode` — kebab-case id of the selected radio for that type (e.g. `yolo-bounding-box`). Must be a valid pair with `annotationType`. Older files may omit this.
 
@@ -311,7 +311,7 @@ Main `sendSplashStatus()` → preload `onSplashStatus` → `splash.js` updates U
 - `visionforge:window-is-maximized`
 
 **Workflow:**
-Button click → `window.visionforge.*Window()` → preload invoke → `register.js` → `BrowserWindow` API (minimize → `win.minimize()` / taskbar)
+Button click → `window.visionforge.*Window()` → preload invoke → `register.js` → `BrowserWindow` API (minimize → `win.minimize()` / taskbar). Titlebar **Export** (`#btn-titlebar-export`, left of Settings) opens the same `#export-overlay` as File → Export; disabled until a `.VFSln` is loaded.
 
 ---
 
@@ -424,7 +424,7 @@ Rules:
 **Purpose:** Main-process business logic (singleton modules). IPC handlers stay thin.
 
 **Primary Files:**
-- `src/main/middleware/project-service.js` — create/load/update/close `.VFSln` session, folder/file pickers, image listing, `classes.txt` label import, append-only `assets` sync
+- `src/main/middleware/project-service.js` — create/load/update/close `.VFSln` session, folder/file pickers, image listing, `classes.txt` label import, append-only `assets` sync, Delete Asset (unlink image + sidecars + VFSln row)
 - `src/main/middleware/detection-import-service.js` — YOLO txt / Pascal VOC xml sidecar parse into empty `assets[].detections`
 - `src/main/middleware/image-service.js` — rotate current image 90° CW and overwrite the file
 - `src/main/services/image-protocol.js` — privileged `vfimg:` protocol; only serves files under the allowed images folder
@@ -572,13 +572,13 @@ Native directory dialog → **Loading project** overlay → `updateProject({ ima
 
 ### Export Annotations
 
-**Trigger:** File → Export (project must be open)
+**Trigger:** File → Export, or titlebar **Export** (left of Settings); project must be open
 
 **Flow:**
 `#export-overlay` → Location is prefilled with `imagesFolder` (browse still changes it) → annotation type is locked to VFSln `annotationType` → choose annotation mode (catalog radios for that type; does not write VFSln) → Export → progress bar (`visionforge:export-progress` current/total) while `exportAnnotations` writes one sidecar per image in `imagesFolder` (empty file if that image has no boxes) plus `{dest}/classes.txt` (one name per line, line index = `id`, empty line for missing ids; YOLO and VOC) → **Exported N files.** → auto-close after 1.5s. Failure hides the bar and keeps the dialog open. Mode matching `/yolo/i` → `{basename}.txt` lines `labelid xc yc w h` (6 decimals; VOC boxes converted). Any other mode → Pascal VOC `{basename}.xml` (`folder`, `filename`, `path` = image path, `size`, `object`/`bndbox` integers; YOLO converted; `truncated` if the box touches an edge). Missing `width`/`height` probed with `sharp`. Overwrites existing sidecars. Renderer does not use `fs`.
 
 **Files:**
-- `src/renderer/index.html` — `#export-overlay`, `#btn-export`
+- `src/renderer/index.html` — `#export-overlay`, `#btn-export`, `#btn-titlebar-export`
 - `src/renderer/scripts/export-dialog.js`
 - `src/main/middleware/export-service.js`
 - `src/preload/index.js`
@@ -590,10 +590,26 @@ Native directory dialog → **Loading project** overlay → `updateProject({ ima
 **Trigger:** `loadProject` when `imagesFolder` is set; also `updateProject({ imagesFolder })`
 
 **Flow:**
-List image names in `imagesFolder` (same extensions as `listImageFolder`). Existing `assets[].name` kept (including detections and size). Names not in `assets` appended as `{ name, width: 0, height: 0, detections: [] }`. Write only if the array grew or `assets` was missing. Never delete stale rows. Do not probe image dimensions at sync time. Playback still uses `listImageFolder`.
+List image names in `imagesFolder` (same extensions as `listImageFolder`). Existing `assets[].name` kept (including detections and size). Names not in `assets` appended as `{ name, width: 0, height: 0, detections: [] }`. Write only if the array grew or `assets` was missing. Never delete stale rows (explicit **Delete Asset** is the only removal). Do not probe image dimensions at sync time. Playback still uses `listImageFolder`.
 
 **Files:**
 - `src/main/middleware/project-service.js`
+
+---
+
+### Delete Asset
+
+**Trigger:** Assets tab → right-click an image row → Delete → confirm
+
+**Flow:**
+`#asset-context-menu` (Delete) → `#delete-asset-overlay` (`Delete "{name}"? This will remove the image and its detection file. This cannot be undone.`) → Cancel / Escape / overlay click / X closes with no change → `visionforge:delete-asset` → unlink `{imagesFolder}/{name}` (abort and keep VFSln if unlink fails; missing file is OK) → best-effort unlink `{basename}.txt` and `{basename}.xml` in `imagesFolder` and `imagesFolder/labels` → filter that `{ name }` out of VFSln `assets` (`skipPostHooks`) → return updated project + folder file list → renderer refreshes Assets / playback / preview / Detections. If the deleted file was current, stay on the same index (now the next file) or clamp to the last remaining frame. Empty folder → empty stage.
+
+**Files:**
+- `src/renderer/index.html` — `#asset-context-menu`, `#delete-asset-overlay`
+- `src/renderer/scripts/workspace-canvas.js`
+- `src/main/middleware/project-service.js` — `deleteAsset`
+- `src/preload/index.js`
+- `src/shared/ipc/channels.js`
 
 ---
 
@@ -629,7 +645,7 @@ Show `#loading-project-overlay` (spinner + “Loading project”; not dismissibl
 **Trigger:** After project assets are in renderer state; `setFrame` (playback, Assets click, Shift+wheel, A/D, Left/Right)
 
 **Flow:**
-Match current `files[frameIndex].name` to `assets[].name` → list that row’s `detections` in `#panel-detections` (label name from `labels` by `labelid`; circle uses the same `labelid` color as the canvas box) → draw SVG rects on `#detection-overlay` in image pixel space. YOLO `{ xc, yc, w, h }` normalized → pixel box; VOC `{ xmin, ymin, xmax, ymax }` already pixels. Image and overlay live in `#workspace-view` and share one zoom/pan transform. Stroke 2.2px, unchanged on hover; color from `labelid` via golden-angle HSL (not a fixed palette). Cursor tool: hover shows small corner squares (nw/ne/sw/se); click a box (or its Detections-tab row) selects it (`is-selected` keeps the corners visible, Labels tab highlights that `labelid`); Delete / Backspace or the row trash removes that detection only (no confirm; skip while drawing or resizing); drag body to move, drag a corner to resize; pointer-up snaps corners to whole pixels then writes YOLO `xc/yc/w/h` as `((x1+x2)/2)/imageSize` and `(x2-x1)/imageSize` (clamped 0–1, 6 decimal places) or integer VOC `value` via `updateProject({ assets })`. On image load (and on that persist), write `width`/`height` for that row if missing or different — skip the write when size is already correct. Frame change clears the selected box and keeps the current zoom/pan (`setFrame` only resets the view when `resetView` is set, i.e. a new folder/project load).
+Match current `files[frameIndex].name` to `assets[].name` → list that row’s `detections` in `#panel-detections` (label name from `labels` by `labelid`; circle uses the same `labelid` color as the canvas box) → draw SVG rects on `#detection-overlay` in image pixel space. YOLO `{ xc, yc, w, h }` normalized → pixel box; VOC `{ xmin, ymin, xmax, ymax }` already pixels. Image and overlay live in `#workspace-view` and share one zoom/pan transform. Stroke 2.2px, unchanged on hover; color from `labelid` via golden-angle HSL (not a fixed palette). Cursor tool: hover shows small corner squares (nw/ne/sw/se); click a box (or its Detections-tab row) selects it (`is-selected` keeps the corners visible, Labels tab highlights that `labelid`); Delete / Backspace or the row trash removes that detection only (no confirm; skip while drawing or resizing); drag body to move, drag a corner to resize; pointer-up snaps corners to whole pixels then writes YOLO `xc/yc/w/h` as `((x1+x2)/2)/imageSize` and `(x2-x1)/imageSize` (clamped 0–1, 6 decimal places) or integer VOC `value` via `updateProject({ assets })`. On image load (and on that persist), write `width`/`height` for that row if missing or different — skip the write when size is already correct. Frame change clears the selected box and keeps the current zoom/pan (`setFrame` only resets the view when `resetView` is set, i.e. a new folder/project load). When the inspector is on the Assets tab, `setFrame` also scrolls the current `.assets-list__item` into view (`block: nearest`). No auto-scroll on Labels or Detections.
 
 **Files:**
 - `src/renderer/index.html` — `#panel-detections`, `#workspace-view`, `#detection-overlay`
@@ -657,7 +673,7 @@ Match current `files[frameIndex].name` to `assets[].name` → list that row’s 
 **Trigger:** `#view-toolbar` (visible only while an image is previewed), mouse wheel on stage, middle-button drag
 
 **Flow:**
-Toolbar appears at top-left of `#workspace-stage` when a frame image is shown. Zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets `zoom=1` and pan. Changing frames keeps the current zoom and pan (playback, Assets click, A/D, slider, Shift+wheel). A new folder or project load still fits to screen. Middle-button drag pans the image (any tool). Ctrl+wheel on the stage `zoomBy` toward the pointer (any tool). Shift+wheel on Cursor steps `setFrame` ±1 (80ms cooldown); A / ArrowLeft and D / ArrowRight step frames (any tool; ignored while typing or when a dialog/input is focused); **W** toggles Cursor / Box (same guards); plain wheel does not change the frame; Box/Hexagon no-op. Rotate → `rotateImage` (sharp 90° CW overwrite) → reload `vfimg` src with cache-bust → re-fit. `#workspace-view` wraps the image and `#detection-overlay` so boxes stay aligned. `showWorkspace` selects the Cursor tool.
+Toolbar appears at top-left of `#workspace-stage` when a frame image is shown. Zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets `zoom=1` and pan. Changing frames keeps the current zoom and pan (playback, Assets click, A/D, slider, Shift+wheel). A new folder or project load still fits to screen. Middle-button drag pans the image (any tool). Ctrl+wheel on the stage `zoomBy` toward the pointer (any tool). Shift+wheel on Cursor steps `setFrame` ±1 (80ms cooldown); A / ArrowLeft and D / ArrowRight step frames (any tool; ignored while typing or when a dialog/input is focused); **W** toggles Cursor / Box (same guards); plain wheel does not change the frame; Box/Hexagon no-op. If the inspector is on Assets, that `setFrame` scrolls the current filename into view (`block: nearest`). Rotate → `rotateImage` (sharp 90° CW overwrite) → reload `vfimg` src with cache-bust → re-fit. `#workspace-view` wraps the image and `#detection-overlay` so boxes stay aligned. `showWorkspace` selects the Cursor tool.
 
 **Files:**
 - `src/renderer/scripts/workspace-canvas.js`
@@ -708,7 +724,7 @@ Open `#settings-overlay` (left section list, right pane). Load `configuration.vf
 **Trigger:** Left-rail `#tool-magic`; project open and a canvas image is previewed
 
 **Flow:**
-If Process Image screen is open, ignore. Read Settings config. No `onnxModelPath` → alert “Select an AI model in Settings first.” Type other than `object-detection` → alert “This model type is not supported yet.” Else `runOnnxDetect` on the current image with VFSln labels → map pixel boxes to YOLO or VOC via `rectToValue` → **replace** that asset’s `detections` → `updateProject` → redraw canvas boxes and Detections tab.
+If Process Image screen is open, ignore. Read Settings config. No `onnxModelPath` → alert “Select an AI model in Settings first.” Type other than `object-detection` → alert “This model type is not supported yet.” Else `runOnnxDetect` on the current image with VFSln labels → map pixel boxes to YOLO or VOC via `rectToValue` → snapshot that asset’s current `detections` in renderer memory → **replace** that asset’s `detections` → `updateProject` → redraw canvas boxes and Detections tab → show **Revert** on `#view-toolbar` (top-left, after Rotate). Revert writes the snapshot back and hides itself. Changing the image (`setFrame` when the filename changes) hides Revert and **keeps** the new VFSln detections. Snapshot is not stored in the VFSln.
 
 **Files:**
 - `src/renderer/scripts/magic-detect.js`
@@ -1033,6 +1049,7 @@ Renderer
 - Create / open / load / update / close `.VFSln` session
 - Image folder picker and listing
 - Append-only `assets` sync
+- Delete Asset (unlink image + sidecars + VFSln row)
 - Start page and workspace canvas
 - `vfimg:` allowed directory
 - Generic open-file picker (`selectOpenFile`) used by Process Image ONNX path
@@ -1081,7 +1098,7 @@ Renderer
 | Middleware export | `module.exports = new XMiddleware()` (planned) |
 | Renderer scripts | IIFE pattern: `(function () { ... })();` |
 | Window preload | Separate preload per window (main vs splash) |
-| CSS | Dark theme (`#0b0b0d` main, `#0f1419` splash) |
+| CSS | Dark theme (`#0b0b0d` main, `#0f1419` splash); thin custom scrollbar (`::-webkit-scrollbar` + `scrollbar-color`, gold active thumb) on overflow panes |
 | Storage path (planned) | `Documents/VisionForge/` |
 | App artifact name | `VisionForge Release LTS.exe` |
 | Node version (CI) | 20 |
@@ -1116,6 +1133,7 @@ Renderer
 | `visionforge:list-image-folder` | invoke | `register.js` | List image files in a folder (non-recursive) |
 | `visionforge:load-project` | invoke | `register.js` | Read `.VFSln`, sync `assets`, import empty detections, record history |
 | `visionforge:update-project` | invoke | `register.js` | Merge keys into `.VFSln` and write (`imagesFolder` also syncs assets + detections) |
+| `visionforge:delete-asset` | invoke | `register.js` | Unlink image + sidecar txt/xml; remove VFSln `assets` row; return remaining folder files |
 | `visionforge:rotate-image` | invoke | `register.js` | Rotate image 90° CW and overwrite file |
 | `visionforge:close-project` | invoke | `register.js` | Clear `vfimg:` allowed dir (end open-project session) |
 | `visionforge:export-annotations` | invoke | `register.js` | Write YOLO `.txt` or Pascal VOC `.xml` sidecars into a folder |
@@ -1163,19 +1181,19 @@ Renderer
 - **Open existing project** / **Recent** loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab). `loadProject` appends missing image names to `assets` and fills empty `detections` from sidecar txt/xml.
 - **Labels:** if VFSln `labels` is empty, import `{project-folder}/classes.txt` then `{imagesFolder}/classes.txt` as `{ id, name }` (id from 0) and list them in the Labels tab. Each row shows a circle in that `id`’s box color (golden-angle HSL) between the id and the name. Existing labels are never overwritten by that import. **Add**, **rename**, and **delete** write VFSln `labels` only (never `classes.txt`). Rename keeps the same `id`; delete does not renumber remaining ids.
 - **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open. That save also syncs `assets` (append-only) and imports empty detections.
-- **Assets (VFSln):** `{ name, width, height, detections: [{ labelid, value }] }`. Append-only; playback still lists the folder. `width`/`height` filled when that image is previewed (or on box persist). YOLO `value` is `{ xc, yc, w, h }` with `xc = ((x1+x2)/2)/image_width` (same pattern for `yc`, `w`, `h`), clamped to 0–1 and written to 6 decimal places on edit (LabelImg / Ultralytics style); VOC is integer `{ xmin, ymin, xmax, ymax }`. Non-empty detections are not overwritten by sidecar import.
+- **Assets (VFSln):** `{ name, width, height, detections: [{ labelid, value }] }`. Folder sync is append-only; **Delete Asset** (Assets-tab right-click) removes the image file, matching `.txt`/`.xml` sidecars, and that VFSln row. Playback still lists the folder. `width`/`height` filled when that image is previewed (or on box persist). YOLO `value` is `{ xc, yc, w, h }` with `xc = ((x1+x2)/2)/image_width` (same pattern for `yc`, `w`, `h`), clamped to 0–1 and written to 6 decimal places on edit (LabelImg / Ultralytics style); VOC is integer `{ xmin, ymin, xmax, ymax }`. Non-empty detections are not overwritten by sidecar import.
 - **Loading project overlay:** non-dismissible spinner during `loadProject` / `imagesFolder` save until the image list is ready.
 - **Detections tab:** lists VFSln detections for the current image (label name by `labelid`, with the same color circle as the Labels tab); refreshes on frame change. Click a row to select that box; hover trash (or Delete / Backspace when a box is selected) removes that detection only.
 - **Canvas boxes:** SVG overlay in `#workspace-view` with the image (shared zoom/pan transform). Stroke 2.2px (does not thicken on hover). Color is derived from `labelid` (golden-angle HSL), not a fixed palette. Cursor hover shows small corner squares; the selected box keeps those squares visible. Drag body to move, drag a corner to resize; persist YOLO as `((x1+x2)/2)/imageSize` and `(x2-x1)/imageSize` (0–1, 6 decimal places) or integer VOC on release. Click a box selects it and its Labels-tab class. Delete / Backspace removes the selected detection.
 - **Box tool:** click-drag on the image creates a box (clamped to the image) using the selected Labels-tab class; after a successful create, switch to Cursor. Selecting Box opens the Labels tab (first label if none selected). **W** toggles Cursor and Box (ignored while typing or when a dialog is focused). From click until release, a meshed creation box (not yet in detections) grows with the drag. Thin black full-stage crosshair lines pass through the cursor tip. With a box selected, picking another Labels row reassigns that detection’s `labelid`.
 - **Playback** range follows the count of image files in that folder (`png`, `jpg`, `jpeg`, `webp`, `bmp`, `gif`, `tif`, `tiff`). Current frame is previewed via `vfimg:`. Frame changes keep zoom/pan; Fit to Screen and a new folder/project load still fit. A / ArrowLeft and D / ArrowRight step ±1 (ignored while typing).
-- **Assets** is the first/default inspector tab.
+- **Assets** is the first/default inspector tab. Each row shows a chip with that image’s VFSln detection count (including `0`). Right-click a row → Delete (confirm) removes the file, sidecars, and VFSln row. While this tab is selected, frame changes (wheel / keys / playback) scroll the current filename into view (`block: nearest`). Labels and Detections do not auto-scroll. Overflow lists use a thin custom scrollbar matching the dark gold theme.
 - **Zoom / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets view; zoom-out below fit snaps to Fit to Screen. Changing images keeps the current zoom and pan. Rotate overwrites the current file 90° clockwise (`sharp`). Cursor is selected on project load. Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps assets; A / Left and D / Right step frames (any tool); plain wheel does not change the frame; Box/Hexagon ignore.
-- **Export:** File → Export (enabled while a project is open). Location defaults to `imagesFolder` (browse can change it); annotation type is locked; mode can change for that export only. Writes one sidecar per image (empty if no boxes): YOLO `.txt` (`labelid xc yc w h`) or Pascal VOC `.xml`, plus `classes.txt` (one name per line by `id`). A progress bar runs during the write; **Exported N files.** then the dialog closes.
+- **Export:** File → Export or titlebar **Export** (left of Settings; both enabled while a project is open). Location defaults to `imagesFolder` (browse can change it); annotation type is locked; mode can change for that export only. Writes one sidecar per image (empty if no boxes): YOLO `.txt` (`labelid xc yc w h`) or Pascal VOC `.xml`, plus `classes.txt` (one name per line by `id`). A progress bar runs during the write; **Exported N files.** then the dialog closes.
 - **Goto Startup page:** File menu item (enabled while a project is open) closes the workspace and returns to `#start-page` without deleting the VFSln or recents.
 - **Settings:** titlebar gear opens `#settings-overlay` (left sections / right pane). **AI Model** sets ONNX path and type; Apply writes `Documents/VisionForge/configuration.vfson`. Cancel / Escape discard unsaved edits.
 - **Process Image:** left-rail `fa-image` command (visible only when a project is open and a canvas image is previewed). Opens `#process-image-screen` with that `vfimg:` snapshot fit-to-screen. Process uses the Settings AI Model (`object-detection` only), runs YOLO ONNX in main, and draws preview-only boxes plus a Detections tab. Does not write VFSln. Back / Escape return to the workspace.
-- **Auto detect:** left-rail `fa-wand-magic-sparkles` (same visibility). If no model is set, shows an error. If the type is not object detection, shows an error. Otherwise runs ONNX on the current image, **replaces** that asset’s VFSln detections, and redraws canvas boxes / Detections tab.
+- **Auto detect:** left-rail `fa-wand-magic-sparkles` (same visibility). If no model is set, shows an error. If the type is not object detection, shows an error. Otherwise runs ONNX on the current image, **replaces** that asset’s VFSln detections, and redraws canvas boxes / Detections tab. A **Revert** button appears on the top-left view toolbar until the image changes; Revert restores the previous detections. Changing images keeps the new boxes.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

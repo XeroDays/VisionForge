@@ -25,6 +25,7 @@
   const cancelBtn = document.getElementById("btn-export-cancel");
   const closeBtn = document.getElementById("btn-export-close");
   const openBtn = document.getElementById("btn-export");
+  const titlebarExportBtn = document.getElementById("btn-titlebar-export");
 
   if (!overlay) return;
 
@@ -261,6 +262,9 @@
   openBtn?.addEventListener("click", () => {
     openDialog();
   });
+  titlebarExportBtn?.addEventListener("click", () => {
+    openDialog();
+  });
   locationInput?.addEventListener("click", () => {
     void pickFolder();
   });
@@ -282,4 +286,6 @@
     event.preventDefault();
     closeDialog();
   });
+
+  window.openExportDialog = openDialog;
 })();

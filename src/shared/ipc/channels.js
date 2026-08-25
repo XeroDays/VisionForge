@@ -28,6 +28,7 @@ module.exports = {
   LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
   LOAD_PROJECT: "visionforge:load-project",
   UPDATE_PROJECT: "visionforge:update-project",
+  DELETE_ASSET: "visionforge:delete-asset",
   ROTATE_IMAGE: "visionforge:rotate-image",
   CLOSE_PROJECT: "visionforge:close-project",
   EXPORT_ANNOTATIONS: "visionforge:export-annotations",

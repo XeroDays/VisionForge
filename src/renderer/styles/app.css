@@ -24,6 +24,48 @@ body {
   --tools-rail-width: 48px;
   --inspector-width: 280px;
   --inspector-min-width: 220px;
+  --scrollbar-size: 8px;
+  --scrollbar-track: #0d0d0d;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+  --scrollbar-thumb-active: rgba(244, 180, 42, 0.7);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-thumb-active);
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
 }
 
 .screen {
@@ -138,6 +180,37 @@ body {
   color: #fff;
 }
 
+.asset-context-menu {
+  position: fixed;
+  z-index: 360;
+  min-width: 148px;
+  padding: 0.25rem;
+  background: #1a1a1c;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  -webkit-app-region: no-drag;
+}
+
+.asset-context-menu__item {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.65rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #e7ecf3;
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.asset-context-menu__item:hover {
+  background: rgba(232, 17, 35, 0.18);
+  color: #ff6b73;
+}
+
 .app-menubar__item {
   padding: 0.2rem 0.5rem;
   border: none;
@@ -196,6 +269,28 @@ body {
 .window-control-btn--close:hover {
   background: #e81123;
   color: #fff;
+}
+
+.titlebar-export {
+  height: 28px;
+  padding: 0 0.65rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.titlebar-export:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.titlebar-export:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .screen-body {
@@ -483,7 +578,37 @@ body {
 }
 
 .assets-list__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.assets-list__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assets-list__count {
+  flex: 0 0 auto;
+  min-width: 1.35rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.assets-list__count:not(.is-empty) {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .labels-list__item {
@@ -606,6 +731,11 @@ body {
 
 .assets-list__item.is-current {
   background: rgba(244, 180, 42, 0.16);
+  color: #f4b42a;
+}
+
+.assets-list__item.is-current .assets-list__count {
+  background: rgba(244, 180, 42, 0.22);
   color: #f4b42a;
 }
 
@@ -931,6 +1061,13 @@ body {
 .view-toolbar__btn:hover {
   color: #f4b42a;
   background: rgba(244, 180, 42, 0.12);
+}
+
+.view-toolbar__btn--label {
+  width: auto;
+  padding: 0 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .playback-bar {

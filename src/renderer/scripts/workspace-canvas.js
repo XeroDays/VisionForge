@@ -53,6 +53,8 @@
   const fileMenuDropdown = document.getElementById("file-menu-dropdown");
   const selectFolderMenuItem = document.getElementById("btn-select-image-folder");
   const exportMenuItem = document.getElementById("btn-export");
+  const titlebarExportBtn = document.getElementById("btn-titlebar-export");
+  const revertBtn = document.getElementById("view-tool-revert");
   const gotoStartupMenuItem = document.getElementById("btn-goto-startup");
   const skipStartBtn = document.getElementById("playback-skip-start");
   const rewindBtn = document.getElementById("playback-rewind");
@@ -80,6 +82,14 @@
   const deleteLabelCloseBtn = document.getElementById("btn-delete-label-close");
   const deleteLabelCancelBtn = document.getElementById("btn-delete-label-cancel");
   const deleteLabelConfirmBtn = document.getElementById("btn-delete-label-confirm");
+  const assetContextMenu = document.getElementById("asset-context-menu");
+  const assetContextDeleteBtn = document.getElementById("btn-asset-context-delete");
+  const deleteAssetOverlay = document.getElementById("delete-asset-overlay");
+  const deleteAssetMessage = document.getElementById("delete-asset-message");
+  const deleteAssetCloseBtn = document.getElementById("btn-delete-asset-close");
+  const deleteAssetCancelBtn = document.getElementById("btn-delete-asset-cancel");
+  const deleteAssetConfirmBtn = document.getElementById("btn-delete-asset-confirm");
+  const assetsPane = document.getElementById("panel-assets");
 
   if (!canvas) return;
 
@@ -101,6 +111,8 @@
     addingLabel: false,
     editingLabelId: null,
     pendingDeleteId: null,
+    pendingDeleteAssetName: null,
+    deletingAsset: false,
     savingLabel: false,
     selectedLabelId: null,
     selectedDetectionIndex: null,
@@ -108,6 +120,7 @@
     annotationMode: "",
     assets: [],
     assetsByName: new Map(),
+    magicRevert: null,
   };
 
   let fitScale = 1;
@@ -181,6 +194,7 @@
       hideCrosshair();
       setViewToolbarVisible(false);
       setProcessImageBtnVisible();
+      clearMagicRevert();
       return;
     }
     if (workspaceView) workspaceView.hidden = false;
@@ -224,6 +238,7 @@
     }
     if (selectFolderMenuItem) selectFolderMenuItem.disabled = !visible;
     if (exportMenuItem) exportMenuItem.disabled = !visible;
+    if (titlebarExportBtn) titlebarExportBtn.disabled = !visible;
     if (gotoStartupMenuItem) gotoStartupMenuItem.disabled = !visible;
     if (labelsAddBtn) labelsAddBtn.disabled = !visible;
   }
@@ -250,6 +265,27 @@
     setPlaying(false);
   }
 
+  function detectionCountFor(name) {
+    const asset = state.assetsByName.get(String(name || ""));
+    return Array.isArray(asset?.detections) ? asset.detections.length : 0;
+  }
+
+  function fillAssetCountChip(chip, count) {
+    const n = Number(count) || 0;
+    chip.textContent = String(n);
+    chip.classList.toggle("is-empty", n === 0);
+    chip.setAttribute("aria-label", n === 1 ? "1 detection" : `${n} detections`);
+  }
+
+  function refreshAssetCountChips() {
+    if (!assetsList) return;
+    assetsList.querySelectorAll(".assets-list__item").forEach((item) => {
+      const chip = item.querySelector(".assets-list__count");
+      if (!chip) return;
+      fillAssetCountChip(chip, detectionCountFor(item.dataset.name));
+    });
+  }
+
   function renderAssets() {
     if (!assetsList || !assetsEmpty) return;
     assetsList.replaceChildren();
@@ -270,11 +306,22 @@
       button.className = "assets-list__item";
       if (index === state.frameIndex) button.classList.add("is-current");
       button.dataset.frameIndex = String(index);
+      button.dataset.name = file.name;
       button.title = file.name;
-      button.textContent = file.name;
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "assets-list__name";
+      nameEl.textContent = file.name;
+
+      const countEl = document.createElement("span");
+      countEl.className = "assets-list__count";
+      fillAssetCountChip(countEl, detectionCountFor(file.name));
+
+      button.append(nameEl, countEl);
       li.appendChild(button);
       assetsList.appendChild(li);
     });
+    scrollCurrentAssetIntoView();
   }
 
   function waitForPaint() {
@@ -302,6 +349,7 @@
       const name = String(asset?.name || "");
       if (name) state.assetsByName.set(name, asset);
     }
+    refreshAssetCountChips();
   }
 
   function currentDetections() {
@@ -804,6 +852,67 @@
     drawDetectionBoxes();
   }
 
+  function cloneDetections(detections) {
+    try {
+      return JSON.parse(JSON.stringify(Array.isArray(detections) ? detections : []));
+    } catch {
+      return [];
+    }
+  }
+
+  function clearMagicRevert() {
+    state.magicRevert = null;
+    if (revertBtn) revertBtn.hidden = true;
+  }
+
+  function syncMagicRevertButton() {
+    if (!revertBtn) return;
+    const file = currentFile();
+    const show = Boolean(state.magicRevert && file && file.name === state.magicRevert.name);
+    revertBtn.hidden = !show;
+  }
+
+  async function revertMagicDetections() {
+    const snap = state.magicRevert;
+    const file = currentFile();
+    if (!snap || !file || file.name !== snap.name || !state.filePath) return;
+
+    const startedAt = log.enter("revertMagicDetections");
+    const detections = cloneDetections(snap.detections);
+    const imgW = imageEl?.naturalWidth || 0;
+    const imgH = imageEl?.naturalHeight || 0;
+    const nextAssets = state.assets.map((row) =>
+      row?.name === file.name
+        ? formatAsset(row, {
+            width: imgW || row?.width,
+            height: imgH || row?.height,
+            detections,
+          })
+        : row,
+    );
+    setAssets(nextAssets);
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
+      if (updated?.ok) {
+        setAssets(updated.project?.assets);
+      } else {
+        log.warn("could not revert detections", { reason: updated?.reason });
+        log.exit("revertMagicDetections", startedAt, { ok: false, reason: updated?.reason });
+        return;
+      }
+    } catch (err) {
+      log.error("revertMagicDetections failed", { error: String(err?.message || err) });
+      log.exit("revertMagicDetections", startedAt, { error: true });
+      return;
+    }
+    clearMagicRevert();
+    setSelectedDetection(null);
+    renderDetections();
+    drawDetectionBoxes();
+    log.info("magic detections reverted", { name: file.name, count: detections.length });
+    log.exit("revertMagicDetections", startedAt, { ok: true, count: detections.length });
+  }
+
   async function applyWorkspaceDetections(items) {
     const startedAt = log.enter("applyWorkspaceDetections");
     const file = currentFile();
@@ -811,6 +920,7 @@
       log.exit("applyWorkspaceDetections", startedAt, { ok: false, reason: "no-image" });
       return { ok: false, reason: "no-image" };
     }
+    const previous = cloneDetections(state.assetsByName.get(file.name)?.detections);
     const imgW = imageEl.naturalWidth;
     const imgH = imageEl.naturalHeight;
     const template = isVocMode()
@@ -863,6 +973,8 @@
     renderDetections();
     drawDetectionBoxes();
     window.selectInspectorTab?.("detections");
+    state.magicRevert = { name: file.name, detections: previous };
+    syncMagicRevertButton();
     log.info("auto detections applied", { name: file.name, count: detections.length });
     log.exit("applyWorkspaceDetections", startedAt, { ok: true, count: detections.length });
     return { ok: true, count: detections.length };
@@ -1244,6 +1356,94 @@
     state.pendingDeleteId = null;
   }
 
+  function closeAssetContextMenu() {
+    if (assetContextMenu) assetContextMenu.hidden = true;
+  }
+
+  function positionAssetContextMenu(clientX, clientY) {
+    if (!assetContextMenu) return;
+    const pad = 4;
+    const rect = assetContextMenu.getBoundingClientRect();
+    let x = clientX;
+    let y = clientY;
+    x = Math.min(x, window.innerWidth - rect.width - pad);
+    y = Math.min(y, window.innerHeight - rect.height - pad);
+    x = Math.max(pad, x);
+    y = Math.max(pad, y);
+    assetContextMenu.style.left = `${x}px`;
+    assetContextMenu.style.top = `${y}px`;
+  }
+
+  function openAssetContextMenu(event, imageName) {
+    const name = String(imageName || "").trim();
+    if (!name || !assetContextMenu) return;
+    closeFileMenu();
+    state.pendingDeleteAssetName = name;
+    assetContextMenu.hidden = false;
+    positionAssetContextMenu(event.clientX, event.clientY);
+  }
+
+  function closeDeleteAssetDialog() {
+    if (deleteAssetOverlay) deleteAssetOverlay.hidden = true;
+    if (!state.deletingAsset) state.pendingDeleteAssetName = null;
+  }
+
+  function openDeleteAssetDialog(imageName) {
+    const name = String(imageName || "").trim();
+    if (!name || !state.filePath) return;
+    closeAssetContextMenu();
+    state.pendingDeleteAssetName = name;
+    if (deleteAssetMessage) {
+      deleteAssetMessage.textContent = `Delete "${name}"? This will remove the image and its detection file. This cannot be undone.`;
+    }
+    if (deleteAssetOverlay) deleteAssetOverlay.hidden = false;
+  }
+
+  async function confirmDeleteAsset() {
+    const name = String(state.pendingDeleteAssetName || "").trim();
+    if (!state.filePath || !name || state.deletingAsset) return;
+
+    const startedAt = log.enter("confirmDeleteAsset");
+    state.deletingAsset = true;
+    if (deleteAssetConfirmBtn) deleteAssetConfirmBtn.disabled = true;
+    try {
+      const keepName = currentFile()?.name === name ? "" : currentFile()?.name || "";
+      const deletedIndex = state.files.findIndex((file) => file.name === name);
+      const result = await window.visionforge?.deleteAsset?.(state.filePath, name);
+      if (!result?.ok) {
+        log.warn("could not delete asset", { name, reason: result?.reason });
+        log.exit("confirmDeleteAsset", startedAt, { ok: false, reason: result?.reason });
+        return;
+      }
+
+      setAssets(result.project?.assets);
+      state.imagesFolder = result.folderPath || state.imagesFolder;
+      state.files = Array.isArray(result.files) ? result.files : [];
+      stopPlay();
+      renderAssets();
+
+      let nextIndex = 0;
+      if (keepName) {
+        const found = state.files.findIndex((file) => file.name === keepName);
+        nextIndex = found >= 0 ? found : 0;
+      } else if (deletedIndex >= 0 && state.files.length) {
+        nextIndex = Math.min(deletedIndex, state.files.length - 1);
+      }
+
+      setFrame(nextIndex);
+      closeDeleteAssetDialog();
+      state.pendingDeleteAssetName = null;
+      log.info("asset deleted", { name, remaining: state.files.length });
+      log.exit("confirmDeleteAsset", startedAt, { ok: true });
+    } catch (err) {
+      log.error("confirmDeleteAsset failed", { error: String(err?.message || err) });
+      log.exit("confirmDeleteAsset", startedAt, { error: true });
+    } finally {
+      state.deletingAsset = false;
+      if (deleteAssetConfirmBtn) deleteAssetConfirmBtn.disabled = false;
+    }
+  }
+
   function openDeleteDialog(id) {
     const label = state.labels.find((item) => item.id === id);
     if (!label || !state.filePath) return;
@@ -1339,6 +1539,18 @@
     });
   }
 
+  function isAssetsTabActive() {
+    if (window.isProcessImageScreenOpen?.()) return false;
+    if (inspectorPanel?.hidden) return false;
+    return window.getInspectorTab?.() === "assets";
+  }
+
+  function scrollCurrentAssetIntoView() {
+    if (!isAssetsTabActive() || !assetsList) return;
+    const item = assetsList.querySelector(".assets-list__item.is-current");
+    item?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
   function syncPlaybackControls() {
     const max = lastFrameIndex();
     const hasFrames = state.files.length > 0;
@@ -1359,11 +1571,15 @@
     boxDraw = null;
     hideDraftRect();
     state.selectedDetectionIndex = null;
+    const prevName = currentFile()?.name || "";
     const max = lastFrameIndex();
     const next = state.files.length === 0 ? 0 : Math.min(max, Math.max(0, Math.round(index)));
     state.frameIndex = next;
+    const nextName = currentFile()?.name || "";
+    if (prevName !== nextName) clearMagicRevert();
     syncPlaybackControls();
     highlightCurrentAsset();
+    scrollCurrentAssetIntoView();
     if (options.resetView) {
       state.zoom = 1;
       state.panX = 0;
@@ -1487,6 +1703,8 @@
       closeFileMenu();
       closeComposer();
       closeDeleteDialog();
+      closeDeleteAssetDialog();
+      closeAssetContextMenu();
       window.selectWorkspaceTool?.("cursor");
       window.selectInspectorTab?.("assets");
       log.info("workspace opened", { filePath: state.filePath, name: state.name });
@@ -1513,6 +1731,9 @@
     closeFileMenu();
     closeComposer();
     closeDeleteDialog();
+    closeDeleteAssetDialog();
+    closeAssetContextMenu();
+    clearMagicRevert();
     window.selectWorkspaceTool?.("cursor");
     applyImageList("", []);
     renderLabels([]);
@@ -1526,12 +1747,15 @@
     state.panY = 0;
     state.editingLabelId = null;
     state.pendingDeleteId = null;
+    state.pendingDeleteAssetName = null;
     state.addingLabel = false;
+    state.deletingAsset = false;
     state.savingLabel = false;
     state.selectedLabelId = null;
     state.selectedDetectionIndex = null;
     state.annotationType = "";
     state.annotationMode = "";
+    state.magicRevert = null;
     panning = false;
     lastFrameWheelAt = 0;
     setWorkspaceChrome(false);
@@ -1870,6 +2094,10 @@
     }
     if (action === "rotate") {
       void rotateCurrentImage();
+      return;
+    }
+    if (action === "revert") {
+      void revertMagicDetections();
     }
   });
 
@@ -1948,7 +2176,14 @@
   );
 
   function isDeleteDialogOpen() {
-    return Boolean(deleteLabelOverlay && !deleteLabelOverlay.hidden);
+    return Boolean(
+      (deleteLabelOverlay && !deleteLabelOverlay.hidden) ||
+        (deleteAssetOverlay && !deleteAssetOverlay.hidden),
+    );
+  }
+
+  function isAssetContextMenuOpen() {
+    return Boolean(assetContextMenu && !assetContextMenu.hidden);
   }
 
   deleteLabelCloseBtn?.addEventListener("click", () => closeDeleteDialog());
@@ -1961,9 +2196,19 @@
   });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    if (isDeleteDialogOpen()) {
+    if (deleteAssetOverlay && !deleteAssetOverlay.hidden) {
+      event.preventDefault();
+      closeDeleteAssetDialog();
+      return;
+    }
+    if (deleteLabelOverlay && !deleteLabelOverlay.hidden) {
       event.preventDefault();
       closeDeleteDialog();
+      return;
+    }
+    if (isAssetContextMenuOpen()) {
+      event.preventDefault();
+      closeAssetContextMenu();
     }
   });
 
@@ -1997,12 +2242,37 @@
     setSelectedDetection(Number(item.dataset.index));
   });
 
+  deleteAssetCloseBtn?.addEventListener("click", () => closeDeleteAssetDialog());
+  deleteAssetCancelBtn?.addEventListener("click", () => closeDeleteAssetDialog());
+  deleteAssetConfirmBtn?.addEventListener("click", () => {
+    void confirmDeleteAsset();
+  });
+  deleteAssetOverlay?.addEventListener("click", (event) => {
+    if (event.target === deleteAssetOverlay) closeDeleteAssetDialog();
+  });
+
   assetsList?.addEventListener("click", (event) => {
     const item = event.target.closest(".assets-list__item");
     if (!item || !assetsList.contains(item)) return;
     stopPlay();
     setFrame(Number(item.dataset.frameIndex));
   });
+
+  assetsList?.addEventListener("contextmenu", (event) => {
+    const item = event.target.closest(".assets-list__item");
+    if (!item || !assetsList.contains(item)) return;
+    event.preventDefault();
+    openAssetContextMenu(event, item.dataset.name || item.title);
+  });
+
+  assetContextDeleteBtn?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const name = state.pendingDeleteAssetName;
+    closeAssetContextMenu();
+    openDeleteAssetDialog(name);
+  });
+
+  assetsPane?.addEventListener("scroll", () => closeAssetContextMenu());
 
   fileMenuBtn?.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -2018,6 +2288,9 @@
   });
 
   document.addEventListener("click", (event) => {
+    if (isAssetContextMenuOpen() && !event.target.closest("#asset-context-menu")) {
+      closeAssetContextMenu();
+    }
     if (!fileMenuDropdown || fileMenuDropdown.hidden) return;
     if (event.target.closest("#file-menu")) return;
     closeFileMenu();
@@ -2039,6 +2312,7 @@
     if (!state.filePath || state.files.length === 0) return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (isDeleteDialogOpen()) return;
+    if (isAssetContextMenuOpen()) return;
     if (window.isProcessImageScreenOpen?.()) return;
     if (isTypingTarget(event.target)) return;
     const key = event.key;

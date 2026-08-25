@@ -40,6 +40,9 @@
           <button type="button" id="btn-new-release" class="btn-new-release" hidden aria-label="New Release Available" title="New Release Available">
             New Release Available
           </button>
+          <button type="button" id="btn-titlebar-export" class="titlebar-export" disabled aria-label="Export">
+            Export
+          </button>
           <button type="button" class="window-control-btn" id="btn-settings" aria-label="Settings" title="Settings">
             <i class="fa-solid fa-gear" aria-hidden="true"></i>
           </button>
@@ -121,6 +124,9 @@
               </button>
               <button type="button" class="view-toolbar__btn" id="view-tool-rotate" data-view-tool="rotate" aria-label="Rotate" title="Rotate">
                 <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="view-toolbar__btn view-toolbar__btn--label" id="view-tool-revert" data-view-tool="revert" hidden aria-label="Revert detections" title="Revert detections">
+                Revert
               </button>
             </div>
             <div class="workspace-view" id="workspace-view" hidden>
@@ -392,6 +398,24 @@
     </div>
   </div>
 
+  <div id="delete-asset-overlay" class="settings-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="delete-asset-title">
+    <div class="settings-modal settings-modal--compact">
+      <div class="settings-modal-header">
+        <h2 class="settings-modal-title" id="delete-asset-title">Delete asset</h2>
+        <button type="button" id="btn-delete-asset-close" class="icon-btn" aria-label="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="settings-modal-body">
+        <p class="delete-label-message" id="delete-asset-message">Delete this image? This will remove the image and its detection file. This cannot be undone.</p>
+      </div>
+      <div class="settings-modal-footer delete-label-footer">
+        <button type="button" id="btn-delete-asset-cancel" class="btn-secondary">Cancel</button>
+        <button type="button" id="btn-delete-asset-confirm" class="btn-primary btn-danger">Delete</button>
+      </div>
+    </div>
+  </div>
+
   <div id="export-overlay" class="settings-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="export-title">
     <div class="settings-modal create-project-modal">
       <div class="settings-modal-header">
@@ -430,6 +454,10 @@
         <button type="button" id="btn-export-confirm" class="btn-primary" disabled>Export</button>
       </div>
     </div>
+  </div>
+
+  <div id="asset-context-menu" class="asset-context-menu" hidden role="menu" aria-label="Asset actions">
+    <button type="button" class="asset-context-menu__item" id="btn-asset-context-delete" role="menuitem">Delete</button>
   </div>
 
   <script src="scripts/renderer-logger.js"></script>

@@ -3,7 +3,7 @@ const path = require("path");
 const { app, dialog, BrowserWindow } = require("electron");
 const { createLogger } = require("../services/visionforge-logger");
 const { recordSolution } = require("../services/history-solutions-store");
-const { setAllowedImagesDir } = require("../services/image-protocol");
+const { setAllowedImagesDir, isAllowedImagePath } = require("../services/image-protocol");
 const { isValidAnnotation } = require("../../shared/enums/annotation-types");
 const { importEmptyDetections } = require("./detection-import-service");
 
@@ -434,6 +434,111 @@ async function selectImagesFolder(sender, defaultPath) {
   return { ok: true, canceled: false, folderPath };
 }
 
+function isSafeImageName(imageName) {
+  const name = String(imageName || "").trim();
+  if (!name) return false;
+  if (name !== path.basename(name)) return false;
+  if (name === "." || name === "..") return false;
+  return IMAGE_EXTENSIONS.has(path.extname(name).toLowerCase());
+}
+
+function unlinkIfExists(filePath) {
+  try {
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+      return { ok: true, existed: false };
+    }
+    fs.unlinkSync(filePath);
+    return { ok: true, existed: true };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+}
+
+function sidecarCandidates(folder, imageName) {
+  const base = path.parse(imageName).name;
+  const dirs = [folder, path.join(folder, "labels")];
+  const paths = [];
+  for (const dir of dirs) {
+    for (const ext of [".txt", ".xml"]) {
+      paths.push(path.join(dir, `${base}${ext}`));
+    }
+  }
+  return paths;
+}
+
+function deleteAsset(filePath, imageName) {
+  const startedAt = log.enter("deleteAsset");
+  const result = readSolution(filePath);
+  if (!result.ok) {
+    log.exit("deleteAsset", startedAt, { ok: false, reason: result.reason });
+    return result;
+  }
+
+  const folder = String(result.project?.imagesFolder || "").trim();
+  if (!folder) {
+    log.exit("deleteAsset", startedAt, { ok: false, reason: "missing-folder" });
+    return { ok: false, reason: "missing-folder" };
+  }
+
+  const name = String(imageName || "").trim();
+  if (!isSafeImageName(name)) {
+    log.exit("deleteAsset", startedAt, { ok: false, reason: "invalid-name" });
+    return { ok: false, reason: "invalid-name" };
+  }
+
+  const assets = Array.isArray(result.project.assets) ? result.project.assets : [];
+  if (!assets.some((row) => String(row?.name || "") === name)) {
+    log.exit("deleteAsset", startedAt, { ok: false, reason: "missing-asset" });
+    return { ok: false, reason: "missing-asset" };
+  }
+
+  setAllowedImagesDir(folder);
+  const imagePath = path.resolve(folder, name);
+  if (!isAllowedImagePath(imagePath)) {
+    log.exit("deleteAsset", startedAt, { ok: false, reason: "forbidden" });
+    return { ok: false, reason: "forbidden" };
+  }
+
+  const unlinked = unlinkIfExists(imagePath);
+  if (!unlinked.ok) {
+    log.warn("could not delete image", { imagePath, error: unlinked.error });
+    log.exit("deleteAsset", startedAt, { ok: false, reason: "unlink-failed" });
+    return { ok: false, reason: "unlink-failed" };
+  }
+
+  let sidecarsRemoved = 0;
+  for (const candidate of sidecarCandidates(folder, name)) {
+    const resolved = path.resolve(candidate);
+    if (!isAllowedImagePath(resolved)) continue;
+    const removed = unlinkIfExists(resolved);
+    if (removed.ok && removed.existed) {
+      sidecarsRemoved += 1;
+    } else if (!removed.ok) {
+      log.warn("could not delete sidecar", { sidecar: resolved, error: removed.error });
+    }
+  }
+
+  const nextAssets = assets.filter((row) => String(row?.name || "") !== name);
+  const updated = updateProject(result.filePath, { assets: nextAssets }, { skipPostHooks: true });
+  if (!updated.ok) {
+    log.exit("deleteAsset", startedAt, { ok: false, reason: updated.reason });
+    return updated;
+  }
+
+  const listed = listImageFiles(folder);
+  const files = listed.ok ? listed.files : [];
+  log.info("deleted asset", { name, sidecarsRemoved, remaining: files.length });
+  log.exit("deleteAsset", startedAt, { ok: true, name, remaining: files.length });
+  return {
+    ok: true,
+    filePath: updated.filePath,
+    name: updated.name,
+    project: updated.project,
+    folderPath: folder,
+    files,
+  };
+}
+
 function listImageFolder(folderPath) {
   const startedAt = log.enter("listImageFolder");
   const listed = listImageFiles(folderPath);
@@ -463,6 +568,7 @@ module.exports = {
   createProject,
   loadProject,
   updateProject,
+  deleteAsset,
   closeProject,
   selectImagesFolder,
   listImageFolder,

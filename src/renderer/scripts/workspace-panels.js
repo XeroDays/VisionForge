@@ -26,6 +26,7 @@
   };
 
   const COMMAND_TOOLS = new Set(["select-images", "process-image", "magic"]);
+  let currentTab = "assets";
 
   log.debug("workspace-panels.js init");
 
@@ -43,6 +44,7 @@
   }
 
   function selectTab(tabId) {
+    currentTab = tabId;
     tabButtons.forEach((btn) => {
       const selected = btn.dataset.tab === tabId;
       btn.classList.toggle("is-selected", selected);
@@ -127,5 +129,6 @@
   setInspectorWidth(DEFAULT_INSPECTOR_WIDTH);
   selectTab("assets");
   window.selectInspectorTab = selectTab;
+  window.getInspectorTab = () => currentTab;
   window.selectWorkspaceTool = selectTool;
 })();

@@ -27,6 +27,7 @@ const CH = {
   LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
   LOAD_PROJECT: "visionforge:load-project",
   UPDATE_PROJECT: "visionforge:update-project",
+  DELETE_ASSET: "visionforge:delete-asset",
   ROTATE_IMAGE: "visionforge:rotate-image",
   CLOSE_PROJECT: "visionforge:close-project",
   EXPORT_ANNOTATIONS: "visionforge:export-annotations",
@@ -62,6 +63,7 @@ contextBridge.exposeInMainWorld("visionforge", {
   listImageFolder: (folderPath) => ipcRenderer.invoke(CH.LIST_IMAGE_FOLDER, folderPath),
   loadProject: (filePath) => ipcRenderer.invoke(CH.LOAD_PROJECT, filePath),
   updateProject: (filePath, patch) => ipcRenderer.invoke(CH.UPDATE_PROJECT, filePath, patch),
+  deleteAsset: (filePath, imageName) => ipcRenderer.invoke(CH.DELETE_ASSET, filePath, imageName),
   rotateImage: (filePath) => ipcRenderer.invoke(CH.ROTATE_IMAGE, filePath),
   closeProject: () => ipcRenderer.invoke(CH.CLOSE_PROJECT),
   exportAnnotations: (filePath, destFolder, mode) =>
