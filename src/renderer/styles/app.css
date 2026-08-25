@@ -1167,7 +1167,7 @@ body {
   border: 1px solid rgba(244, 180, 42, 0.35);
   border-radius: 999px;
   cursor: pointer;
-  transition: background 0.15s ease, box-shadow 0.15s ease;
+  -webkit-app-region: no-drag;
 }
 
 .btn-new-release:not([hidden]) {
@@ -1175,16 +1175,31 @@ body {
 }
 
 @keyframes new-release-glow-breathe {
-  0%, 100% {
-    box-shadow: 0 0 6px rgba(244, 180, 42, 0.25);
+  0%,
+  100% {
+    border-color: rgba(244, 180, 42, 0.35);
+    background: rgba(244, 180, 42, 0.15);
+    box-shadow: 0 0 0 0 rgba(244, 180, 42, 0);
   }
+
   50% {
-    box-shadow: 0 0 16px rgba(244, 180, 42, 0.55);
+    border-color: rgba(244, 180, 42, 0.9);
+    background: rgba(244, 180, 42, 0.32);
+    box-shadow: 0 0 14px 2px rgba(244, 180, 42, 0.4);
   }
 }
 
 .btn-new-release:hover {
   background: rgba(244, 180, 42, 0.28);
+  animation-play-state: paused;
+}
+
+.release-overlay {
+  z-index: 1000;
+}
+
+.release-overlay.is-force-update #btn-release-close {
+  display: none !important;
 }
 
 .btn-primary {

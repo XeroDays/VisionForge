@@ -229,6 +229,11 @@ class LicenseService {
     return Number(payload[camelKey] ?? payload[pascalKey]);
   }
 
+  #getPayloadBool(payload, camelKey, pascalKey) {
+    const value = payload[camelKey] ?? payload[pascalKey];
+    return value === true;
+  }
+
   isUpdateAvailable(payload) {
     if (!payload || typeof payload !== "object") return false;
     const remoteBuild = this.#getPayloadNumber(payload, "buildVersion", "BuildVersion");
@@ -238,10 +243,15 @@ class LicenseService {
 
   #buildRegisterResult(fromCache = false) {
     const base = this.getCachedUpdate();
+    const payload = this._cached;
+    const remoteBuild = payload ? this.#getPayloadNumber(payload, "buildVersion", "BuildVersion") : NaN;
     return {
       ...base,
       accessGranted: this.isAccessGranted(this._cached),
       fromCache,
+      localBuild: this.getBuildVersion(),
+      remoteBuild: Number.isFinite(remoteBuild) ? remoteBuild : null,
+      forceUpdate: payload ? this.#getPayloadBool(payload, "forceUpdate", "ForceUpdate") : false,
     };
   }
 
@@ -299,6 +309,9 @@ class LicenseService {
         accessGranted: result.accessGranted,
         fromCache: result.fromCache,
         updateAvailable: result.updateAvailable,
+        localBuild: result.localBuild,
+        remoteBuild: result.remoteBuild,
+        forceUpdate: result.forceUpdate,
       });
       return result;
     } catch (err) {
@@ -312,11 +325,20 @@ class LicenseService {
           accessGranted: result.accessGranted,
           fromCache: true,
           updateAvailable: result.updateAvailable,
+          localBuild: result.localBuild,
+          remoteBuild: result.remoteBuild,
+          forceUpdate: result.forceUpdate,
         });
         return result;
       }
       this._cached = null;
-      log.exit("register", startedAt, { accessGranted: false, fromCache: false });
+      log.exit("register", startedAt, {
+        accessGranted: false,
+        fromCache: false,
+        localBuild: this.getBuildVersion(),
+        remoteBuild: null,
+        forceUpdate: false,
+      });
       return {
         ok: false,
         payload: null,
@@ -325,6 +347,9 @@ class LicenseService {
         filename: null,
         accessGranted: false,
         fromCache: false,
+        localBuild: this.getBuildVersion(),
+        remoteBuild: null,
+        forceUpdate: false,
         error: String(err.message || err),
       };
     }

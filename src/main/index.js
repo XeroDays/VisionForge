@@ -40,12 +40,10 @@ function loadHeavyModules() {
     setImmediate(() => {
       const { registerIpcHandlers } = require("./ipc/register");
       const { createMainWindow } = require("./windows/main-window");
-      const licenseService = require("./services/license-service");
       const { getAppIcon } = require("./helpers/app-icon");
       registerIpcHandlers();
       resolve({
         createMainWindow,
-        licenseService,
         getAppIcon,
       });
     });
@@ -73,46 +71,47 @@ async function bootstrap() {
   const splash = createSplashWindow();
   log.exit("createSplashWindow", splashCreateStartedAt);
 
-  const splashLoadStartedAt = log.enter("waitForWebContentsLoad(splash)");
-  await waitForWebContentsLoad(splash);
-  log.exit("waitForWebContentsLoad(splash)", splashLoadStartedAt);
-
   if (!splash.isDestroyed()) {
     splash.show();
     log.mark("splash.show");
   }
 
   await yieldToEventLoop();
-  await yieldToEventLoop();
-
   sendSplashStatus(splash, "Starting…");
-  log.mark('sendSplashStatus "Starting..."');
-  await yieldToEventLoop();
+  log.mark('sendSplashStatus "Starting…"');
+
+  const licenseService = require("./services/license-service");
+  const prefetchPromise = licenseService.prefetchRegistrationData();
 
   let heavyStartedAt = log.enter("loadHeavyModules");
-  const deps = await loadHeavyModules();
+  const { createMainWindow, getAppIcon } = await loadHeavyModules();
   log.exit("loadHeavyModules", heavyStartedAt);
 
-  const icon = deps.getAppIcon();
+  const icon = getAppIcon();
   if (icon && typeof app.setIcon === "function") {
     app.setIcon(icon);
     log.mark("app.setIcon");
   }
 
-  const main = deps.createMainWindow();
+  const main = createMainWindow();
+
+  sendSplashStatus(splash, "Checking for updates…");
+  log.mark('sendSplashStatus "Checking for updates…"');
 
   log.mark("Promise.all: license.register + main did-finish-load");
 
   const [licenseResult] = await Promise.all([
     (async () => {
-      sendSplashStatus(splash, "Checking for updates…");
-      log.mark('sendSplashStatus "Checking for updates..."');
+      await prefetchPromise;
       const registerStartedAt = log.enter("licenseService.register");
-      const result = await deps.licenseService.register();
+      const result = await licenseService.register();
       log.exit("licenseService.register", registerStartedAt, {
         accessGranted: result.accessGranted,
         fromCache: result.fromCache,
         updateAvailable: result.updateAvailable,
+        localBuild: result.localBuild,
+        remoteBuild: result.remoteBuild,
+        forceUpdate: result.forceUpdate,
       });
       return result;
     })(),
@@ -138,12 +137,16 @@ async function bootstrap() {
   }
 
   sendSplashStatus(splash, "Loading workspace…");
-  log.mark('sendSplashStatus "Loading workspace..."');
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  log.mark('sendSplashStatus "Loading workspace…"');
 
   if (!main.isDestroyed() && main.webContents && !main.webContents.isDestroyed()) {
     main.webContents.send(channels.LICENSE_UPDATE, licenseResult);
-    log.mark("LICENSE_UPDATE sent to main renderer");
+    log.mark("LICENSE_UPDATE sent to main renderer", {
+      updateAvailable: licenseResult.updateAvailable,
+      localBuild: licenseResult.localBuild,
+      remoteBuild: licenseResult.remoteBuild,
+      forceUpdate: licenseResult.forceUpdate,
+    });
   }
 
   if (!splash.isDestroyed()) {

@@ -65,7 +65,16 @@
     }
   }
 
+  function guardForceUpdate() {
+    if (typeof window.blockIfForceUpdate === "function" && window.blockIfForceUpdate()) {
+      log.info("start-page blocked by force update");
+      return true;
+    }
+    return false;
+  }
+
   async function openExistingProject() {
+    if (guardForceUpdate()) return;
     const startedAt = log.enter("openExistingProject");
     try {
       const result = await window.visionforge?.openProjectFile?.();
@@ -99,6 +108,7 @@
     });
 
     if (action === "create") {
+      if (guardForceUpdate()) return;
       window.openCreateProjectDialog?.();
     }
 
@@ -107,6 +117,7 @@
     }
 
     if (action === "recent") {
+      if (guardForceUpdate()) return;
       const filePath = actionEl.dataset.filePath;
       if (filePath) {
         window.showWorkspace?.({ filePath, name: actionEl.dataset.projectName });

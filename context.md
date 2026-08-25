@@ -76,8 +76,8 @@
 | No bundler | Source files loaded directly by Electron — no Webpack/Vite |
 | Frameless windows | Both splash and main use `frame: false`; custom chrome in renderer |
 | Window security | `contextIsolation: true` on all `BrowserWindow` instances |
-| Lazy bootstrap | Heavy modules loaded via `setImmediate` after splash shows (IPC, windows, license, icon) |
-| Splash load gate | Wait for splash `did-finish-load` before `splash.show()` |
+| Lazy bootstrap | Heavy modules loaded via `setImmediate` after splash shows (IPC, windows, icon); license prefetch starts in parallel |
+| Splash show | Splash `show()` immediately (dark `backgroundColor` while HTML loads); status text via `SPLASH_STATUS` |
 | Main presentation | **Maximize** main window after splash (not fullscreen) |
 | Minimize behavior | Main window minimize uses `win.minimize()` (taskbar, not tray) |
 | Logo asset | `src/renderer/images/logo/VisionForge.png` (dev + splash); packaged `icon.png` via `helpers/app-icon.js` |
@@ -118,7 +118,7 @@
 - `channels.js`
 
 **Workflow:**
-`app.whenReady` → register splash IPC → create splash → wait splash load → show → `"Starting…"` → lazy-load IPC/windows/license/icon → create hidden main → parallel license register (`"Checking for updates…"`) + main load → on deny stay on splash / on grant `"Loading workspace…"` (1s) → `LICENSE_UPDATE` → close splash → maximize/show main
+`app.whenReady` → register splash IPC → create splash → `splash.show()` immediately → `"Starting…"` → `licenseService.prefetchRegistrationData()` in parallel with lazy-load IPC/windows/icon → create hidden main → `"Checking for updates…"` → parallel `register()` + main load → on deny stay on splash / on grant `"Loading workspace…"` → `LICENSE_UPDATE` immediately → close splash → maximize/show main
 
 ---
 
@@ -132,7 +132,7 @@
 - `src/preload/index.js` — license update IPC
 
 **Workflow:**
-`LICENSE_UPDATE` on main load → `initReleaseUpdate()` → show button if `updateAvailable` → modal download/install via license IPC
+`LICENSE_UPDATE` (before main show) + IIFE `onLicenseUpdate` / `getLicenseUpdate` in `release-update-panel.js` → unhide top-right `#btn-new-release` (gold glow-breathe) if local `BUILD_VERSION` < API `buildVersion`/`BuildVersion` → modal download/install via license IPC. **ForceUpdate:** overlay opens immediately (`z-index` 1000, close hidden, no dismiss); `showWorkspace` / Create / Open / Recent no-op and re-open the modal.
 
 ---
 
@@ -174,7 +174,7 @@ Create / Open / Recent → `showWorkspace(filePath)` → **Loading project** ove
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. **Open existing project** opens a native file picker filtered to `.VFSln`, then shows the workspace. Recent row click loads that `.VFSln` and shows the workspace.
+No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. **Open existing project** opens a native file picker filtered to `.VFSln`, then shows the workspace. Recent row click loads that `.VFSln` and shows the workspace. If Softasium `ForceUpdate` is true, Create / Open / Recent do not leave the start page; the release modal re-opens instead.
 
 ---
 
@@ -1173,7 +1173,8 @@ Renderer
 
 ## Current State Notes (as of v1.0.2, `BUILD_VERSION` 2)
 
-- **Splash/bootstrap**  -style flow (license gate, 1s transition delay)
+- **Splash/bootstrap** — Flowter-parity: splash shows immediately, license prefetch overlaps heavy IPC load, Register during `"Checking for updates…"`, `LICENSE_UPDATE` before splash close (no 1s delay before the send)
+- **Updates:** `#btn-new-release` (top-right, gold glow) when local `BUILD_VERSION` 2 is less than server `buildVersion`. ForceUpdate locks the start page behind a non-dismissible download modal (`z-index` 1000)
 - **Minimize** uses `win.minimize()` so the app stays on the Windows taskbar (no system tray)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`

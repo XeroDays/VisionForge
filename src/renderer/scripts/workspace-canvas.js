@@ -1676,6 +1676,10 @@
 
   async function showWorkspace({ filePath, name } = {}) {
     const startedAt = log.enter("showWorkspace");
+    if (window.blockIfForceUpdate?.()) {
+      log.exit("showWorkspace", startedAt, { ok: false, reason: "force-update" });
+      return;
+    }
     const resolvedPath = String(filePath || "").trim();
     if (!resolvedPath) {
       log.exit("showWorkspace", startedAt, { ok: false, reason: "missing-file" });

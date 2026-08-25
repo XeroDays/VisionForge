@@ -207,6 +207,10 @@
   }
 
   function openDialog() {
+    if (window.blockIfForceUpdate?.()) {
+      log.info("create-project blocked by force update");
+      return;
+    }
     if (nameInput) nameInput.value = "Untitled";
     if (locationInput) locationInput.value = "";
     resetAnnotation();
