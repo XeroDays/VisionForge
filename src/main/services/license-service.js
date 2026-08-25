@@ -11,7 +11,7 @@ const { license: log, truncate } = require("./visionforge-logger");
 
 const REGISTER_URL = "https://api.softasium.com/api/SoftwareLicencing/Register";
 const LICENSE_AUTH_BEARER = "iamsyedidrees@gmail.com";
-const BUILD_VERSION = 1;
+const BUILD_VERSION = 2;
 const FALLBACK_INSTALLER_NAME = "VisionForge-Update.exe";
 
 class LicenseService {

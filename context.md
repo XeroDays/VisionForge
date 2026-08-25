@@ -1171,7 +1171,7 @@ Renderer
 
 ---
 
-## Current State Notes (as of v1.0.0)
+## Current State Notes (as of v1.0.2, `BUILD_VERSION` 2)
 
 - **Splash/bootstrap**  -style flow (license gate, 1s transition delay)
 - **Minimize** uses `win.minimize()` so the app stays on the Windows taskbar (no system tray)

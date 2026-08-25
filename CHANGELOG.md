@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-08-25
+
+### Added
+
+- Project workspace: create/open `.VFSln` solutions, recent list, image-folder playback, and canvas preview (`vfimg:`).
+- Inspector Assets / Labels / Detections tabs, Box-tool drawing, and YOLO/VOC detections stored on each asset.
+- File and titlebar **Export** for YOLO `.txt` or Pascal VOC `.xml` sidecars plus `classes.txt`.
+- Settings AI Model, Process Image preview, and Auto detect (ONNX). After Auto detect, **Revert** restores the previous boxes until the image changes.
+- Assets-tab detection-count chips, right-click Delete (image + sidecars + VFSln row), and auto-scroll to the current file.
+- Custom thin scrollbar matching the dark gold theme.
+
+### Changed
+
+- Main window minimize stays on the Windows taskbar (no system tray).
+
 ## [1.0.0] - 2026-08-17
 
 ### Added
