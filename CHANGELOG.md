@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Start page Recent projects: right-click a row and choose **Remove from list** to drop that entry from history (does not delete the project file).
-- Oriented Object Detection: with a box selected, mouse wheel rotates it by 15° and Alt+wheel by 5°.
+- Oriented Object Detection: with a box selected, mouse wheel rotates it by 15° and Alt+wheel by 1°.
 
 ### Changed
 

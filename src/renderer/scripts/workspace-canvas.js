@@ -22,7 +22,7 @@
   const BOX_HANDLE_PX = 8;
   const BOX_MIN_SIZE = 4;
   const OBB_ANGLE_SNAP = 15;
-  const OBB_WHEEL_ROTATE_SMALL = 5;
+  const OBB_WHEEL_ROTATE_SMALL = 1;
   const OBB_WHEEL_PERSIST_MS = 200;
   const labelColorCache = new Map();
 
