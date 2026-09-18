@@ -123,6 +123,7 @@
     selectedDetectionIndex: null,
     annotationType: "",
     annotationMode: "",
+    onnxConfidence: window.VisionForgeAiModelTypes?.DEFAULT_CONFIDENCE ?? 0.25,
     assets: [],
     assetsByName: new Map(),
     magicRevert: null,
@@ -1131,6 +1132,18 @@
     const template = valueTemplate();
     const detections = (Array.isArray(items) ? items : [])
       .map((item) => {
+        const labelid = Number.isInteger(Number(item.labelid)) ? Number(item.labelid) : 0;
+        const xc = Number(item?.xc);
+        const yc = Number(item?.yc);
+        const w = Number(item?.w);
+        const h = Number(item?.h);
+        if ([xc, yc, w, h].every(Number.isFinite)) {
+          const value = { xc, yc, w, h };
+          if (isObbProject() || Number.isFinite(Number(item?.angle))) {
+            value.angle = Number.isFinite(Number(item?.angle)) ? Number(item.angle) : 0;
+          }
+          return { labelid, value };
+        }
         const xmin = Number(item?.xmin);
         const ymin = Number(item?.ymin);
         const xmax = Number(item?.xmax);
@@ -1142,10 +1155,7 @@
           imgH,
           template,
         );
-        return {
-          labelid: Number.isInteger(Number(item.labelid)) ? Number(item.labelid) : 0,
-          value,
-        };
+        return { labelid, value };
       })
       .filter(Boolean);
 
@@ -1911,6 +1921,9 @@
       state.name = result.name || name || "Untitled";
       state.annotationType = String(result.project?.annotationType || "");
       state.annotationMode = String(result.project?.annotationMode || "");
+      state.onnxConfidence = (window.VisionForgeAiModelTypes?.normalizeConfidence || ((v) => Number(v) || 0.25))(
+        result.project?.onnxConfidence,
+      );
       if (startPage) startPage.hidden = true;
       canvas.hidden = false;
       setWorkspaceChrome(true);
@@ -1971,6 +1984,7 @@
     state.selectedDetectionIndex = null;
     state.annotationType = "";
     state.annotationMode = "";
+    state.onnxConfidence = window.VisionForgeAiModelTypes?.DEFAULT_CONFIDENCE ?? 0.25;
     state.magicRevert = null;
     panning = false;
     lastFrameWheelAt = 0;
@@ -2605,11 +2619,19 @@
   window.getWorkspaceLabels = () =>
     state.labels.map((label) => ({ id: label.id, name: label.name }));
   window.applyWorkspaceDetections = applyWorkspaceDetections;
+  window.getWorkspaceFilePath = () => state.filePath || "";
+  window.getWorkspaceConfidence = () =>
+    (window.VisionForgeAiModelTypes?.normalizeConfidence || ((v) => Number(v) || 0.25))(state.onnxConfidence);
+  window.setWorkspaceConfidence = (value) => {
+    state.onnxConfidence = (window.VisionForgeAiModelTypes?.normalizeConfidence || ((v) => Number(v) || 0.25))(value);
+    return state.onnxConfidence;
+  };
   window.getWorkspaceExportContext = () => ({
     filePath: state.filePath,
     imagesFolder: state.imagesFolder,
     annotationType: state.annotationType,
     annotationMode: state.annotationMode,
+    onnxConfidence: state.onnxConfidence,
   });
   window.setWorkspaceTool = setWorkspaceTool;
   window.zoomWorkspace = (direction) => {

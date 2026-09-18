@@ -3,10 +3,9 @@ const path = require("path");
 const sharp = require("sharp");
 const ort = require("onnxruntime-node");
 const { createLogger } = require("../services/visionforge-logger");
+const { normalizeConfidence } = require("../../shared/enums/ai-model-types");
 
 const log = createLogger("onnx-detect");
-
-const CONF_THRESHOLD = 0.25;
 const NMS_IOU = 0.45;
 const MAX_DETECTIONS = 300;
 const DEFAULT_SIZE = 640;
@@ -102,6 +101,53 @@ async function letterboxTensor(imagePath, inputW, inputH) {
   };
 }
 
+function clamp01(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function toDegrees(angle) {
+  if (!Number.isFinite(angle)) return 0;
+  if (Math.abs(angle) > Math.PI + 0.01) return angle;
+  return (angle * 180) / Math.PI;
+}
+
+function mapObbBox(cx, cy, w, h, angle, letter) {
+  let x = cx;
+  let y = cy;
+  let bw = w;
+  let bh = h;
+  const maxSide = Math.max(letter.inputW, letter.inputH);
+  if (x <= 2 && y <= 2 && bw <= 2 && bh <= 2) {
+    x *= letter.inputW;
+    y *= letter.inputH;
+    bw *= letter.inputW;
+    bh *= letter.inputH;
+  } else if (x > maxSide * 1.5 || y > maxSide * 1.5) {
+    return null;
+  }
+  const xcPx = (x - letter.padX) / letter.scale;
+  const ycPx = (y - letter.padY) / letter.scale;
+  const wPx = bw / letter.scale;
+  const hPx = bh / letter.scale;
+  if (wPx <= 0 || hPx <= 0) return null;
+  const xmin = Math.round(xcPx - wPx / 2);
+  const ymin = Math.round(ycPx - hPx / 2);
+  const xmax = Math.round(xcPx + wPx / 2);
+  const ymax = Math.round(ycPx + hPx / 2);
+  return {
+    xc: Number(clamp01(xcPx / letter.origW).toFixed(6)),
+    yc: Number(clamp01(ycPx / letter.origH).toFixed(6)),
+    w: Number(clamp01(wPx / letter.origW).toFixed(6)),
+    h: Number(clamp01(hPx / letter.origH).toFixed(6)),
+    angle: Number(toDegrees(angle).toFixed(2)),
+    xmin: Math.max(0, Math.min(letter.origW, xmin)),
+    ymin: Math.max(0, Math.min(letter.origH, ymin)),
+    xmax: Math.max(0, Math.min(letter.origW, xmax)),
+    ymax: Math.max(0, Math.min(letter.origH, ymax)),
+  };
+}
+
 function mapBox(x1, y1, x2, y2, letter) {
   let left = x1;
   let top = y1;
@@ -151,7 +197,7 @@ function nms(items) {
   return kept;
 }
 
-function decodeEndToEnd(data, dims, names, letter) {
+function decodeEndToEnd(data, dims, names, letter, threshold) {
   const last = dims[dims.length - 1];
   if (last !== 6 && last !== 7) return null;
   const rows = data.length / last;
@@ -161,7 +207,7 @@ function decodeEndToEnd(data, dims, names, letter) {
     const box = mapBox(data[o], data[o + 1], data[o + 2], data[o + 3], letter);
     const score = data[o + 4];
     const cls = Math.round(data[o + 5]);
-    if (!box || score < CONF_THRESHOLD || box.xmax <= box.xmin || box.ymax <= box.ymin) continue;
+    if (!box || score < threshold || box.xmax <= box.xmin || box.ymax <= box.ymin) continue;
     out.push({
       labelid: cls,
       name: className(names, cls),
@@ -172,7 +218,7 @@ function decodeEndToEnd(data, dims, names, letter) {
   return nms(out);
 }
 
-function decodeYoloRaw(data, dims, names, letter) {
+function decodeYoloRaw(data, dims, names, letter, threshold) {
   let channels;
   let count;
   let transposed = false;
@@ -213,7 +259,7 @@ function decodeYoloRaw(data, dims, names, letter) {
       }
     }
     const score = objectness * best;
-    if (score < CONF_THRESHOLD) continue;
+    if (score < threshold) continue;
     const box = mapBox(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2, letter);
     if (!box || box.xmax <= box.xmin || box.ymax <= box.ymin) continue;
     out.push({
@@ -226,18 +272,119 @@ function decodeYoloRaw(data, dims, names, letter) {
   return nms(out);
 }
 
-function decodeOutputs(results, names, letter) {
+function decodeOutputs(results, names, letter, threshold) {
   for (const value of Object.values(results)) {
     if (!value?.data || !value.dims) continue;
-    const end2end = decodeEndToEnd(value.data, value.dims, names, letter);
+    const end2end = decodeEndToEnd(value.data, value.dims, names, letter, threshold);
     if (end2end) return end2end;
-    const raw = decodeYoloRaw(value.data, value.dims, names, letter);
+    const raw = decodeYoloRaw(value.data, value.dims, names, letter, threshold);
     if (raw.length) return raw;
   }
   return [];
 }
 
-async function runOnnxDetect(imagePath, modelPath, labels) {
+function looksEndToEndObb(dims) {
+  const last = dims[dims.length - 1];
+  if (last !== 7) return false;
+  const rows = dims.length >= 2 ? Number(dims[dims.length - 2]) : 0;
+  return rows > 0 && rows <= 1000;
+}
+
+function decodeEndToEndObb(data, dims, names, letter, threshold) {
+  if (!looksEndToEndObb(dims)) return null;
+  const last = 7;
+  const rows = data.length / last;
+  const out = [];
+  for (let i = 0; i < rows; i += 1) {
+    const o = i * last;
+    const x1 = data[o];
+    const y1 = data[o + 1];
+    const x2 = data[o + 2];
+    const y2 = data[o + 3];
+    const score = data[o + 4];
+    const cls = Math.round(data[o + 5]);
+    const angle = data[o + 6];
+    if (score < threshold) continue;
+    const box = mapObbBox((x1 + x2) / 2, (y1 + y2) / 2, Math.abs(x2 - x1), Math.abs(y2 - y1), angle, letter);
+    if (!box || box.w <= 0 || box.h <= 0) continue;
+    out.push({
+      labelid: cls,
+      name: className(names, cls),
+      score: Number(score.toFixed(4)),
+      ...box,
+    });
+  }
+  return nms(out);
+}
+
+function decodeYoloObbRaw(data, dims, names, letter, threshold) {
+  let channels;
+  let count;
+  let transposed = false;
+  if (dims.length >= 3 && dims[1] < dims[2]) {
+    channels = dims[1];
+    count = dims[2];
+    transposed = true;
+  } else if (dims.length >= 3) {
+    count = dims[1];
+    channels = dims[2];
+  } else if (dims.length === 2) {
+    count = dims[0];
+    channels = dims[1];
+  } else {
+    return [];
+  }
+  if (channels < 6) return [];
+
+  const hasObjectness = names.length > 0 && channels === names.length + 6;
+  const classCount = hasObjectness ? channels - 6 : channels - 5;
+  if (classCount < 1) return [];
+  const out = [];
+
+  for (let i = 0; i < count; i += 1) {
+    const at = (offset) => (transposed ? data[offset * count + i] : data[i * channels + offset]);
+    const cx = at(0);
+    const cy = at(1);
+    const w = at(2);
+    const h = at(3);
+    const angle = at(4);
+    let best = 0;
+    let cls = 0;
+    const classStart = hasObjectness ? 6 : 5;
+    const objectness = hasObjectness ? at(5) : 1;
+    for (let c = 0; c < classCount; c += 1) {
+      const score = at(classStart + c);
+      if (score > best) {
+        best = score;
+        cls = c;
+      }
+    }
+    const score = objectness * best;
+    if (score < threshold) continue;
+    const box = mapObbBox(cx, cy, w, h, angle, letter);
+    if (!box || box.w <= 0 || box.h <= 0) continue;
+    out.push({
+      labelid: cls,
+      name: className(names, cls),
+      score: Number(score.toFixed(4)),
+      ...box,
+    });
+  }
+  return nms(out);
+}
+
+function decodeObbOutputs(results, names, letter, threshold) {
+  for (const value of Object.values(results)) {
+    if (!value?.data || !value.dims) continue;
+    const end2end = decodeEndToEndObb(value.data, value.dims, names, letter, threshold);
+    if (end2end) return end2end;
+    const raw = decodeYoloObbRaw(value.data, value.dims, names, letter, threshold);
+    if (raw.length) return raw;
+  }
+  return [];
+}
+
+async function runOnnxDetect(imagePath, modelPath, labels, modelType, confidence) {
   const startedAt = log.enter("runOnnxDetect");
   const image = String(imagePath || "").trim();
   if (!image || !fs.existsSync(image) || !fs.statSync(image).isFile()) {
@@ -276,8 +423,17 @@ async function runOnnxDetect(imagePath, modelPath, labels) {
 
   try {
     const results = await loaded.session.run({ [size.name]: letter.tensor });
-    const detections = decodeOutputs(results, names, letter);
-    log.info("onnx detect finished", { count: detections.length, modelPath: loaded.modelPath });
+    const isObb = String(modelType || "").trim() === "oriented-object-detection";
+    const threshold = normalizeConfidence(confidence);
+    const detections = isObb
+      ? decodeObbOutputs(results, names, letter, threshold)
+      : decodeOutputs(results, names, letter, threshold);
+    log.info("onnx detect finished", {
+      count: detections.length,
+      modelPath: loaded.modelPath,
+      modelType: isObb ? "oriented-object-detection" : "object-detection",
+      confidence: threshold,
+    });
     log.exit("runOnnxDetect", startedAt, { ok: true, count: detections.length });
     return { ok: true, detections };
   } catch (err) {

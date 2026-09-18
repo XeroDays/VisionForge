@@ -75,7 +75,13 @@
       }
 
       const labels = window.getWorkspaceLabels?.() || [];
-      const result = await window.visionforge?.runOnnxDetect?.(current.filePath, modelPath, labels);
+      const result = await window.visionforge?.runOnnxDetect?.(
+        current.filePath,
+        modelPath,
+        labels,
+        modelType,
+        window.getWorkspaceConfidence?.(),
+      );
       if (!result?.ok) {
         showAlert(INFER_REASONS[result?.reason] || "Auto detect failed.");
         log.exit("runMagicDetect", startedAt, { ok: false, reason: result?.reason });

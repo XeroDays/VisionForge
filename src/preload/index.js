@@ -71,8 +71,8 @@ contextBridge.exposeInMainWorld("visionforge", {
   exportAnnotations: (filePath, destFolder, mode) =>
     ipcRenderer.invoke(CH.EXPORT_ANNOTATIONS, filePath, destFolder, mode),
   selectOpenFile: (options) => ipcRenderer.invoke(CH.SELECT_OPEN_FILE, options),
-  runOnnxDetect: (imagePath, modelPath, labels) =>
-    ipcRenderer.invoke(CH.RUN_ONNX_DETECT, imagePath, modelPath, labels),
+  runOnnxDetect: (imagePath, modelPath, labels, modelType, confidence) =>
+    ipcRenderer.invoke(CH.RUN_ONNX_DETECT, imagePath, modelPath, labels, modelType, confidence),
   log(level, namespace, message, meta) {
     ipcRenderer.send(CH.SPLASH_LOG, { level, namespace, message, meta });
   },

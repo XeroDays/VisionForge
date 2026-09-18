@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Settings AI Model: **Oriented Object Detection** is selectable. Process Image and Auto detect run YOLO OBB ONNX (rotated boxes) when that type is applied.
+- Settings model-type dropdown now matches the create-project catalog: Image Classification and Instance Segmentation are visible, disabled, and marked **Coming soon**.
+- Settings AI Model **Confidence** slider (1–99%, default 25%). Stored on the open `.VFSln` as `onnxConfidence` and used by Process Image and Auto detect. Disabled on the start page until a project is open.
+
 ## [1.0.4] - 2026-09-18
 
 ### Added

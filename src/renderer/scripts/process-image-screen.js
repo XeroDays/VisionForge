@@ -108,6 +108,30 @@
     }
   }
 
+  function isObbItem(item) {
+    return [item?.xc, item?.yc, item?.w, item?.h].every((part) => Number.isFinite(Number(part)));
+  }
+
+  function obbPolygonPoints(item, imgW, imgH) {
+    const xc = Number(item.xc) * imgW;
+    const yc = Number(item.yc) * imgH;
+    const w = Number(item.w) * imgW;
+    const h = Number(item.h) * imgH;
+    const rad = ((Number(item.angle) || 0) * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const hw = w / 2;
+    const hh = h / 2;
+    return [
+      [-hw, -hh],
+      [hw, -hh],
+      [hw, hh],
+      [-hw, hh],
+    ]
+      .map(([dx, dy]) => `${xc + dx * cos - dy * sin},${yc + dx * sin + dy * cos}`)
+      .join(" ");
+  }
+
   function drawDetections(items) {
     detections = Array.isArray(items) ? items : [];
     overlayEl?.replaceChildren();
@@ -123,17 +147,28 @@
     if (detectionsEmpty) detectionsEmpty.hidden = true;
     if (detectionsList) detectionsList.hidden = false;
 
+    const imgW = previewEl?.naturalWidth || 0;
+    const imgH = previewEl?.naturalHeight || 0;
+
     detections.forEach((item) => {
       const color = colorForLabelId(item.labelid);
       if (overlayEl) {
-        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        rect.setAttribute("class", "process-image-overlay__box");
-        rect.setAttribute("x", String(item.xmin));
-        rect.setAttribute("y", String(item.ymin));
-        rect.setAttribute("width", String(Math.max(1, item.xmax - item.xmin)));
-        rect.setAttribute("height", String(Math.max(1, item.ymax - item.ymin)));
-        rect.setAttribute("stroke", color);
-        overlayEl.appendChild(rect);
+        if (isObbItem(item) && imgW && imgH) {
+          const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+          polygon.setAttribute("class", "process-image-overlay__box");
+          polygon.setAttribute("points", obbPolygonPoints(item, imgW, imgH));
+          polygon.setAttribute("stroke", color);
+          overlayEl.appendChild(polygon);
+        } else {
+          const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          rect.setAttribute("class", "process-image-overlay__box");
+          rect.setAttribute("x", String(item.xmin));
+          rect.setAttribute("y", String(item.ymin));
+          rect.setAttribute("width", String(Math.max(1, item.xmax - item.xmin)));
+          rect.setAttribute("height", String(Math.max(1, item.ymax - item.ymin)));
+          rect.setAttribute("stroke", color);
+          overlayEl.appendChild(rect);
+        }
       }
 
       if (!detectionsList) return;
@@ -221,10 +256,11 @@
     if (busy || !imagePath) return;
     const startedAt = log.enter("runProcess");
     let modelPath = "";
+    let modelType = window.VisionForgeAiModelTypes?.DEFAULT_TYPE;
     try {
       const config = await window.visionforge?.getConfiguration?.();
       modelPath = String(config?.onnxModelPath || "").trim();
-      const modelType = config?.onnxModelType || window.VisionForgeAiModelTypes?.DEFAULT_TYPE;
+      modelType = config?.onnxModelType || window.VisionForgeAiModelTypes?.DEFAULT_TYPE;
       if (!modelPath) {
         setStatus("Select an AI model in Settings first.", true);
         log.exit("runProcess", startedAt, { ok: false, reason: "missing-model" });
@@ -247,7 +283,13 @@
     updateProcessEnabled();
     setStatus("Running model…");
     try {
-      const result = await window.visionforge?.runOnnxDetect?.(imagePath, modelPath, labels);
+      const result = await window.visionforge?.runOnnxDetect?.(
+        imagePath,
+        modelPath,
+        labels,
+        modelType,
+        window.getWorkspaceConfidence?.(),
+      );
       if (!result?.ok) {
         const reasons = {
           "missing-image": "Image file is missing.",

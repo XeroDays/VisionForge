@@ -1380,6 +1380,40 @@ body {
   font-size: 0.8125rem;
 }
 
+.settings-confidence {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.settings-confidence__slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  margin: 0;
+  accent-color: #f4b42a;
+  cursor: pointer;
+}
+
+.settings-confidence__slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.settings-confidence__value {
+  flex: 0 0 3rem;
+  text-align: right;
+  color: #e7ecf3;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-confidence__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
 .release-modal-body {
   padding: 1.25rem;
 }

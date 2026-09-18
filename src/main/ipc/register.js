@@ -162,9 +162,9 @@ function registerIpcHandlers() {
     return projectService.selectOpenFile(event.sender, options);
   });
 
-  ipcMain.handle(channels.RUN_ONNX_DETECT, async (_event, imagePath, modelPath, labels) => {
-    log.info("RUN_ONNX_DETECT");
-    return onnxDetectService.runOnnxDetect(imagePath, modelPath, labels);
+  ipcMain.handle(channels.RUN_ONNX_DETECT, async (_event, imagePath, modelPath, labels, modelType, confidence) => {
+    log.info("RUN_ONNX_DETECT", { modelType, confidence });
+    return onnxDetectService.runOnnxDetect(imagePath, modelPath, labels, modelType, confidence);
   });
 }
 

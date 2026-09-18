@@ -296,10 +296,24 @@
               <button type="button" id="btn-settings-model-browse" class="create-project-browse" aria-label="Choose ONNX model">...</button>
             </div>
           </div>
-          <label class="create-project-field">
-            <span class="create-project-label">Model type</span>
-            <select id="settings-model-type" class="settings-dialog__select" aria-label="Model type"></select>
-          </label>
+          <div class="create-project-field">
+            <span class="create-project-label" id="settings-model-type-label">Model type</span>
+            <div class="create-project-dropdown" id="settings-model-type-dropdown">
+              <button type="button" class="create-project-dropdown__button" id="settings-model-type-button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="settings-model-type-label settings-model-type-button-label">
+                <span class="create-project-dropdown__value" id="settings-model-type-button-label"></span>
+                <i class="fa-solid fa-chevron-down create-project-dropdown__chevron" aria-hidden="true"></i>
+              </button>
+              <ul class="create-project-dropdown__list" id="settings-model-type-list" role="listbox" aria-labelledby="settings-model-type-label" hidden></ul>
+            </div>
+          </div>
+          <div class="create-project-field" id="settings-confidence-field">
+            <span class="create-project-label" id="settings-confidence-label">Confidence</span>
+            <div class="settings-confidence">
+              <input type="range" id="settings-confidence" class="settings-confidence__slider" min="1" max="99" step="1" value="25" aria-labelledby="settings-confidence-label" />
+              <span id="settings-confidence-value" class="settings-confidence__value">25%</span>
+            </div>
+            <p class="settings-confidence__hint" id="settings-confidence-hint" hidden>Open a project to set confidence.</p>
+          </div>
         </div>
       </div>
       <div class="settings-modal-footer create-project-footer">
