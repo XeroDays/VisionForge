@@ -8,16 +8,6 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   const TYPES = [
     {
-      id: "image-classification",
-      label: "Image Classification",
-      modes: [
-        { id: "image-level-classification", label: "Image-level classification" },
-        { id: "single-class-multi-class", label: "Single-class / multi-class" },
-        { id: "multi-label-classification", label: "Multi-label classification" },
-        { id: "binary-classification", label: "Binary classification" },
-      ],
-    },
-    {
       id: "object-detection-bbox",
       label: "Object Detection — Bounding Box",
       modes: [
@@ -29,8 +19,20 @@
       ],
     },
     {
+      id: "image-classification",
+      label: "Image Classification",
+      comingSoon: true,
+      modes: [
+        { id: "image-level-classification", label: "Image-level classification" },
+        { id: "single-class-multi-class", label: "Single-class / multi-class" },
+        { id: "multi-label-classification", label: "Multi-label classification" },
+        { id: "binary-classification", label: "Binary classification" },
+      ],
+    },
+    {
       id: "oriented-object-detection",
       label: "Oriented Object Detection — Rotated Bounding Box",
+      comingSoon: true,
       hint: "Useful for aerial imagery, documents, text, vehicles, etc.",
       modes: [
         { id: "rotated-rectangle-obb", label: "Rotated rectangle / OBB" },
@@ -42,6 +44,7 @@
     {
       id: "instance-segmentation",
       label: "Instance Segmentation",
+      comingSoon: true,
       modes: [
         { id: "polygon", label: "Polygon" },
         { id: "free-form-polygon", label: "Free-form polygon" },
@@ -55,6 +58,7 @@
     {
       id: "semantic-segmentation",
       label: "Semantic Segmentation",
+      comingSoon: true,
       modes: [
         { id: "pixel-level-class-masks", label: "Pixel-level class masks" },
         { id: "brush-paint", label: "Brush / paint" },
@@ -67,6 +71,7 @@
     {
       id: "panoptic-segmentation",
       label: "Panoptic Segmentation",
+      comingSoon: true,
       hint: "Semantic segmentation + instance segmentation",
       modes: [
         { id: "stuff-classes", label: "Stuff classes (road, sky, grass, etc.)" },
@@ -77,6 +82,7 @@
     {
       id: "keypoint-pose",
       label: "Keypoint / Pose Estimation",
+      comingSoon: true,
       modes: [
         { id: "human-pose", label: "Human pose" },
         { id: "face-landmarks", label: "Face landmarks" },
@@ -89,6 +95,7 @@
     {
       id: "polyline-line",
       label: "Polyline / Line Detection",
+      comingSoon: true,
       modes: [
         { id: "roads", label: "Roads" },
         { id: "lane-markings", label: "Lane markings" },
@@ -101,6 +108,7 @@
     {
       id: "ocr-text",
       label: "OCR / Text Detection",
+      comingSoon: true,
       modes: [
         { id: "bounding-box-around-text", label: "Bounding box around text" },
         { id: "rotated-text-box", label: "Rotated text box" },
@@ -115,6 +123,7 @@
     {
       id: "image-level-attributes",
       label: "Image-Level Attributes",
+      comingSoon: true,
       hint: "Example: car → color=red, damaged=true",
       modes: [
         { id: "object-attributes", label: "Object attributes" },
@@ -136,5 +145,16 @@
     return found.modes.some((item) => item.id === modeId);
   }
 
-  return { TYPES, isValidAnnotation };
+  function isTypeAvailable(type) {
+    const typeId = String(type || "").trim();
+    if (!typeId) return false;
+    const found = TYPES.find((item) => item.id === typeId);
+    return Boolean(found && !found.comingSoon);
+  }
+
+  function isSupportedAnnotation(type, mode) {
+    return isTypeAvailable(type) && isValidAnnotation(type, mode);
+  }
+
+  return { TYPES, isValidAnnotation, isTypeAvailable, isSupportedAnnotation };
 });

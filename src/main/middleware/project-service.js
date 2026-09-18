@@ -4,7 +4,7 @@ const { app, dialog, BrowserWindow } = require("electron");
 const { createLogger } = require("../services/visionforge-logger");
 const { recordSolution } = require("../services/history-solutions-store");
 const { setAllowedImagesDir, isAllowedImagePath } = require("../services/image-protocol");
-const { isValidAnnotation } = require("../../shared/enums/annotation-types");
+const { isValidAnnotation, isSupportedAnnotation } = require("../../shared/enums/annotation-types");
 const { importEmptyDetections } = require("./detection-import-service");
 
 const log = createLogger("project");
@@ -134,7 +134,7 @@ function createProject(name, location, annotation) {
     return { ok: false, reason: "invalid-location" };
   }
 
-  if (!isValidAnnotation(annotationType, annotationMode)) {
+  if (!isSupportedAnnotation(annotationType, annotationMode)) {
     log.exit("createProject", startedAt, { ok: false, reason: "invalid-annotation" });
     return { ok: false, reason: "invalid-annotation" };
   }

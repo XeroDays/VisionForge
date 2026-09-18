@@ -20,6 +20,7 @@ const CH = {
   SELECT_PROJECT_FOLDER: "visionforge:select-project-folder",
   SELECT_PROJECT_FILE: "visionforge:select-project-file",
   GET_SOLUTION_HISTORY: "visionforge:get-solution-history",
+  REMOVE_SOLUTION_HISTORY: "visionforge:remove-solution-history",
   GET_CONFIGURATION: "visionforge:get-configuration",
   UPDATE_CONFIGURATION: "visionforge:update-configuration",
   CREATE_PROJECT: "visionforge:create-project",
@@ -55,6 +56,7 @@ contextBridge.exposeInMainWorld("visionforge", {
   selectProjectFolder: () => ipcRenderer.invoke(CH.SELECT_PROJECT_FOLDER),
   openProjectFile: () => ipcRenderer.invoke(CH.SELECT_PROJECT_FILE),
   getSolutionHistory: () => ipcRenderer.invoke(CH.GET_SOLUTION_HISTORY),
+  removeHistorySolution: (filePath) => ipcRenderer.invoke(CH.REMOVE_SOLUTION_HISTORY, filePath),
   getConfiguration: () => ipcRenderer.invoke(CH.GET_CONFIGURATION),
   updateConfiguration: (patch) => ipcRenderer.invoke(CH.UPDATE_CONFIGURATION, patch),
   createProject: (name, location, annotation) =>

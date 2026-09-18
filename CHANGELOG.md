@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Start page Recent projects: right-click a row and choose **Remove from list** to drop that entry from history (does not delete the project file).
+
+### Changed
+
+- Create Project annotation-type dropdown now shows all catalog types but only **Object Detection — Bounding Box** is selectable. All other types are visible, disabled, and marked with a **Coming soon** badge. The dialog defaults to Object Detection — Bounding Box.
+
 ## [1.0.3] - 2026-08-25
 
 ### Fixed

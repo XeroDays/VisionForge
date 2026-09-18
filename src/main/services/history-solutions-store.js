@@ -80,9 +80,31 @@ function recordSolution({ name, filePath }) {
   return { ok: true, history: next };
 }
 
+function removeSolution(filePath) {
+  const startedAt = log.enter("removeSolution");
+  const key = normalizePathKey(String(filePath || "").trim());
+  if (!key) {
+    log.exit("removeSolution", startedAt, { ok: false, reason: "missing-path" });
+    return { ok: false, reason: "missing-path" };
+  }
+
+  const history = readHistory();
+  const next = {
+    format: "vfson",
+    version: 1,
+    solutions: history.solutions.filter((item) => normalizePathKey(item.filePath) !== key),
+  };
+
+  writeHistory(next);
+  log.info("removed solution history", { filePath, count: next.solutions.length });
+  log.exit("removeSolution", startedAt, { ok: true, count: next.solutions.length });
+  return { ok: true, history: next };
+}
+
 module.exports = {
   getHistoryFilePath,
   readHistory,
   recordSolution,
+  removeSolution,
   MAX_ENTRIES,
 };

@@ -174,7 +174,7 @@ Create / Open / Recent → `showWorkspace(filePath)` → **Loading project** ove
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. **Open existing project** opens a native file picker filtered to `.VFSln`, then shows the workspace. Recent row click loads that `.VFSln` and shows the workspace. If Softasium `ForceUpdate` is true, Create / Open / Recent do not leave the start page; the release modal re-opens instead.
+No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. **Open existing project** opens a native file picker filtered to `.VFSln`, then shows the workspace. Recent row click loads that `.VFSln` and shows the workspace. Right-click a recent row → **Remove from list** (`.asset-context-menu`) calls `removeHistorySolution` and re-renders; does not delete the `.VFSln`. If Softasium `ForceUpdate` is true, Create / Open / Recent do not leave the start page; the release modal re-opens instead.
 
 ---
 
@@ -189,7 +189,7 @@ No project selected → `#start-page` visible. **Create new project** opens `#cr
 - `src/renderer/index.html` — `#create-project-overlay`
 
 **Workflow:**
-Create new project → modal (name + location + custom annotation-type dropdown + mode radios) → location click/`...` → `selectProjectFolder` → type change rebuilds radios (none preselected) → Next requires a mode → `createProject(name, location, { type, mode })` validates against the catalog and writes `{ProjectName}.VFSln` (including `annotationType` / `annotationMode` / `assets: []`) → record history → close modal → show workspace. Close via Cancel, X, or Escape — backdrop click does not dismiss. Annotation type is a custom dark dropdown (not a native `<select>`). Does not change workspace tools.
+Create new project → modal (name + location + custom annotation-type dropdown + mode radios) → location click/`...` → `selectProjectFolder` → type change rebuilds radios (none preselected) → Next requires a mode → `createProject(name, location, { type, mode })` validates against the catalog and writes `{ProjectName}.VFSln` (including `annotationType` / `annotationMode` / `assets: []`) → record history → close modal → show workspace. Close via Cancel, X, or Escape — backdrop click does not dismiss. Annotation type is a custom dark dropdown (not a native `<select>`). Does not change workspace tools. Only **Object Detection — Bounding Box** (`object-detection-bbox`) is currently selectable; all other types are shown disabled with a **Coming soon** badge. The dialog defaults to Object Detection — Bounding Box.
 
 ---
 
@@ -238,7 +238,7 @@ Open existing project → `openProjectFile()` → native dialog filtered to `.VF
 - `solutions[]` — `{ name, filePath, openedAt }` newest first, max 20, deduped by `filePath`
 
 **Workflow:**
-Create or open a `.VFSln` → `recordSolution` upserts history → start page `getSolutionHistory()` renders Recent projects.
+Create or open a `.VFSln` → `recordSolution` upserts history → start page `getSolutionHistory()` renders Recent projects. Right-click a row → **Remove from list** → `removeSolution` filters that `filePath` from `history-solutions.vfson` and refreshes the list. Does not delete the project file.
 
 ---
 
@@ -462,7 +462,7 @@ Image rail button (visible only with a project + canvas preview) → hide canvas
 **Trigger:** Start page → Create new project
 
 **Flow:**
-Modal → name + location + custom annotation-type dropdown + mode radios → Next → `createProject` validates `{ type, mode }` via `isValidAnnotation` → write VFSln (`annotationType`, `annotationMode`, `assets: []`) → history → workspace. Reject `invalid-annotation` if the pair is missing or unknown.
+Modal → name + location + custom annotation-type dropdown + mode radios → Next → `createProject` validates `{ type, mode }` via `isSupportedAnnotation` → write VFSln (`annotationType`, `annotationMode`, `assets: []`) → history → workspace. Reject `invalid-annotation` if the pair is missing, unknown, or coming-soon. Only `object-detection-bbox` is currently supported; all other catalog types render as disabled Coming soon options.
 
 **Files:**
 - `src/renderer/scripts/create-project-dialog.js`
@@ -1041,7 +1041,8 @@ Renderer
 
 **Changing impacts:**
 - Create-project type dropdown and mode radios
-- `createProject` validation (`isValidAnnotation`)
+- `createProject` validation (`isSupportedAnnotation` for create; `isValidAnnotation` still used for load/export compatibility)
+- `comingSoon: true` marks all types except `object-detection-bbox` as not yet creatable; `isTypeAvailable` tests this flag
 
 ### `src/main/middleware/project-service.js`
 
@@ -1126,6 +1127,7 @@ Renderer
 | `visionforge:select-project-folder` | invoke | `register.js` | Native open-directory dialog |
 | `visionforge:select-project-file` | invoke | `register.js` | Native open-file dialog (`.VFSln` filter) |
 | `visionforge:get-solution-history` | invoke | `register.js` | Read `history-solutions.vfson` recents |
+| `visionforge:remove-solution-history` | invoke | `register.js` | Remove one recents row from `history-solutions.vfson` |
 | `visionforge:get-configuration` | invoke | `register.js` | Read `configuration.vfson` (create defaults if missing) |
 | `visionforge:update-configuration` | invoke | `register.js` | Merge known keys into `configuration.vfson` |
 | `visionforge:create-project` | invoke | `register.js` | Write `{Name}.VFSln` with `annotationType` / `annotationMode` / `assets: []` |
@@ -1178,7 +1180,7 @@ Renderer
 - **Minimize** uses `win.minimize()` so the app stays on the Windows taskbar (no system tray)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
-- **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder, labels, assets, annotationType, annotationMode). Annotation type/mode come from the create dialog catalog and are required for new projects. All project config belongs in that file.
+- **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder, labels, assets, annotationType, annotationMode). Annotation type/mode come from the create dialog catalog and are required for new projects. All project config belongs in that file. Only `object-detection-bbox` is currently creatable; all other types appear disabled with a **Coming soon** badge in the dropdown. The dialog defaults to Object Detection — Bounding Box. The middleware rejects coming-soon pairs via `isSupportedAnnotation`; existing projects with other types still load and export normally via `isValidAnnotation`.
 - **Open existing project** / **Recent** loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab). `loadProject` appends missing image names to `assets` and fills empty `detections` from sidecar txt/xml.
 - **Labels:** if VFSln `labels` is empty, import `{project-folder}/classes.txt` then `{imagesFolder}/classes.txt` as `{ id, name }` (id from 0) and list them in the Labels tab. Each row shows a circle in that `id`’s box color (golden-angle HSL) between the id and the name. Existing labels are never overwritten by that import. **Add**, **rename**, and **delete** write VFSln `labels` only (never `classes.txt`). Rename keeps the same `id`; delete does not renumber remaining ids.
 - **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open. That save also syncs `assets` (append-only) and imports empty detections.
@@ -1195,6 +1197,6 @@ Renderer
 - **Settings:** titlebar gear opens `#settings-overlay` (left sections / right pane). **AI Model** sets ONNX path and type; Apply writes `Documents/VisionForge/configuration.vfson`. Cancel / Escape discard unsaved edits.
 - **Process Image:** left-rail `fa-image` command (visible only when a project is open and a canvas image is previewed). Opens `#process-image-screen` with that `vfimg:` snapshot fit-to-screen. Process uses the Settings AI Model (`object-detection` only), runs YOLO ONNX in main, and draws preview-only boxes plus a Detections tab. Does not write VFSln. Back / Escape return to the workspace.
 - **Auto detect:** left-rail `fa-wand-magic-sparkles` (same visibility). If no model is set, shows an error. If the type is not object detection, shows an error. Otherwise runs ONNX on the current image, **replaces** that asset’s VFSln detections, and redraws canvas boxes / Detections tab. A **Revert** button appears on the top-left view toolbar until the image changes; Revert restores the previous detections. Changing images keeps the new boxes.
-- **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20).
+- **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20). Right-click a row → **Remove from list** drops that entry from the file and refreshes the list; the `.VFSln` is not deleted.
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

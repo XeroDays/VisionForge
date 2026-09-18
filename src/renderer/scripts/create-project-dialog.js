@@ -30,7 +30,9 @@
   if (!overlay) return;
 
   const TYPES = window.VisionForgeAnnotationTypes?.TYPES || [];
-  let selectedTypeId = TYPES[0]?.id || "";
+  const isTypeAvailable = window.VisionForgeAnnotationTypes?.isTypeAvailable || (() => true);
+  const firstAvailable = TYPES.find((t) => !t.comingSoon);
+  let selectedTypeId = firstAvailable?.id || TYPES[0]?.id || "";
   let typeHighlight = 0;
 
   log.debug("create-project-dialog.js init");
@@ -73,10 +75,13 @@
   function updateTypeHighlight() {
     const options = typeOptionButtons();
     options.forEach((option, index) => {
-      option.classList.toggle("is-active", index === typeHighlight);
+      const isHighlighted = index === typeHighlight && !option.disabled;
+      option.classList.toggle("is-active", isHighlighted);
       option.setAttribute("aria-selected", option.dataset.typeId === selectedTypeId ? "true" : "false");
     });
-    options[typeHighlight]?.scrollIntoView({ block: "nearest" });
+    if (!options[typeHighlight]?.disabled) {
+      options[typeHighlight]?.scrollIntoView({ block: "nearest" });
+    }
   }
 
   function closeTypeDropdown() {
@@ -101,7 +106,8 @@
 
   function openTypeDropdown() {
     if (!typeDropdown || !typeList) return;
-    typeHighlight = Math.max(0, TYPES.findIndex((item) => item.id === selectedTypeId));
+    const idx = TYPES.findIndex((item) => item.id === selectedTypeId);
+    typeHighlight = Math.max(0, idx);
     typeDropdown.classList.add("is-open");
     typeList.hidden = false;
     typeButton?.setAttribute("aria-expanded", "true");
@@ -110,6 +116,7 @@
   }
 
   function setSelectedType(id, rebuild = true) {
+    if (!isTypeAvailable(id)) return;
     selectedTypeId = id;
     const type = getSelectedType();
     if (typeButtonLabel) typeButtonLabel.textContent = type?.label || "";
@@ -122,7 +129,7 @@
 
   function chooseHighlightedType() {
     const type = TYPES[typeHighlight];
-    if (!type) return;
+    if (!type || type.comingSoon) return;
     setSelectedType(type.id);
     closeTypeDropdown();
   }
@@ -176,24 +183,41 @@
       option.role = "option";
       option.dataset.typeId = type.id;
       option.dataset.index = String(index);
-      option.textContent = type.label;
-      option.addEventListener("click", () => {
-        typeHighlight = index;
-        setSelectedType(type.id);
-        closeTypeDropdown();
-      });
-      option.addEventListener("mouseenter", () => {
-        typeHighlight = index;
-        updateTypeHighlight();
-      });
+
+      const labelSpan = document.createElement("span");
+      labelSpan.className = "create-project-dropdown__option-label";
+      labelSpan.textContent = type.label;
+      option.appendChild(labelSpan);
+
+      if (type.comingSoon) {
+        option.disabled = true;
+        option.setAttribute("aria-disabled", "true");
+        option.classList.add("is-coming-soon");
+        const badge = document.createElement("span");
+        badge.className = "create-project-dropdown__coming-soon";
+        badge.textContent = "Coming soon";
+        option.appendChild(badge);
+      } else {
+        option.addEventListener("click", () => {
+          typeHighlight = index;
+          setSelectedType(type.id);
+          closeTypeDropdown();
+        });
+        option.addEventListener("mouseenter", () => {
+          typeHighlight = index;
+          updateTypeHighlight();
+        });
+      }
+
       item.appendChild(option);
       typeList.appendChild(item);
     });
   }
 
   function resetAnnotation() {
-    selectedTypeId = TYPES[0]?.id || "";
-    typeHighlight = 0;
+    const available = TYPES.find((t) => !t.comingSoon);
+    selectedTypeId = available?.id || TYPES[0]?.id || "";
+    typeHighlight = Math.max(0, TYPES.findIndex((t) => t.id === selectedTypeId));
     setSelectedType(selectedTypeId, false);
     closeTypeDropdown();
     renderModes();
@@ -347,12 +371,16 @@
     if (!isTypeOpen()) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      typeHighlight = Math.min(TYPES.length - 1, typeHighlight + 1);
+      let next = typeHighlight + 1;
+      while (next < TYPES.length && TYPES[next]?.comingSoon) next++;
+      if (next < TYPES.length) typeHighlight = next;
       updateTypeHighlight();
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      typeHighlight = Math.max(0, typeHighlight - 1);
+      let prev = typeHighlight - 1;
+      while (prev >= 0 && TYPES[prev]?.comingSoon) prev--;
+      if (prev >= 0) typeHighlight = prev;
       updateTypeHighlight();
     }
     if (event.key === "Enter") {

@@ -21,6 +21,7 @@ module.exports = {
   SELECT_PROJECT_FOLDER: "visionforge:select-project-folder",
   SELECT_PROJECT_FILE: "visionforge:select-project-file",
   GET_SOLUTION_HISTORY: "visionforge:get-solution-history",
+  REMOVE_SOLUTION_HISTORY: "visionforge:remove-solution-history",
   GET_CONFIGURATION: "visionforge:get-configuration",
   UPDATE_CONFIGURATION: "visionforge:update-configuration",
   CREATE_PROJECT: "visionforge:create-project",

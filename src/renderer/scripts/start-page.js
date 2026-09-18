@@ -16,10 +16,56 @@
   const recentEmpty = document.getElementById("start-recent-empty");
   if (!startPage) return;
 
+  let pendingRemoveFilePath = "";
+  const contextMenu = document.createElement("div");
+  contextMenu.id = "recent-context-menu";
+  contextMenu.className = "asset-context-menu";
+  contextMenu.hidden = true;
+  contextMenu.setAttribute("role", "menu");
+  contextMenu.setAttribute("aria-label", "Recent project actions");
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "asset-context-menu__item";
+  removeBtn.id = "btn-recent-context-remove";
+  removeBtn.setAttribute("role", "menuitem");
+  removeBtn.textContent = "Remove from list";
+  contextMenu.appendChild(removeBtn);
+  document.body.appendChild(contextMenu);
+
   log.debug("start-page.js init");
+
+  function isContextMenuOpen() {
+    return !contextMenu.hidden;
+  }
+
+  function closeContextMenu() {
+    contextMenu.hidden = true;
+    pendingRemoveFilePath = "";
+  }
+
+  function positionContextMenu(clientX, clientY) {
+    const pad = 4;
+    const rect = contextMenu.getBoundingClientRect();
+    let x = Math.min(clientX, window.innerWidth - rect.width - pad);
+    let y = Math.min(clientY, window.innerHeight - rect.height - pad);
+    x = Math.max(pad, x);
+    y = Math.max(pad, y);
+    contextMenu.style.left = `${x}px`;
+    contextMenu.style.top = `${y}px`;
+  }
+
+  function openContextMenu(event, filePath) {
+    const path = String(filePath || "").trim();
+    if (!path) return;
+    pendingRemoveFilePath = path;
+    contextMenu.hidden = false;
+    positionContextMenu(event.clientX, event.clientY);
+  }
 
   function renderHistory(solutions) {
     if (!recentList) return;
+    closeContextMenu();
     recentList.replaceChildren();
     const items = Array.isArray(solutions) ? solutions : [];
 
@@ -123,6 +169,51 @@
         window.showWorkspace?.({ filePath, name: actionEl.dataset.projectName });
       }
     }
+  });
+
+  recentList?.addEventListener("contextmenu", (event) => {
+    const row = event.target.closest(".start-recent__row");
+    if (!row || !recentList.contains(row)) return;
+    event.preventDefault();
+    openContextMenu(event, row.dataset.filePath);
+  });
+
+  removeBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const filePath = pendingRemoveFilePath;
+    closeContextMenu();
+    if (!filePath) return;
+    void (async () => {
+      const startedAt = log.enter("removeHistorySolution");
+      try {
+        const result = await window.visionforge?.removeHistorySolution?.(filePath);
+        if (!result?.ok) {
+          log.exit("removeHistorySolution", startedAt, { ok: false });
+          return;
+        }
+        await refreshSolutionHistory();
+        log.exit("removeHistorySolution", startedAt, { ok: true, filePath });
+      } catch (err) {
+        log.error("removeHistorySolution failed", { error: String(err?.message || err) });
+        log.exit("removeHistorySolution", startedAt, { error: true });
+      }
+    })();
+  });
+
+  document.addEventListener("click", (event) => {
+    if (isContextMenuOpen() && !event.target.closest("#recent-context-menu")) {
+      closeContextMenu();
+    }
+  });
+
+  recentList?.addEventListener("scroll", () => closeContextMenu());
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (!isContextMenuOpen()) return;
+    if (startPage.hidden) return;
+    event.preventDefault();
+    closeContextMenu();
   });
 
   window.refreshSolutionHistory = refreshSolutionHistory;

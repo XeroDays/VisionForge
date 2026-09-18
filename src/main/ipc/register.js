@@ -90,6 +90,11 @@ function registerIpcHandlers() {
     return historyStore.readHistory();
   });
 
+  ipcMain.handle(channels.REMOVE_SOLUTION_HISTORY, async (_event, filePath) => {
+    log.info("REMOVE_SOLUTION_HISTORY", { filePath });
+    return historyStore.removeSolution(filePath);
+  });
+
   ipcMain.handle(channels.GET_CONFIGURATION, async () => {
     log.debug("GET_CONFIGURATION");
     return configurationStore.readConfiguration();
