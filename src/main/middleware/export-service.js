@@ -26,6 +26,7 @@ function escapeXml(value) {
 }
 
 const YOLO_TXT_MODES = new Set(["yolo-bounding-box", "center-based-normalized-bounding-boxes"]);
+const YOLO_OBB_MODE = "yolo-obb";
 const VOC_XML_MODE = "pascal-voc-bounding-box";
 const COCO_JSON_MODE = "coco-bounding-box";
 
@@ -155,6 +156,52 @@ function writeYoloTxt(destPath, detections, imgW, imgH) {
     if (!yolo) continue;
     const labelid = Number.isInteger(Number(detection.labelid)) ? Number(detection.labelid) : 0;
     lines.push(`${labelid} ${yolo.xc} ${yolo.yc} ${yolo.w} ${yolo.h}`);
+  }
+  fs.writeFileSync(destPath, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
+}
+
+function rotatePoint(pt, cx, cy, angleDeg) {
+  const rad = (Number(angleDeg) || 0) * (Math.PI / 180);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = pt.x - cx;
+  const dy = pt.y - cy;
+  return {
+    x: cx + dx * cos - dy * sin,
+    y: cy + dx * sin + dy * cos,
+  };
+}
+
+function detectionToYoloObb(value) {
+  if (!isYoloValue(value)) return null;
+  const xc = Number(value.xc);
+  const yc = Number(value.yc);
+  const w = Number(value.w);
+  const h = Number(value.h);
+  const angle = Number.isFinite(Number(value.angle)) ? Number(value.angle) : 0;
+  const hw = w / 2;
+  const hh = h / 2;
+  return [
+    { x: xc - hw, y: yc - hh },
+    { x: xc + hw, y: yc - hh },
+    { x: xc + hw, y: yc + hh },
+    { x: xc - hw, y: yc + hh },
+  ].map((pt) => {
+    const rotated = rotatePoint(pt, xc, yc, angle);
+    return {
+      x: Number(clamp01(rotated.x).toFixed(6)),
+      y: Number(clamp01(rotated.y).toFixed(6)),
+    };
+  });
+}
+
+function writeYoloObbTxt(destPath, detections) {
+  const lines = [];
+  for (const detection of detections) {
+    const corners = detectionToYoloObb(detection?.value);
+    if (!corners) continue;
+    const labelid = Number.isInteger(Number(detection.labelid)) ? Number(detection.labelid) : 0;
+    lines.push(`${labelid} ${corners.flatMap((pt) => [pt.x, pt.y]).join(" ")}`);
   }
   fs.writeFileSync(destPath, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
 }
@@ -290,7 +337,8 @@ async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
     return { ok: false, reason: "missing-images-folder" };
   }
 
-  const isTxtMode = YOLO_TXT_MODES.has(exportMode);
+  const isYoloObbMode = exportMode === YOLO_OBB_MODE;
+  const isTxtMode = YOLO_TXT_MODES.has(exportMode) || isYoloObbMode;
   const isVocMode = exportMode === VOC_XML_MODE;
   const isCocoMode = exportMode === COCO_JSON_MODE;
   if (!isTxtMode && !isVocMode && !isCocoMode) {
@@ -324,7 +372,10 @@ async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
     }
     const detections = Array.isArray(asset?.detections) ? asset.detections : [];
     const base = path.parse(file.name).name;
-    if (isTxtMode) {
+    if (isYoloObbMode) {
+      writeYoloObbTxt(path.join(dest, `${base}.txt`), detections);
+      count += 1;
+    } else if (isTxtMode) {
       writeYoloTxt(path.join(dest, `${base}.txt`), detections, width, height);
       count += 1;
     } else if (isVocMode) {

@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-09-18
+
 ### Added
 
 - Start page Recent projects: right-click a row and choose **Remove from list** to drop that entry from history (does not delete the project file).
 - Oriented Object Detection: with a box selected, Alt+wheel rotates it by 1°.
+- Oriented Object Detection **YOLO OBB** export writes `{basename}.txt` (`labelid` plus 8 normalized corners) and `classes.txt`.
 
 ### Changed
 
