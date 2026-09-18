@@ -21,6 +21,7 @@
   const GOLDEN_ANGLE = 137.508;
   const BOX_HANDLE_PX = 8;
   const BOX_MIN_SIZE = 4;
+  const OBB_ANGLE_SNAP = 15;
   const labelColorCache = new Map();
 
   const startPage = document.getElementById("start-page");
@@ -42,6 +43,8 @@
   const loadingOverlay = document.getElementById("loading-project-overlay");
   const viewToolbar = document.getElementById("view-toolbar");
   const breadcrumb = document.getElementById("app-breadcrumb");
+  const boxToolBtn = document.getElementById("tool-box");
+  const obbToolBtn = document.getElementById("tool-obb");
   const selectImagesBtn = document.getElementById("tool-select-images");
   const processImageBtn = document.getElementById("tool-process-image");
   const magicBtn = document.getElementById("tool-magic");
@@ -233,8 +236,11 @@
     if (!visible) {
       if (processImageBtn) processImageBtn.hidden = true;
       if (magicBtn) magicBtn.hidden = true;
+      if (obbToolBtn) obbToolBtn.hidden = true;
+      if (boxToolBtn) boxToolBtn.hidden = false;
     } else {
       setProcessImageBtnVisible();
+      syncDrawTools();
     }
     if (selectFolderMenuItem) selectFolderMenuItem.disabled = !visible;
     if (exportMenuItem) exportMenuItem.disabled = !visible;
@@ -363,6 +369,65 @@
     return /voc|pascal/i.test(state.annotationMode);
   }
 
+  function isObbProject() {
+    return state.annotationType === "oriented-object-detection";
+  }
+
+  function drawToolId() {
+    return isObbProject() ? "obb" : "box";
+  }
+
+  function isDrawTool(toolId = state.currentTool) {
+    return toolId === "box" || toolId === "obb";
+  }
+
+  function syncDrawTools() {
+    const obb = isObbProject();
+    if (boxToolBtn) boxToolBtn.hidden = !state.filePath || obb;
+    if (obbToolBtn) obbToolBtn.hidden = !state.filePath || !obb;
+    if (obb && state.currentTool === "box") window.selectWorkspaceTool?.("obb");
+    if (!obb && state.currentTool === "obb") window.selectWorkspaceTool?.("cursor");
+  }
+
+  function valueTemplate() {
+    if (isObbProject()) return { xc: 0, yc: 0, w: 0, h: 0, angle: 0 };
+    return isVocMode() ? { xmin: 0, ymin: 0, xmax: 1, ymax: 1 } : { xc: 0, yc: 0, w: 0, h: 0 };
+  }
+
+  function detectionAngle(value) {
+    const angle = Number(value?.angle);
+    return Number.isFinite(angle) ? angle : 0;
+  }
+
+  function rotatePoint(pt, cx, cy, angleDeg) {
+    const rad = (Number(angleDeg) || 0) * (Math.PI / 180);
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const dx = pt.x - cx;
+    const dy = pt.y - cy;
+    return {
+      x: cx + dx * cos - dy * sin,
+      y: cy + dx * sin + dy * cos,
+    };
+  }
+
+  function rectCenter(rect) {
+    return {
+      x: Number(rect?.x) + Number(rect?.width) / 2,
+      y: Number(rect?.y) + Number(rect?.height) / 2,
+    };
+  }
+
+  function angleFromCenter(pt, center, snap) {
+    let angle = (Math.atan2(pt.y - center.y, pt.x - center.x) * 180) / Math.PI + 90;
+    if (snap) angle = Math.round(angle / OBB_ANGLE_SNAP) * OBB_ANGLE_SNAP;
+    if (!Number.isFinite(angle)) return 0;
+    angle %= 360;
+    if (angle > 180) angle -= 360;
+    if (angle <= -180) angle += 360;
+    return Number(angle.toFixed(2));
+  }
+
   function refreshLabelSelection() {
     labelsList?.querySelectorAll(".labels-list__item").forEach((row) => {
       row.classList.toggle("is-selected", Number(row.dataset.labelId) === state.selectedLabelId);
@@ -428,7 +493,14 @@
     const items = currentDetections();
     for (let i = items.length - 1; i >= 0; i -= 1) {
       const rect = detectionToRect(items[i]?.value, imgW, imgH);
-      if (rect && pointInRect(pt, rect)) return i;
+      if (!rect) continue;
+      if (rect.angle) {
+        const center = rectCenter(rect);
+        const local = rotatePoint(pt, center.x, center.y, -rect.angle);
+        if (pointInRect(local, rect)) return i;
+      } else if (pointInRect(pt, rect)) {
+        return i;
+      }
     }
     return null;
   }
@@ -558,7 +630,7 @@
 
   function updateCrosshair(clientX, clientY) {
     lastStagePointer = { x: clientX, y: clientY };
-    if (state.currentTool !== "box" || !currentFile() || !imageReady() || !stage || !boxGuides) {
+    if (!isDrawTool() || !currentFile() || !imageReady() || !stage || !boxGuides) {
       hideGuides();
       return;
     }
@@ -601,19 +673,25 @@
     const xmax = Number(value.xmax);
     const ymax = Number(value.ymax);
     if ([xmin, ymin, xmax, ymax].every(Number.isFinite)) {
-      return { x: xmin, y: ymin, width: xmax - xmin, height: ymax - ymin };
+      const rect = { x: xmin, y: ymin, width: xmax - xmin, height: ymax - ymin };
+      if (isObbProject() || Number.isFinite(Number(value.angle))) rect.angle = detectionAngle(value);
+      return rect;
     }
     const xc = Number(value.xc);
     const yc = Number(value.yc);
     const w = Number(value.w);
     const h = Number(value.h);
     if (![xc, yc, w, h].every(Number.isFinite) || !imgW || !imgH) return null;
-    return {
+    const rect = {
       x: (xc - w / 2) * imgW,
       y: (yc - h / 2) * imgH,
       width: w * imgW,
       height: h * imgH,
     };
+    if (isObbProject() || Number.isFinite(Number(value.angle))) {
+      rect.angle = detectionAngle(value);
+    }
+    return rect;
   }
 
   function isVocValue(value) {
@@ -650,7 +728,7 @@
     const y1 = snapped.y;
     const x2 = snapped.x + snapped.width;
     const y2 = snapped.y + snapped.height;
-    if (isVocValue(original)) {
+    if (isVocValue(original) && !isObbProject()) {
       return {
         xmin: x1,
         ymin: y1,
@@ -658,12 +736,21 @@
         ymax: y2,
       };
     }
-    return {
+    const value = {
       xc: yoloNorm((x1 + x2) / 2, imgW),
       yc: yoloNorm((y1 + y2) / 2, imgH),
       w: yoloNorm(x2 - x1, imgW),
       h: yoloNorm(y2 - y1, imgH),
     };
+    if (
+      isObbProject() ||
+      (rect && Object.prototype.hasOwnProperty.call(rect, "angle")) ||
+      Number.isFinite(Number(original?.angle))
+    ) {
+      const angle = Number.isFinite(Number(rect?.angle)) ? Number(rect.angle) : detectionAngle(original);
+      value.angle = Number(angle.toFixed(2));
+    }
+    return value;
   }
 
   function formatAsset(row, patch = {}) {
@@ -687,13 +774,17 @@
     return Math.max(4, BOX_HANDLE_PX / Math.max(currentScale(), 0.01));
   }
 
-  function svgRect(className, attrs) {
-    const el = document.createElementNS(SVG_NS, "rect");
-    el.setAttribute("class", className);
+  function svgEl(tag, className, attrs) {
+    const el = document.createElementNS(SVG_NS, tag);
+    if (className) el.setAttribute("class", className);
     Object.entries(attrs).forEach(([key, value]) => {
       el.setAttribute(key, String(value));
     });
     return el;
+  }
+
+  function svgRect(className, attrs) {
+    return svgEl("rect", className, attrs);
   }
 
   function layoutBoxGroup(group, rect) {
@@ -705,6 +796,12 @@
     const sw = group.querySelector('[data-edge="sw"]');
     const se = group.querySelector('[data-edge="se"]');
     if (!body || !nw || !ne || !sw || !se) return;
+    const angle = Number(rect?.angle) || 0;
+    const cx = rect.x + rect.width / 2;
+    const cy = rect.y + rect.height / 2;
+    group.dataset.angle = String(angle);
+    if (angle) group.setAttribute("transform", `rotate(${angle} ${cx} ${cy})`);
+    else group.removeAttribute("transform");
     body.setAttribute("x", String(rect.x));
     body.setAttribute("y", String(rect.y));
     body.setAttribute("width", String(rect.width));
@@ -722,6 +819,20 @@
       el.setAttribute("width", String(t));
       el.setAttribute("height", String(t));
     });
+    const stem = group.querySelector(".detection-overlay__rotate-stem");
+    const rotate = group.querySelector('[data-edge="rotate"]');
+    if (stem && rotate) {
+      const stemLen = Math.max(16, t * 2.8);
+      const knobR = Math.max(t * 0.7, 4);
+      const knobY = rect.y - stemLen;
+      stem.setAttribute("x1", String(cx));
+      stem.setAttribute("y1", String(rect.y));
+      stem.setAttribute("x2", String(cx));
+      stem.setAttribute("y2", String(knobY));
+      rotate.setAttribute("cx", String(cx));
+      rotate.setAttribute("cy", String(knobY));
+      rotate.setAttribute("r", String(knobR));
+    }
   }
 
   function refreshHandleSizes() {
@@ -734,6 +845,7 @@
         y: Number(body.getAttribute("y")),
         width: Number(body.getAttribute("width")),
         height: Number(body.getAttribute("height")),
+        angle: Number(group.dataset.angle) || 0,
       });
     });
   }
@@ -762,7 +874,25 @@
     height = Math.max(BOX_MIN_SIZE, height);
     x = Math.min(Math.max(0, x), Math.max(0, imgW - width));
     y = Math.min(Math.max(0, y), Math.max(0, imgH - height));
-    return { x, y, width, height };
+    const next = { x, y, width, height };
+    if (rect && Object.prototype.hasOwnProperty.call(rect, "angle")) next.angle = Number(rect.angle) || 0;
+    return next;
+  }
+
+  function clampObbRect(rect, imgW, imgH) {
+    let width = Math.max(BOX_MIN_SIZE, Number(rect?.width) || 0);
+    let height = Math.max(BOX_MIN_SIZE, Number(rect?.height) || 0);
+    let cx = Number(rect?.x) + width / 2;
+    let cy = Number(rect?.y) + height / 2;
+    cx = Math.min(Math.max(0, cx), imgW);
+    cy = Math.min(Math.max(0, cy), imgH);
+    return {
+      x: cx - width / 2,
+      y: cy - height / 2,
+      width,
+      height,
+      angle: Number(rect?.angle) || 0,
+    };
   }
 
   function applyBoxEdge(startRect, edge, dx, dy) {
@@ -809,7 +939,8 @@
         next.x === start.x &&
         next.y === start.y &&
         next.width === start.width &&
-        next.height === start.height);
+        next.height === start.height &&
+        (Number(next.angle) || 0) === (Number(start.angle) || 0));
     if (unchanged || !state.filePath) {
       setSelectedDetection(edit.index, { openTab: true });
       drawDetectionBoxes();
@@ -923,9 +1054,7 @@
     const previous = cloneDetections(state.assetsByName.get(file.name)?.detections);
     const imgW = imageEl.naturalWidth;
     const imgH = imageEl.naturalHeight;
-    const template = isVocMode()
-      ? { xmin: 0, ymin: 0, xmax: 1, ymax: 1 }
-      : { xc: 0, yc: 0, w: 0, h: 0 };
+    const template = valueTemplate();
     const detections = (Array.isArray(items) ? items : [])
       .map((item) => {
         const xmin = Number(item?.xmin);
@@ -992,7 +1121,7 @@
     const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
     detections.push({
       labelid,
-      value: rectToValue(rect, imgW, imgH, isVocMode() ? { xmin: 0, ymin: 0, xmax: 1, ymax: 1 } : { xc: 0, yc: 0, w: 0, h: 0 }),
+      value: rectToValue({ ...rect, angle: isObbProject() ? Number(rect.angle) || 0 : undefined }, imgW, imgH, valueTemplate()),
     });
     const nextAssets = state.assets.map((row) =>
       row?.name === file.name
@@ -1157,6 +1286,12 @@
         svgRect("detection-overlay__handle", { "data-edge": "sw", fill: color }),
         svgRect("detection-overlay__handle", { "data-edge": "se", fill: color }),
       );
+      if (isObbProject() || Number.isFinite(rect.angle)) {
+        group.append(
+          svgEl("line", "detection-overlay__rotate-stem", { stroke: color }),
+          svgEl("circle", "detection-overlay__handle", { "data-edge": "rotate", fill: color }),
+        );
+      }
       layoutBoxGroup(group, rect);
       groups.push(group);
     });
@@ -1303,7 +1438,7 @@
       return false;
     }
     renderLabels(updated.project?.labels || next);
-    if (state.currentTool === "box") ensureSelectedLabel();
+    if (isDrawTool()) ensureSelectedLabel();
     renderDetections();
     log.exit(method, startedAt, { ok: true, count: state.labels.length });
     return true;
@@ -1664,8 +1799,8 @@
 
   function setWorkspaceTool(toolId) {
     state.currentTool = toolId || "cursor";
-    stage?.classList.toggle("is-box-tool", state.currentTool === "box");
-    if (state.currentTool === "box") {
+    stage?.classList.toggle("is-box-tool", isDrawTool());
+    if (isDrawTool()) {
       window.selectInspectorTab?.("labels");
       ensureSelectedLabel();
       if (lastStagePointer) updateCrosshair(lastStagePointer.x, lastStagePointer.y);
@@ -1909,12 +2044,16 @@
     stopPlay();
     setSelectedDetection(index, { openTab: true });
     const handle = event.target.closest?.(".detection-overlay__handle");
+    const editRect =
+      isObbProject() || Number.isFinite(Number(rect.angle))
+        ? { ...rect, angle: Number(rect.angle) || 0 }
+        : { ...rect };
     boxEdit = {
       index,
       edge: handle?.getAttribute("data-edge") || "move",
       startPt,
-      startRect: { ...rect },
-      currentRect: { ...rect },
+      startRect: editRect,
+      currentRect: { ...editRect },
       pointerId: event.pointerId,
       group: item,
     };
@@ -1926,11 +2065,39 @@
     if (!boxEdit || event.pointerId !== boxEdit.pointerId) return;
     const pt = clientToImage(event.clientX, event.clientY);
     if (!pt) return;
-    const next = clampRect(
-      applyBoxEdge(boxEdit.startRect, boxEdit.edge, pt.x - boxEdit.startPt.x, pt.y - boxEdit.startPt.y),
-      imageEl.naturalWidth,
-      imageEl.naturalHeight,
-    );
+    const start = boxEdit.startRect;
+    const imgW = imageEl.naturalWidth;
+    const imgH = imageEl.naturalHeight;
+    let next;
+    if (boxEdit.edge === "rotate") {
+      next = {
+        ...start,
+        angle: angleFromCenter(pt, rectCenter(start), event.shiftKey),
+      };
+    } else if (start.angle && boxEdit.edge !== "move") {
+      const center = rectCenter(start);
+      const localStart = rotatePoint(boxEdit.startPt, center.x, center.y, -start.angle);
+      const localNow = rotatePoint(pt, center.x, center.y, -start.angle);
+      next = clampObbRect(
+        applyBoxEdge(start, boxEdit.edge, localNow.x - localStart.x, localNow.y - localStart.y),
+        imgW,
+        imgH,
+      );
+      next.angle = start.angle;
+    } else if (start.angle && boxEdit.edge === "move") {
+      next = clampObbRect(
+        applyBoxEdge(start, "move", pt.x - boxEdit.startPt.x, pt.y - boxEdit.startPt.y),
+        imgW,
+        imgH,
+      );
+      next.angle = start.angle;
+    } else {
+      next = clampRect(
+        applyBoxEdge(start, boxEdit.edge, pt.x - boxEdit.startPt.x, pt.y - boxEdit.startPt.y),
+        imgW,
+        imgH,
+      );
+    }
     boxEdit.currentRect = next;
     layoutBoxGroup(boxEdit.group, next);
   });
@@ -1978,7 +2145,7 @@
   );
 
   function startBoxDraw(event) {
-    if (state.currentTool !== "box" || event.button !== 0 || !currentFile() || !imageReady()) return false;
+    if (!isDrawTool() || event.button !== 0 || !currentFile() || !imageReady()) return false;
     const raw = clientToImage(event.clientX, event.clientY);
     const imgW = imageEl.naturalWidth;
     const imgH = imageEl.naturalHeight;
@@ -2059,7 +2226,7 @@
       updateCrosshair(event.clientX, event.clientY);
       return;
     }
-    if (state.currentTool === "box") updateCrosshair(event.clientX, event.clientY);
+    if (isDrawTool()) updateCrosshair(event.clientX, event.clientY);
   });
 
   stage?.addEventListener("pointerleave", () => {
@@ -2328,7 +2495,8 @@
     }
     if (key === "w" || key === "W") {
       event.preventDefault();
-      window.selectWorkspaceTool?.(state.currentTool === "box" ? "cursor" : "box");
+      const drawTool = drawToolId();
+      window.selectWorkspaceTool?.(state.currentTool === drawTool ? "cursor" : drawTool);
       return;
     }
     let delta = 0;

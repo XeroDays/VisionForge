@@ -31,13 +31,13 @@
     {
       id: "oriented-object-detection",
       label: "Oriented Object Detection — Rotated Bounding Box",
-      comingSoon: true,
       hint: "Useful for aerial imagery, documents, text, vehicles, etc.",
       modes: [
-        { id: "rotated-rectangle-obb", label: "Rotated rectangle / OBB" },
-        { id: "4-point-quadrilateral", label: "4-point quadrilateral" },
-        { id: "yolo-obb", label: "YOLO OBB" },
-        { id: "dota", label: "DOTA" },
+        { id: "yolo-obb", label: "YOLO OBB", extension: ".txt" },
+        { id: "dota", label: "DOTA", extension: ".txt" },
+        { id: "rotated-rectangle-obb", label: "Rotated rectangle / OBB (xywhr)", extension: ".txt" },
+        { id: "4-point-quadrilateral", label: "4-point quadrilateral", extension: ".txt" },
+        { id: "rotated-coco-json", label: "Rotated COCO / Paddle", extension: ".json" },
       ],
     },
     {

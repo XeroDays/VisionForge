@@ -342,6 +342,12 @@ body {
   color: #f4b42a;
 }
 
+.tool-btn__hexagon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
 .tools-rail__divider {
   width: 24px;
   height: 1px;
@@ -1020,6 +1026,21 @@ body {
 
 .detection-overlay__handle[data-edge="se"] {
   cursor: se-resize;
+}
+
+.detection-overlay__rotate-stem {
+  fill: none;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.detection-overlay__handle[data-edge="rotate"] {
+  cursor: grab;
+}
+
+.detection-overlay__item.is-active .detection-overlay__handle[data-edge="rotate"] {
+  cursor: grabbing;
 }
 
 .view-toolbar {

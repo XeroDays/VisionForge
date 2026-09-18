@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Create Project annotation-type dropdown now shows all catalog types but only **Object Detection — Bounding Box** is selectable. All other types are visible, disabled, and marked with a **Coming soon** badge. The dialog defaults to Object Detection — Bounding Box.
 - Removed the **Axis-aligned rectangle** annotation mode. Export mode radios now show the file extension, and each remaining mode writes its real format: YOLO and center-based `{basename}.txt` plus `classes.txt`, Pascal VOC `{basename}.xml`, and COCO `annotations.json`.
-- Removed the unused Hexagon tool from the left tools rail.
+- Removed the unused Hexagon tool from the left tools rail on Bounding Box projects. Oriented Object Detection is now creatable; those projects show Hexagon instead of Box (**W** still toggles the draw tool). Draw a rectangle, then rotate it with the selected-box handle (Shift snaps 15°).
 
 ## [1.0.3] - 2026-08-25
 
