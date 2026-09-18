@@ -2219,8 +2219,8 @@
         setFrame(state.frameIndex + (event.deltaY < 0 ? -1 : 1));
         return;
       }
-      if (!canRotateSelectedObb()) return;
-      rotateSelectedByWheel(event.deltaY, event.altKey ? OBB_WHEEL_ROTATE_SMALL : OBB_ANGLE_SNAP);
+      if (!event.altKey || !canRotateSelectedObb()) return;
+      rotateSelectedByWheel(event.deltaY, OBB_WHEEL_ROTATE_SMALL);
     },
     { passive: false },
   );
