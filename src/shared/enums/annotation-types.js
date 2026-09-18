@@ -11,11 +11,10 @@
       id: "object-detection-bbox",
       label: "Object Detection — Bounding Box",
       modes: [
-        { id: "axis-aligned-rectangle", label: "Axis-aligned rectangle" },
-        { id: "yolo-bounding-box", label: "YOLO bounding box" },
-        { id: "coco-bounding-box", label: "COCO bounding box" },
-        { id: "pascal-voc-bounding-box", label: "Pascal VOC bounding box" },
-        { id: "center-based-normalized-bounding-boxes", label: "Center-based / normalized bounding boxes" },
+        { id: "yolo-bounding-box", label: "YOLO bounding box", extension: ".txt" },
+        { id: "coco-bounding-box", label: "COCO bounding box", extension: ".json" },
+        { id: "pascal-voc-bounding-box", label: "Pascal VOC bounding box", extension: ".xml" },
+        { id: "center-based-normalized-bounding-boxes", label: "Center-based / normalized bounding boxes", extension: ".txt" },
       ],
     },
     {

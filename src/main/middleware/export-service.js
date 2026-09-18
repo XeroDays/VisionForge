@@ -25,9 +25,9 @@ function escapeXml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function isYoloMode(mode) {
-  return /yolo/i.test(String(mode || ""));
-}
+const YOLO_TXT_MODES = new Set(["yolo-bounding-box", "center-based-normalized-bounding-boxes"]);
+const VOC_XML_MODE = "pascal-voc-bounding-box";
+const COCO_JSON_MODE = "coco-bounding-box";
 
 function isVocValue(value) {
   if (!value || typeof value !== "object") return false;
@@ -218,6 +218,25 @@ function reportProgress(onProgress, current, total) {
   }
 }
 
+function writeCocoJson(destPath, images, annotations, labels) {
+  const categories = [];
+  const seen = new Set();
+  (Array.isArray(labels) ? labels : []).forEach((row) => {
+    const id = Number(row?.id);
+    if (!Number.isInteger(id) || id < 0 || seen.has(id)) return;
+    seen.add(id);
+    categories.push({ id, name: String(row?.name || "").trim() || `class_${id}` });
+  });
+  categories.sort((a, b) => a.id - b.id);
+
+  const payload = {
+    images,
+    annotations,
+    categories,
+  };
+  fs.writeFileSync(destPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
+
 function writeClassesTxt(destPath, labels) {
   const rows = Array.isArray(labels) ? labels : [];
   const byId = new Map();
@@ -271,19 +290,30 @@ async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
     return { ok: false, reason: "missing-images-folder" };
   }
 
+  const isTxtMode = YOLO_TXT_MODES.has(exportMode);
+  const isVocMode = exportMode === VOC_XML_MODE;
+  const isCocoMode = exportMode === COCO_JSON_MODE;
+  if (!isTxtMode && !isVocMode && !isCocoMode) {
+    log.exit("exportAnnotations", startedAt, { ok: false, reason: "invalid-mode" });
+    return { ok: false, reason: "invalid-mode" };
+  }
+
   const files = listImageFiles(imagesFolder);
-  const total = files.length + 1;
+  const extraFiles = isTxtMode ? 1 : isCocoMode ? 1 : 0;
+  const total = files.length + extraFiles;
   reportProgress(onProgress, 0, total);
   const assetsByName = new Map();
   (Array.isArray(loaded.project?.assets) ? loaded.project.assets : []).forEach((row) => {
     if (row?.name) assetsByName.set(String(row.name), row);
   });
   const labels = Array.isArray(loaded.project?.labels) ? loaded.project.labels : [];
-  const yolo = isYoloMode(exportMode);
   const folderName = path.basename(imagesFolder);
+  const cocoImages = [];
+  const cocoAnnotations = [];
+  let annotationId = 1;
   let count = 0;
 
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
     const asset = assetsByName.get(file.name);
     let width = Number(asset?.width) || 0;
     let height = Number(asset?.height) || 0;
@@ -294,9 +324,10 @@ async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
     }
     const detections = Array.isArray(asset?.detections) ? asset.detections : [];
     const base = path.parse(file.name).name;
-    if (yolo) {
+    if (isTxtMode) {
       writeYoloTxt(path.join(dest, `${base}.txt`), detections, width, height);
-    } else {
+      count += 1;
+    } else if (isVocMode) {
       writeVocXml({
         destPath: path.join(dest, `${base}.xml`),
         folder: folderName,
@@ -307,16 +338,50 @@ async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
         detections,
         labels,
       });
+      count += 1;
+    } else {
+      const imageId = index + 1;
+      cocoImages.push({
+        id: imageId,
+        file_name: file.name,
+        width,
+        height,
+      });
+      for (const detection of detections) {
+        const box = detectionToPixels(detection?.value, width, height);
+        if (!box) continue;
+        const xmin = Math.max(0, box.xmin);
+        const ymin = Math.max(0, box.ymin);
+        const xmax = Math.max(xmin, box.xmax);
+        const ymax = Math.max(ymin, box.ymax);
+        const boxW = xmax - xmin;
+        const boxH = ymax - ymin;
+        const categoryId = Number.isInteger(Number(detection.labelid)) ? Number(detection.labelid) : 0;
+        cocoAnnotations.push({
+          id: annotationId,
+          image_id: imageId,
+          category_id: categoryId,
+          bbox: [xmin, ymin, boxW, boxH],
+          area: boxW * boxH,
+          iscrowd: 0,
+        });
+        annotationId += 1;
+      }
     }
-    count += 1;
-    reportProgress(onProgress, count, total);
+    reportProgress(onProgress, isCocoMode ? index + 1 : count, total);
   }
 
-  writeClassesTxt(path.join(dest, "classes.txt"), labels);
-  count += 1;
-  reportProgress(onProgress, count, total);
+  if (isTxtMode) {
+    writeClassesTxt(path.join(dest, "classes.txt"), labels);
+    count += 1;
+    reportProgress(onProgress, count, total);
+  } else if (isCocoMode) {
+    writeCocoJson(path.join(dest, "annotations.json"), cocoImages, cocoAnnotations, labels);
+    count = 1;
+    reportProgress(onProgress, total, total);
+  }
 
-  log.info("exported annotations", { dest, mode: exportMode, count, yolo });
+  log.info("exported annotations", { dest, mode: exportMode, count });
   log.exit("exportAnnotations", startedAt, { ok: true, count });
   return { ok: true, count };
 }

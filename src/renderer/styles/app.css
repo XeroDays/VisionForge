@@ -342,12 +342,6 @@ body {
   color: #f4b42a;
 }
 
-.tool-btn__hexagon {
-  display: block;
-  width: 16px;
-  height: 16px;
-}
-
 .tools-rail__divider {
   width: 24px;
   height: 1px;

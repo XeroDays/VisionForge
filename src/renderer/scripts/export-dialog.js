@@ -115,7 +115,7 @@
 
       const span = document.createElement("span");
       span.className = "create-project-mode__text";
-      span.textContent = mode.label;
+      span.textContent = mode.extension ? `${mode.label} (${mode.extension})` : mode.label;
 
       label.append(input, control, span);
       modesEl.appendChild(label);
@@ -226,6 +226,7 @@
           "invalid-folder": "Export folder is not valid.",
           "missing-images-folder": "Select an image folder first.",
           "missing-mode": "Select an annotation mode.",
+          "invalid-mode": "Choose a valid export mode.",
         };
         showProgress(false);
         setError(reasons[result?.reason] || "Export failed.");
