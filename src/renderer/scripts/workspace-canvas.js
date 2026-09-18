@@ -22,6 +22,8 @@
   const BOX_HANDLE_PX = 8;
   const BOX_MIN_SIZE = 4;
   const OBB_ANGLE_SNAP = 15;
+  const OBB_WHEEL_ROTATE_SMALL = 5;
+  const OBB_WHEEL_PERSIST_MS = 200;
   const labelColorCache = new Map();
 
   const startPage = document.getElementById("start-page");
@@ -134,6 +136,8 @@
   let boxEdit = null;
   let boxDraw = null;
   let lastStagePointer = null;
+  let wheelRotateTimer = null;
+  let pendingWheelRotate = null;
 
   log.debug("workspace-canvas.js init");
 
@@ -418,14 +422,24 @@
     };
   }
 
+  function normalizeAngle(angle) {
+    if (!Number.isFinite(angle)) return 0;
+    let next = angle % 360;
+    if (next > 180) next -= 360;
+    if (next <= -180) next += 360;
+    return Number(next.toFixed(2));
+  }
+
   function angleFromCenter(pt, center, snap) {
     let angle = (Math.atan2(pt.y - center.y, pt.x - center.x) * 180) / Math.PI + 90;
     if (snap) angle = Math.round(angle / OBB_ANGLE_SNAP) * OBB_ANGLE_SNAP;
-    if (!Number.isFinite(angle)) return 0;
-    angle %= 360;
-    if (angle > 180) angle -= 360;
-    if (angle <= -180) angle += 360;
-    return Number(angle.toFixed(2));
+    return normalizeAngle(angle);
+  }
+
+  function canRotateSelectedObb() {
+    if (!isObbProject() || !imageReady() || boxDraw || boxEdit) return false;
+    const index = state.selectedDetectionIndex;
+    return Number.isInteger(index) && Boolean(currentDetections()[index]);
   }
 
   function refreshLabelSelection() {
@@ -926,10 +940,91 @@
     drawDetectionBoxes();
   }
 
+  function cancelWheelRotatePersist() {
+    if (wheelRotateTimer) {
+      clearTimeout(wheelRotateTimer);
+      wheelRotateTimer = null;
+    }
+    pendingWheelRotate = null;
+  }
+
+  async function persistDetectionValue(index, value, fileName) {
+    const name = fileName || currentFile()?.name;
+    if (!state.filePath || !name || !Number.isInteger(index)) return false;
+    const asset = state.assetsByName.get(name);
+    const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
+    const prev = detections[index];
+    if (!prev) return false;
+    detections[index] = { ...prev, value };
+    const nextAssets = state.assets.map((row) =>
+      row?.name === name
+        ? formatAsset(row, {
+            width: imageEl.naturalWidth || asset?.width,
+            height: imageEl.naturalHeight || asset?.height,
+            detections,
+          })
+        : row,
+    );
+    setAssets(nextAssets);
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
+      if (updated?.ok) {
+        setAssets(updated.project?.assets);
+        log.info("detection value updated", { name, index });
+        return true;
+      }
+      log.warn("could not persist detection value", { reason: updated?.reason });
+    } catch (err) {
+      log.error("persistDetectionValue failed", { error: String(err?.message || err) });
+    }
+    return false;
+  }
+
+  async function flushWheelRotatePersist() {
+    const pending = pendingWheelRotate;
+    cancelWheelRotatePersist();
+    if (!pending) return;
+    await persistDetectionValue(pending.index, pending.value, pending.name);
+  }
+
+  function rotateSelectedByWheel(deltaY, step) {
+    if (!canRotateSelectedObb()) return;
+    const index = state.selectedDetectionIndex;
+    const file = currentFile();
+    const asset = file ? state.assetsByName.get(file.name) : null;
+    const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
+    const prev = detections[index];
+    if (!file || !prev) return;
+    const value = {
+      ...prev.value,
+      angle: normalizeAngle(detectionAngle(prev.value) + (deltaY < 0 ? -step : step)),
+    };
+    detections[index] = { ...prev, value };
+    setAssets(
+      state.assets.map((row) =>
+        row?.name === file.name
+          ? formatAsset(row, {
+              width: imageEl.naturalWidth || asset?.width,
+              height: imageEl.naturalHeight || asset?.height,
+              detections,
+            })
+          : row,
+      ),
+    );
+    drawDetectionBoxes();
+    pendingWheelRotate = { name: file.name, index, value };
+    if (wheelRotateTimer) clearTimeout(wheelRotateTimer);
+    wheelRotateTimer = window.setTimeout(() => {
+      wheelRotateTimer = null;
+      void flushWheelRotatePersist();
+    }, OBB_WHEEL_PERSIST_MS);
+  }
+
   async function persistBoxEdit() {
     if (!boxEdit) return;
     const edit = boxEdit;
     boxEdit = null;
+    await flushWheelRotatePersist();
     edit.group?.classList.remove("is-active");
     const start = edit.startRect;
     const next = edit.currentRect;
@@ -954,31 +1049,10 @@
       drawDetectionBoxes();
       return;
     }
-    detections[edit.index] = {
-      ...prev,
-      value: rectToValue(edit.currentRect, imageEl.naturalWidth, imageEl.naturalHeight, prev.value),
-    };
-    const nextAssets = state.assets.map((row) =>
-      row?.name === file.name
-        ? formatAsset(row, {
-            width: imageEl.naturalWidth,
-            height: imageEl.naturalHeight,
-            detections,
-          })
-        : row,
+    await persistDetectionValue(
+      edit.index,
+      rectToValue(edit.currentRect, imageEl.naturalWidth, imageEl.naturalHeight, prev.value),
     );
-    setAssets(nextAssets);
-    try {
-      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
-      if (updated?.ok) {
-        setAssets(updated.project?.assets);
-        log.info("detection box updated", { name: file.name, index: edit.index });
-      } else {
-        log.warn("could not persist detection box", { reason: updated?.reason });
-      }
-    } catch (err) {
-      log.error("persistBoxEdit failed", { error: String(err?.message || err) });
-    }
     setSelectedDetection(edit.index, { openTab: true });
     drawDetectionBoxes();
   }
@@ -1214,6 +1288,7 @@
   }
 
   async function persistDeleteDetection(index) {
+    cancelWheelRotatePersist();
     if (!state.filePath || boxEdit || boxDraw) return;
     const file = currentFile();
     if (!file) return;
@@ -1702,6 +1777,7 @@
   }
 
   function setFrame(index, options = {}) {
+    void flushWheelRotatePersist();
     if (boxEdit) cancelBoxEdit();
     boxDraw = null;
     hideDraftRect();
@@ -1864,6 +1940,7 @@
     const startedAt = log.enter("closeWorkspace");
     window.closeProcessImageScreen?.({ restoreWorkspace: false });
     stopPlay();
+    void flushWheelRotatePersist();
     boxEdit = null;
     boxDraw = null;
     hideCrosshair();
@@ -2134,12 +2211,16 @@
         zoomBy(event.deltaY < 0 ? ZOOM_IN : ZOOM_OUT, origin);
         return;
       }
-      if (!event.shiftKey || state.currentTool !== "cursor" || boxEdit || boxDraw) return;
-      const now = Date.now();
-      if (now - lastFrameWheelAt < FRAME_WHEEL_COOLDOWN_MS) return;
-      lastFrameWheelAt = now;
-      stopPlay();
-      setFrame(state.frameIndex + (event.deltaY < 0 ? -1 : 1));
+      if (event.shiftKey && state.currentTool === "cursor" && !boxEdit && !boxDraw) {
+        const now = Date.now();
+        if (now - lastFrameWheelAt < FRAME_WHEEL_COOLDOWN_MS) return;
+        lastFrameWheelAt = now;
+        stopPlay();
+        setFrame(state.frameIndex + (event.deltaY < 0 ? -1 : 1));
+        return;
+      }
+      if (!canRotateSelectedObb()) return;
+      rotateSelectedByWheel(event.deltaY, event.altKey ? OBB_WHEEL_ROTATE_SMALL : OBB_ANGLE_SNAP);
     },
     { passive: false },
   );
