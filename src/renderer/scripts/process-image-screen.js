@@ -255,26 +255,17 @@
   async function runProcess() {
     if (busy || !imagePath) return;
     const startedAt = log.enter("runProcess");
-    let modelPath = "";
-    let modelType = window.VisionForgeAiModelTypes?.DEFAULT_TYPE;
-    try {
-      const config = await window.visionforge?.getConfiguration?.();
-      modelPath = String(config?.onnxModelPath || "").trim();
-      modelType = config?.onnxModelType || window.VisionForgeAiModelTypes?.DEFAULT_TYPE;
-      if (!modelPath) {
-        setStatus("Select an AI model in Settings first.", true);
-        log.exit("runProcess", startedAt, { ok: false, reason: "missing-model" });
-        return;
-      }
-      if (!window.VisionForgeAiModelTypes?.supportsDetection?.(modelType)) {
-        setStatus("This model type is not supported yet.", true);
-        log.exit("runProcess", startedAt, { ok: false, reason: "unsupported-type" });
-        return;
-      }
-    } catch (err) {
-      setStatus("Could not read Settings.", true);
-      log.error("runProcess config failed", { error: String(err?.message || err) });
-      log.exit("runProcess", startedAt, { error: true });
+    const model = window.getWorkspaceModel?.() || {};
+    const modelPath = String(model.path || "").trim();
+    const modelType = model.type || window.VisionForgeAiModelTypes?.DEFAULT_TYPE;
+    if (!modelPath) {
+      setStatus("Select an AI model in Settings first.", true);
+      log.exit("runProcess", startedAt, { ok: false, reason: "missing-model" });
+      return;
+    }
+    if (!window.VisionForgeAiModelTypes?.supportsDetection?.(modelType)) {
+      setStatus("This model type is not supported yet.", true);
+      log.exit("runProcess", startedAt, { ok: false, reason: "unsupported-type" });
       return;
     }
 

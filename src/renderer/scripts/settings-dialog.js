@@ -93,7 +93,8 @@
   }
 
   function openTypeDropdown() {
-    if (!typeDropdown || !typeList) return;
+    if (!window.isWorkspaceOpen?.()) return;
+    if (!typeDropdown || !typeList || typeButton?.disabled) return;
     const idx = TYPES.findIndex((item) => item.id === selectedTypeId);
     typeHighlight = Math.max(0, idx);
     typeDropdown.classList.add("is-open");
@@ -172,7 +173,15 @@
       confidenceInput.disabled = !enabled;
     }
     if (confidenceValue) confidenceValue.textContent = `${percent}%`;
+  }
+
+  function setAiModelEnabled(enabled) {
+    if (modelInput) modelInput.disabled = !enabled;
+    if (modelBrowseBtn) modelBrowseBtn.disabled = !enabled;
+    if (typeButton) typeButton.disabled = !enabled;
+    if (confidenceInput) confidenceInput.disabled = !enabled;
     if (confidenceHint) confidenceHint.hidden = enabled;
+    if (!enabled) closeTypeDropdown();
   }
 
   function selectSection(sectionId) {
@@ -186,20 +195,16 @@
   async function loadFields() {
     fillTypes();
     const projectOpen = Boolean(window.isWorkspaceOpen?.());
-    try {
-      const config = await window.visionforge?.getConfiguration?.();
-      if (modelInput) modelInput.value = String(config?.onnxModelPath || "").trim();
-      const stored = config?.onnxModelType || DEFAULT_TYPE;
-      setSelectedType(isTypeAvailable(stored) ? stored : DEFAULT_TYPE);
-    } catch (err) {
-      log.warn("could not load configuration", { error: String(err?.message || err) });
-      if (modelInput) modelInput.value = "";
-      setSelectedType(DEFAULT_TYPE);
-    }
+    const model = projectOpen ? window.getWorkspaceModel?.() || {} : {};
+    const path = projectOpen ? String(model.path || "").trim() : "";
+    const type = projectOpen && isTypeAvailable(model.type) ? model.type : DEFAULT_TYPE;
     const confidence = projectOpen
       ? window.getWorkspaceConfidence?.() ?? DEFAULT_CONFIDENCE
       : DEFAULT_CONFIDENCE;
+    if (modelInput) modelInput.value = path;
+    setSelectedType(type);
     setConfidenceUi(confidence, projectOpen);
+    setAiModelEnabled(projectOpen);
   }
 
   async function openSettings() {
@@ -219,6 +224,7 @@
   }
 
   async function pickModel() {
+    if (!window.isWorkspaceOpen?.()) return;
     const startedAt = log.enter("pickModel");
     try {
       const result = await window.visionforge?.selectOpenFile?.({
@@ -241,33 +247,40 @@
 
   async function applySettings() {
     const startedAt = log.enter("applySettings");
+    if (!window.isWorkspaceOpen?.()) {
+      closeSettings();
+      log.exit("applySettings", startedAt, { ok: true, skipped: "no-project" });
+      return;
+    }
+    const filePath = window.getWorkspaceFilePath?.();
+    if (!filePath) {
+      closeSettings();
+      log.exit("applySettings", startedAt, { ok: false, reason: "missing-file" });
+      return;
+    }
     const onnxModelPath = modelInput?.value?.trim() || "";
     const onnxModelType = isTypeAvailable(selectedTypeId) ? selectedTypeId : DEFAULT_TYPE;
-    const projectOpen = Boolean(window.isWorkspaceOpen?.());
     const onnxConfidence = normalizeConfidence(Number(confidenceInput?.value || 25) / 100);
     try {
-      const result = await window.visionforge?.updateConfiguration?.({ onnxModelPath, onnxModelType });
-      if (!result?.ok) {
-        log.warn("could not save configuration", { reason: result?.reason });
-        log.exit("applySettings", startedAt, { ok: false });
+      const updated = await window.visionforge?.updateProject?.(filePath, {
+        onnxModelPath,
+        onnxModelType,
+        onnxConfidence,
+      });
+      if (!updated?.ok) {
+        log.warn("could not save project AI model", { reason: updated?.reason });
+        log.exit("applySettings", startedAt, { ok: false, reason: updated?.reason });
         return;
       }
-      if (projectOpen) {
-        const filePath = window.getWorkspaceFilePath?.();
-        if (filePath) {
-          const updated = await window.visionforge?.updateProject?.(filePath, { onnxConfidence });
-          if (!updated?.ok) {
-            log.warn("could not save project confidence", { reason: updated?.reason });
-            log.exit("applySettings", startedAt, { ok: false, reason: updated?.reason });
-            return;
-          }
-          window.setWorkspaceConfidence?.(updated.project?.onnxConfidence ?? onnxConfidence);
-        }
-      }
-      log.info("configuration saved", {
+      window.setWorkspaceModel?.({
+        path: updated.project?.onnxModelPath ?? onnxModelPath,
+        type: updated.project?.onnxModelType ?? onnxModelType,
+      });
+      window.setWorkspaceConfidence?.(updated.project?.onnxConfidence ?? onnxConfidence);
+      log.info("project AI model saved", {
         onnxModelType,
         hasPath: Boolean(onnxModelPath),
-        onnxConfidence: projectOpen ? onnxConfidence : undefined,
+        onnxConfidence,
       });
       closeSettings();
       log.exit("applySettings", startedAt, { ok: true });

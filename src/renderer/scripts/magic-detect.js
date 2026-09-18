@@ -60,9 +60,9 @@
     const startedAt = log.enter("runMagicDetect");
     setBusy(true);
     try {
-      const config = await window.visionforge?.getConfiguration?.();
-      const modelPath = String(config?.onnxModelPath || "").trim();
-      const modelType = config?.onnxModelType || window.VisionForgeAiModelTypes?.DEFAULT_TYPE;
+      const model = window.getWorkspaceModel?.() || {};
+      const modelPath = String(model.path || "").trim();
+      const modelType = model.type || window.VisionForgeAiModelTypes?.DEFAULT_TYPE;
       if (!modelPath) {
         showAlert("Select an AI model in Settings first.");
         log.exit("runMagicDetect", startedAt, { ok: false, reason: "missing-model" });

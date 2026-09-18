@@ -189,7 +189,7 @@ No project selected → `#start-page` visible. **Create new project** opens `#cr
 - `src/renderer/index.html` — `#create-project-overlay`
 
 **Workflow:**
-Create new project → modal (name + location + custom annotation-type dropdown + mode radios) → location click/`...` → `selectProjectFolder` → type change rebuilds radios (none preselected) → Next requires a mode → `createProject(name, location, { type, mode })` validates against the catalog and writes `{ProjectName}.VFSln` (including `annotationType` / `annotationMode` / `assets: []` / `onnxConfidence: 0.25`) → record history → close modal → show workspace. Close via Cancel, X, or Escape — backdrop click does not dismiss. Annotation type is a custom dark dropdown (not a native `<select>`). Does not change workspace tools. **Object Detection — Bounding Box** (`object-detection-bbox`) and **Oriented Object Detection — Rotated Bounding Box** (`oriented-object-detection`) are selectable. All other types are shown disabled with a **Coming soon** badge. Oriented modes: YOLO OBB, DOTA, Rotated rectangle / OBB (xywhr), 4-point quadrilateral, Rotated COCO / Paddle. The dialog defaults to Object Detection — Bounding Box.
+Create new project → modal (name + location + custom annotation-type dropdown + mode radios) → location click/`...` → `selectProjectFolder` → type change rebuilds radios (none preselected) → Next requires a mode → `createProject(name, location, { type, mode })` validates against the catalog and writes `{ProjectName}.VFSln` (including `annotationType` / `annotationMode` / `assets: []` / `onnxModelPath: ""` / `onnxModelType: object-detection` / `onnxConfidence: 0.25`) → record history → close modal → show workspace. Close via Cancel, X, or Escape — backdrop click does not dismiss. Annotation type is a custom dark dropdown (not a native `<select>`). Does not change workspace tools. **Object Detection — Bounding Box** (`object-detection-bbox`) and **Oriented Object Detection — Rotated Bounding Box** (`oriented-object-detection`) are selectable. All other types are shown disabled with a **Coming soon** badge. Oriented modes: YOLO OBB, DOTA, Rotated rectangle / OBB (xywhr), 4-point quadrilateral, Rotated COCO / Paddle. The dialog defaults to Object Detection — Bounding Box.
 
 ---
 
@@ -221,6 +221,8 @@ Open existing project → `openProjectFile()` → native dialog filtered to `.VF
 - `assets` — `[{ name, width, height, detections }, …]` image rows. Folder sync is append-only (new names added; stale names not removed). **Delete Asset** (Assets-tab context menu) may remove a row after unlinking the image and sidecars. `name` is the file name only (same extensions as `listImageFolder`). `width` / `height` are image pixels (`0` or missing until the renderer has shown that file). `detections` is an array; new rows start as `[]`; `null` or missing is treated as empty. Each detection is `{ labelid, value }` — YOLO `{ xc, yc, w, h }` (OBB adds `angle` in degrees) (`xc = ((x1+x2)/2)/width`, `yc = ((y1+y2)/2)/height`, `w = (x2-x1)/width`, `h = (y2-y1)/height`, clamped to 0–1 and written to 6 decimal places on edit, same as typical YOLO `.txt` exports) or VOC `{ xmin, ymin, xmax, ymax }` (integer pixels on edit). Older files without `assets` treat it as `[]`. Non-empty `detections` are never overwritten by sidecar import.
 - `annotationType` — kebab-case id from the create-project type catalog (e.g. `object-detection-bbox`). Older files may omit this.
 - `annotationMode` — kebab-case id of the selected radio for that type (e.g. `yolo-bounding-box`). Must be a valid pair with `annotationType`. Older files may omit this.
+- `onnxModelPath` — absolute path to this project’s `.onnx` file (empty string until chosen). Edited from Settings → AI Model when a project is open. Older files may omit this (treated as `""`).
+- `onnxModelType` — `object-detection` (default) | `oriented-object-detection` (coming-soon types are not written). Older files may omit this (treated as `object-detection`).
 - `onnxConfidence` — detection score threshold `0.01`–`0.99` (default `0.25`). Used by Process Image and Auto detect. Edited from Settings → AI Model when a project is open. Older files may omit this (treated as `0.25` until Apply writes it).
 
 **Rule:** Do not store project config elsewhere (no parallel JSON/DB for project settings). When a new project setting is introduced, add it to the `.VFSln` schema and document the field in this section.
@@ -245,18 +247,17 @@ Create or open a `.VFSln` → `recordSolution` upserts history → start page `g
 
 ### App configuration (`configuration.vfson`)
 
-**Purpose:** App-level software settings (not project / VFSln). Edited from the titlebar Settings dialog.
+**Purpose:** App-level software settings (not project / VFSln). The titlebar Settings **AI Model** pane no longer writes here; ONNX path, type, and confidence live on the open `.VFSln`.
 
 **Location:** `Documents/VisionForge/configuration.vfson` (same folder as `Logs/` and `history-solutions.vfson`)
 
 **Schema:**
 - `format` — `"vfson"`
 - `version` — `1`
-- `onnxModelPath` — last applied ONNX model path (empty string if none)
-- `onnxModelType` — `object-detection` (default) | `image-classification` | `oriented-object-detection` | `instance-segmentation`
+- Older files may still contain unused `onnxModelPath` / `onnxModelType` leftovers from when those were app-level.
 
 **Workflow:**
-First `getConfiguration` creates the file with defaults if missing. Invalid/corrupt file is rewritten with defaults. Unknown `onnxModelType` falls back to `object-detection`. Settings → AI Model uses a custom dropdown: `object-detection` and `oriented-object-detection` are selectable; `image-classification` and `instance-segmentation` are visible, disabled, and marked **Coming soon**. Apply writes `updateConfiguration({ onnxModelPath, onnxModelType })`. Process Image and Auto detect read this file; `object-detection` and `oriented-object-detection` run inference.
+First `getConfiguration` creates the file with defaults if missing. Invalid/corrupt file is rewritten with defaults. Settings → AI Model reads and writes the open solution only.
 
 ---
 
@@ -452,7 +453,7 @@ Rules:
 - `src/shared/enums/ai-model-types.js`
 
 **Workflow:**
-Image rail button (visible only with a project + canvas preview) → hide canvas/inspector → show `#process-image-screen` with the same `vfimg:` snapshot (fit-to-screen in the left pane). Process reads `onnxModelPath` / `onnxModelType` from Settings (`configuration.vfson`) and `onnxConfidence` from the open `.VFSln`. Missing path or a type other than `object-detection` / `oriented-object-detection` shows a status error. Otherwise `runOnnxDetect` in main (`onnxruntime-node`, letterbox, YOLO AABB or OBB decode, NMS, project confidence) uses VFSln `labels` (unknown ids as `class_N`) → SVG boxes (or rotated polygons for OBB) on the preview + Detections tab (id, color, name, score). Preview only (not VFSln). Back / Escape restore the workspace. File → Goto Startup page closes this screen first.
+Image rail button (visible only with a project + canvas preview) → hide canvas/inspector → show `#process-image-screen` with the same `vfimg:` snapshot (fit-to-screen in the left pane). Process reads `onnxModelPath` / `onnxModelType` / `onnxConfidence` from the open `.VFSln`. Missing path or a type other than `object-detection` / `oriented-object-detection` shows a status error. Otherwise `runOnnxDetect` in main (`onnxruntime-node`, letterbox, YOLO AABB or OBB decode, NMS, project confidence) uses VFSln `labels` (unknown ids as `class_N`) → SVG boxes (or rotated polygons for OBB) on the preview + Detections tab (id, color, name, score). Preview only (not VFSln). Back / Escape restore the workspace. File → Goto Startup page closes this screen first.
 
 ---
 
@@ -689,7 +690,7 @@ Toolbar appears at top-left of `#workspace-stage` when a frame image is shown. Z
 **Trigger:** Left-rail Image command (`#tool-process-image`); project open and a canvas image is previewed
 
 **Flow:**
-Stop playback → snapshot current frame `vfimg:` src → hide `#workspace-canvas` / inspector / resize handle → show `#process-image-screen` (left preview fit-to-screen + overlay, right Setup / Detections tabs). Process reads Settings (`onnxModelPath`, `onnxModelType`) and the open solution `onnxConfidence`. Missing path or unsupported type → status error. Otherwise `visionforge:run-onnx-detect` with VFSln `labels` (`getWorkspaceLabels`), `modelType`, and project confidence draws preview boxes (AABB rects or OBB polygons) and switches to Detections (id, circle, name, score; unknown class as `class_N`). Back or Escape restores canvas + inspector. Canvas shortcuts (W / A / D / Delete) are ignored while this screen is open. Not written to VFSln.
+Stop playback → snapshot current frame `vfimg:` src → hide `#workspace-canvas` / inspector / resize handle → show `#process-image-screen` (left preview fit-to-screen + overlay, right Setup / Detections tabs). Process reads the open solution `onnxModelPath`, `onnxModelType`, and `onnxConfidence`. Missing path or unsupported type → status error. Otherwise `visionforge:run-onnx-detect` with VFSln `labels` (`getWorkspaceLabels`), `modelType`, and project confidence draws preview boxes (AABB rects or OBB polygons) and switches to Detections (id, circle, name, score; unknown class as `class_N`). Back or Escape restores canvas + inspector. Canvas shortcuts (W / A / D / Delete) are ignored while this screen is open. Not written to VFSln.
 
 **Files:**
 - `src/renderer/scripts/process-image-screen.js`
@@ -709,7 +710,7 @@ Stop playback → snapshot current frame `vfimg:` src → hide `#workspace-canva
 **Trigger:** Titlebar gear (`#btn-settings`); available on start page and workspace
 
 **Flow:**
-Open `#settings-overlay` (left section list, right pane). Load `configuration.vfson` into **AI Model** (ONNX path + custom type dropdown). Browse `.onnx` via `selectOpenFile` (not saved until Apply). Model type shows Object Detection and Oriented Object Detection as selectable; Image Classification and Instance Segmentation are disabled with a **Coming soon** badge. Confidence slider (1–99%) loads from the open `.VFSln` `onnxConfidence` and is disabled on the start page with “Open a project to set confidence.” Apply writes `onnxModelPath` / `onnxModelType` to `configuration.vfson` and, when a project is open, `onnxConfidence` to that `.VFSln`. Cancel / Escape / X discard unsaved edits (Escape first closes the type dropdown if it is open).
+Open `#settings-overlay` (left section list, right pane). **AI Model** (ONNX path, type dropdown, confidence) loads from the open `.VFSln`. Browse `.onnx` via `selectOpenFile` (not saved until Apply). Model type shows Object Detection and Oriented Object Detection as selectable; Image Classification and Instance Segmentation are disabled with a **Coming soon** badge. On the start page all three fields are disabled with “Open a project to set the AI model.” Apply writes `onnxModelPath` / `onnxModelType` / `onnxConfidence` to that `.VFSln` only. Cancel / Escape / X discard unsaved edits (Escape first closes the type dropdown if it is open).
 
 **Files:**
 - `src/renderer/scripts/settings-dialog.js`
@@ -725,7 +726,7 @@ Open `#settings-overlay` (left section list, right pane). Load `configuration.vf
 **Trigger:** Left-rail `#tool-magic`; project open and a canvas image is previewed
 
 **Flow:**
-If Process Image screen is open, ignore. Read Settings config. No `onnxModelPath` → alert “Select an AI model in Settings first.” Type other than `object-detection` / `oriented-object-detection` → alert “This model type is not supported yet.” Else `runOnnxDetect` on the current image with VFSln labels, `modelType`, and project `onnxConfidence` → map OBB `{ xc, yc, w, h, angle }` or AABB pixel boxes to YOLO/VOC via `applyWorkspaceDetections` → snapshot that asset’s current `detections` in renderer memory → **replace** that asset’s `detections` → `updateProject` → redraw canvas boxes and Detections tab → show **Revert** on `#view-toolbar` (top-left, after Rotate). Revert writes the snapshot back and hides itself. Changing the image (`setFrame` when the filename changes) hides Revert and **keeps** the new VFSln detections. Snapshot is not stored in the VFSln.
+If Process Image screen is open, ignore. Read the open solution’s `onnxModelPath` / `onnxModelType` / `onnxConfidence`. No path → alert “Select an AI model in Settings first.” Type other than `object-detection` / `oriented-object-detection` → alert “This model type is not supported yet.” Else `runOnnxDetect` on the current image with VFSln labels, `modelType`, and project `onnxConfidence` → map OBB `{ xc, yc, w, h, angle }` or AABB pixel boxes to YOLO/VOC via `applyWorkspaceDetections` → snapshot that asset’s current `detections` in renderer memory → **replace** that asset’s `detections` → `updateProject` → redraw canvas boxes and Detections tab → show **Revert** on `#view-toolbar` (top-left, after Rotate). Revert writes the snapshot back and hides itself. Changing the image (`setFrame` when the filename changes) hides Revert and **keeps** the new VFSln detections. Snapshot is not stored in the VFSln.
 
 **Files:**
 - `src/renderer/scripts/magic-detect.js`
@@ -1057,7 +1058,7 @@ Renderer
 ### `src/main/middleware/project-service.js`
 
 **Changing impacts:**
-- Create / open / load / update / close `.VFSln` session (`onnxConfidence` on create/update)
+- Create / open / load / update / close `.VFSln` session (`onnxModelPath`, `onnxModelType`, `onnxConfidence` on create/update)
 - Image folder picker and listing
 - Append-only `assets` sync
 - Delete Asset (unlink image + sidecars + VFSln row)
@@ -1069,9 +1070,8 @@ Renderer
 
 **Changing impacts:**
 - `Documents/VisionForge/configuration.vfson`
-- Process Image / Auto detect model path and type
-- Settings → AI Model Apply
-- `visionforge:get-configuration` / `visionforge:update-configuration`
+- Leftover unused `onnxModelPath` / `onnxModelType` keys on older files
+- `visionforge:get-configuration` / `visionforge:update-configuration` (Settings AI Model no longer writes these)
 
 ### `src/main/middleware/detection-import-service.js`
 
@@ -1190,7 +1190,7 @@ Renderer
 - **Minimize** uses `win.minimize()` so the app stays on the Windows taskbar (no system tray)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
-- **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder, labels, assets, annotationType, annotationMode, onnxConfidence). Annotation type/mode come from the create dialog catalog and are required for new projects. All project config belongs in that file. `object-detection-bbox` and `oriented-object-detection` are creatable; all other types appear disabled with a **Coming soon** badge in the dropdown. The dialog defaults to Object Detection — Bounding Box. On an OBB project the left rail shows Hexagon instead of Box; **W** toggles Cursor and that draw tool. Click-drag creates an axis-aligned box (`angle: 0`); the selected box has a rotation handle (Shift snaps 15°) and Alt+wheel rotates it 1°. OBB detections store `{ xc, yc, w, h, angle }` (degrees). The middleware rejects coming-soon pairs via `isSupportedAnnotation`; existing projects with other types still load and export normally via `isValidAnnotation`.
+- **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder, labels, assets, annotationType, annotationMode, onnxModelPath, onnxModelType, onnxConfidence). Annotation type/mode come from the create dialog catalog and are required for new projects. All project config belongs in that file. `object-detection-bbox` and `oriented-object-detection` are creatable; all other types appear disabled with a **Coming soon** badge in the dropdown. The dialog defaults to Object Detection — Bounding Box. On an OBB project the left rail shows Hexagon instead of Box; **W** toggles Cursor and that draw tool. Click-drag creates an axis-aligned box (`angle: 0`); the selected box has a rotation handle (Shift snaps 15°) and Alt+wheel rotates it 1°. OBB detections store `{ xc, yc, w, h, angle }` (degrees). The middleware rejects coming-soon pairs via `isSupportedAnnotation`; existing projects with other types still load and export normally via `isValidAnnotation`.
 - **Open existing project** / **Recent** loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab). `loadProject` appends missing image names to `assets` and fills empty `detections` from sidecar txt/xml.
 - **Labels:** if VFSln `labels` is empty, import `{project-folder}/classes.txt` then `{imagesFolder}/classes.txt` as `{ id, name }` (id from 0) and list them in the Labels tab. Each row shows a circle in that `id`’s box color (golden-angle HSL) between the id and the name. Existing labels are never overwritten by that import. **Add**, **rename**, and **delete** write VFSln `labels` only (never `classes.txt`). Rename keeps the same `id`; delete does not renumber remaining ids.
 - **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open. That save also syncs `assets` (append-only) and imports empty detections.
@@ -1204,9 +1204,9 @@ Renderer
 - **Zoom / Rotate:** `#view-toolbar` on the stage (only when an image is previewed): zoom in/out and Fit to Screen are one-shot (never stay selected); Fit resets view; zoom-out below fit snaps to Fit to Screen. Changing images keeps the current zoom and pan. Rotate overwrites the current file 90° clockwise (`sharp`). Cursor is selected on project load. Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps assets; A / Left and D / Right step frames (any tool); on an OBB project with a selected box, Alt+wheel rotates ±1°; otherwise plain wheel does not change the frame; Box ignore.
 - **Export:** File → Export or titlebar **Export** (left of Settings; both enabled while a project is open). Location defaults to `imagesFolder` (browse can change it); annotation type is locked; mode can change for that export only. Mode radios show the file extension. `yolo-bounding-box` / `center-based-normalized-bounding-boxes` write `{basename}.txt` (`labelid xc yc w h`) plus `classes.txt`; `yolo-obb` writes `{basename}.txt` (`labelid` + 8 normalized corners) plus `classes.txt`; `pascal-voc-bounding-box` writes `{basename}.xml`; `coco-bounding-box` writes one `annotations.json`. A progress bar runs during the write; **Exported N files.** then the dialog closes.
 - **Goto Startup page:** File menu item (enabled while a project is open) closes the workspace and returns to `#start-page` without deleting the VFSln or recents.
-- **Settings:** titlebar gear opens `#settings-overlay` (left sections / right pane). **AI Model** sets ONNX path and type (custom dropdown: Object Detection and Oriented Object Detection enabled; Image Classification and Instance Segmentation show **Coming soon**); Apply writes `Documents/VisionForge/configuration.vfson`. Confidence (1–99%, default 25%) is a project setting: slider enabled only with an open solution and Apply writes `onnxConfidence` to that `.VFSln`. Cancel / Escape discard unsaved edits.
-- **Process Image:** left-rail `fa-image` command (visible only when a project is open and a canvas image is previewed). Opens `#process-image-screen` with that `vfimg:` snapshot fit-to-screen. Process uses the Settings AI Model (`object-detection` or `oriented-object-detection`) and the project `onnxConfidence`, runs YOLO ONNX in main, and draws preview-only boxes (rotated polygons for OBB) plus a Detections tab. Does not write VFSln. Back / Escape return to the workspace.
-- **Auto detect:** left-rail `fa-wand-magic-sparkles` (same visibility). If no model is set, shows an error. If the type is not object detection or oriented object detection, shows an error. Otherwise runs ONNX on the current image using the project `onnxConfidence`, **replaces** that asset’s VFSln detections (including `angle` on OBB projects), and redraws canvas boxes / Detections tab. A **Revert** button appears on the top-left view toolbar until the image changes; Revert restores the previous detections. Changing images keeps the new boxes.
+- **Settings:** titlebar gear opens `#settings-overlay` (left sections / right pane). **AI Model** sets this project’s ONNX path, type (Object Detection and Oriented Object Detection enabled; Image Classification and Instance Segmentation show **Coming soon**), and confidence (1–99%, default 25%). All three fields are disabled on the start page. Apply writes `onnxModelPath` / `onnxModelType` / `onnxConfidence` to the open `.VFSln`. Cancel / Escape discard unsaved edits.
+- **Process Image:** left-rail `fa-image` command (visible only when a project is open and a canvas image is previewed). Opens `#process-image-screen` with that `vfimg:` snapshot fit-to-screen. Process uses the project AI Model (`object-detection` or `oriented-object-detection`) and `onnxConfidence`, runs YOLO ONNX in main, and draws preview-only boxes (rotated polygons for OBB) plus a Detections tab. Does not write VFSln. Back / Escape return to the workspace.
+- **Auto detect:** left-rail `fa-wand-magic-sparkles` (same visibility). If no model path is set on the solution, shows an error. If the type is not object detection or oriented object detection, shows an error. Otherwise runs ONNX on the current image using the project model and `onnxConfidence`, **replaces** that asset’s VFSln detections (including `angle` on OBB projects), and redraws canvas boxes / Detections tab. A **Revert** button appears on the top-left view toolbar until the image changes; Revert restores the previous detections. Changing images keeps the new boxes.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20). Right-click a row → **Remove from list** drops that entry from the file and refreshes the list; the `.VFSln` is not deleted.
 - **No tests** — `tests/` contains `.gitkeep` placeholders only
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

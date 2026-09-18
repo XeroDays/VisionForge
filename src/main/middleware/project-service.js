@@ -5,7 +5,13 @@ const { createLogger } = require("../services/visionforge-logger");
 const { recordSolution } = require("../services/history-solutions-store");
 const { setAllowedImagesDir, isAllowedImagePath } = require("../services/image-protocol");
 const { isValidAnnotation, isSupportedAnnotation } = require("../../shared/enums/annotation-types");
-const { DEFAULT_CONFIDENCE, normalizeConfidence } = require("../../shared/enums/ai-model-types");
+const {
+  DEFAULT_CONFIDENCE,
+  DEFAULT_TYPE,
+  isTypeAvailable,
+  normalizeConfidence,
+  normalizeType,
+} = require("../../shared/enums/ai-model-types");
 const { importEmptyDetections } = require("./detection-import-service");
 
 const log = createLogger("project");
@@ -158,6 +164,8 @@ function createProject(name, location, annotation) {
     assets: [],
     annotationType,
     annotationMode,
+    onnxModelPath: "",
+    onnxModelType: DEFAULT_TYPE,
     onnxConfidence: DEFAULT_CONFIDENCE,
   };
 
@@ -385,6 +393,13 @@ function updateProject(filePath, patch, options = {}) {
   };
   if (!project.name) project.name = result.name;
   if (project.version == null) project.version = 1;
+  if (Object.prototype.hasOwnProperty.call(nextPatch, "onnxModelPath")) {
+    project.onnxModelPath = String(nextPatch.onnxModelPath || "").trim();
+  }
+  if (Object.prototype.hasOwnProperty.call(nextPatch, "onnxModelType")) {
+    const type = normalizeType(nextPatch.onnxModelType);
+    project.onnxModelType = isTypeAvailable(type) ? type : DEFAULT_TYPE;
+  }
   if (Object.prototype.hasOwnProperty.call(nextPatch, "onnxConfidence")) {
     project.onnxConfidence = normalizeConfidence(nextPatch.onnxConfidence);
   }

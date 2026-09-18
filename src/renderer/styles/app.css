@@ -1569,6 +1569,11 @@ body {
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+.create-project-dropdown__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .create-project-dropdown__button:focus,
 .create-project-dropdown.is-open .create-project-dropdown__button {
   outline: none;
@@ -1790,6 +1795,12 @@ body {
 
 .create-project-browse:hover {
   background: rgba(255, 255, 255, 0.12);
+}
+
+.create-project-browse:disabled,
+.create-project-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .create-project-hint {

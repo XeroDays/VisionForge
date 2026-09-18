@@ -123,6 +123,8 @@
     selectedDetectionIndex: null,
     annotationType: "",
     annotationMode: "",
+    onnxModelPath: "",
+    onnxModelType: window.VisionForgeAiModelTypes?.DEFAULT_TYPE || "object-detection",
     onnxConfidence: window.VisionForgeAiModelTypes?.DEFAULT_CONFIDENCE ?? 0.25,
     assets: [],
     assetsByName: new Map(),
@@ -1895,6 +1897,21 @@
     }
   }
 
+  function normalizeWorkspaceModelType(type) {
+    const catalog = window.VisionForgeAiModelTypes;
+    const id = catalog?.normalizeType?.(type) || catalog?.DEFAULT_TYPE || "object-detection";
+    if (catalog?.isTypeAvailable && !catalog.isTypeAvailable(id)) {
+      return catalog.DEFAULT_TYPE || "object-detection";
+    }
+    return id;
+  }
+
+  function applyWorkspaceModel(pathValue, typeValue) {
+    state.onnxModelPath = String(pathValue || "").trim();
+    state.onnxModelType = normalizeWorkspaceModelType(typeValue);
+    return { path: state.onnxModelPath, type: state.onnxModelType };
+  }
+
   async function showWorkspace({ filePath, name } = {}) {
     const startedAt = log.enter("showWorkspace");
     if (window.blockIfForceUpdate?.()) {
@@ -1921,6 +1938,7 @@
       state.name = result.name || name || "Untitled";
       state.annotationType = String(result.project?.annotationType || "");
       state.annotationMode = String(result.project?.annotationMode || "");
+      applyWorkspaceModel(result.project?.onnxModelPath, result.project?.onnxModelType);
       state.onnxConfidence = (window.VisionForgeAiModelTypes?.normalizeConfidence || ((v) => Number(v) || 0.25))(
         result.project?.onnxConfidence,
       );
@@ -1984,6 +2002,7 @@
     state.selectedDetectionIndex = null;
     state.annotationType = "";
     state.annotationMode = "";
+    applyWorkspaceModel("", window.VisionForgeAiModelTypes?.DEFAULT_TYPE || "object-detection");
     state.onnxConfidence = window.VisionForgeAiModelTypes?.DEFAULT_CONFIDENCE ?? 0.25;
     state.magicRevert = null;
     panning = false;
@@ -2620,6 +2639,11 @@
     state.labels.map((label) => ({ id: label.id, name: label.name }));
   window.applyWorkspaceDetections = applyWorkspaceDetections;
   window.getWorkspaceFilePath = () => state.filePath || "";
+  window.getWorkspaceModel = () => ({
+    path: state.onnxModelPath || "",
+    type: normalizeWorkspaceModelType(state.onnxModelType),
+  });
+  window.setWorkspaceModel = ({ path, type } = {}) => applyWorkspaceModel(path, type);
   window.getWorkspaceConfidence = () =>
     (window.VisionForgeAiModelTypes?.normalizeConfidence || ((v) => Number(v) || 0.25))(state.onnxConfidence);
   window.setWorkspaceConfidence = (value) => {
@@ -2631,6 +2655,8 @@
     imagesFolder: state.imagesFolder,
     annotationType: state.annotationType,
     annotationMode: state.annotationMode,
+    onnxModelPath: state.onnxModelPath,
+    onnxModelType: state.onnxModelType,
     onnxConfidence: state.onnxConfidence,
   });
   window.setWorkspaceTool = setWorkspaceTool;
