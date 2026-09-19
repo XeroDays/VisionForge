@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-09-20
+
 ### Added
 
 - Settings AI Model: **Oriented Object Detection** is selectable. Process Image and Auto detect run YOLO OBB ONNX (rotated boxes) when that type is applied.
