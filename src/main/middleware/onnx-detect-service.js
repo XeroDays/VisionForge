@@ -339,6 +339,8 @@ function decodeYoloObbRaw(data, dims, names, letter, threshold) {
   const hasObjectness = names.length > 0 && channels === names.length + 6;
   const classCount = hasObjectness ? channels - 6 : channels - 5;
   if (classCount < 1) return [];
+  const classStart = hasObjectness ? 5 : 4;
+  const angleIndex = channels - 1;
   const out = [];
 
   for (let i = 0; i < count; i += 1) {
@@ -347,11 +349,10 @@ function decodeYoloObbRaw(data, dims, names, letter, threshold) {
     const cy = at(1);
     const w = at(2);
     const h = at(3);
-    const angle = at(4);
+    const angle = at(angleIndex);
     let best = 0;
     let cls = 0;
-    const classStart = hasObjectness ? 6 : 5;
-    const objectness = hasObjectness ? at(5) : 1;
+    const objectness = hasObjectness ? at(4) : 1;
     for (let c = 0; c < classCount; c += 1) {
       const score = at(classStart + c);
       if (score > best) {
