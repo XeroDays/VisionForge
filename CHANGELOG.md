@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings model-type dropdown now matches the create-project catalog: Image Classification and Instance Segmentation are visible, disabled, and marked **Coming soon**.
 - Settings AI Model **Confidence** slider (1–99%, default 25%). Stored on the open `.VFSln` as `onnxConfidence` and used by Process Image and Auto detect. Disabled on the start page until a project is open.
 - Each solution stores its own ONNX model: `onnxModelPath` and `onnxModelType` live on the `.VFSln` with confidence. Settings, Process Image, and Auto detect use the open project’s model, not `configuration.vfson`.
+- Drag image files onto the workspace canvas to copy them into the selected image folder. New names are appended to VFSln `assets`. A **Drop images here** overlay appears while dragging. Requires a project and an image folder.
 
 ## [1.0.4] - 2026-09-18
 

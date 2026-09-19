@@ -125,6 +125,11 @@ function registerIpcHandlers() {
     return projectService.listImageFolder(folderPath);
   });
 
+  ipcMain.handle(channels.IMPORT_DROPPED_IMAGES, async (_event, filePath, sourcePaths) => {
+    log.info("IMPORT_DROPPED_IMAGES", { count: Array.isArray(sourcePaths) ? sourcePaths.length : 0 });
+    return projectService.importDroppedImages(filePath, sourcePaths);
+  });
+
   ipcMain.handle(channels.LOAD_PROJECT, async (_event, filePath) => {
     log.info("LOAD_PROJECT", { filePath });
     return projectService.loadProject(filePath);

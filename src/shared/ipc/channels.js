@@ -27,6 +27,7 @@ module.exports = {
   CREATE_PROJECT: "visionforge:create-project",
   SELECT_IMAGES_FOLDER: "visionforge:select-images-folder",
   LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
+  IMPORT_DROPPED_IMAGES: "visionforge:import-dropped-images",
   LOAD_PROJECT: "visionforge:load-project",
   UPDATE_PROJECT: "visionforge:update-project",
   DELETE_ASSET: "visionforge:delete-asset",

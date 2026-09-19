@@ -356,10 +356,60 @@ body {
 }
 
 .screen-section--main {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+.workspace-drop-overlay[hidden] {
+  display: none;
+}
+
+.workspace-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(8, 8, 10, 0.62);
+  border: 2px dashed rgba(244, 180, 42, 0.55);
+  opacity: 0;
+  transform: scale(0.98);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.workspace-drop-overlay.is-active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.workspace-drop-overlay__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 2rem;
+  border-radius: 12px;
+  background: rgba(20, 20, 22, 0.92);
+  border: 1px solid rgba(244, 180, 42, 0.28);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.workspace-drop-overlay__icon {
+  font-size: 1.75rem;
+  color: #f4b42a;
+}
+
+.workspace-drop-overlay__message {
+  margin: 0;
+  color: #e7ecf3;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .inspector-resize-handle {

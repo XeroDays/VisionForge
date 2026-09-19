@@ -559,6 +559,87 @@ function deleteAsset(filePath, imageName) {
   };
 }
 
+function importDroppedImages(filePath, sourcePaths) {
+  const startedAt = log.enter("importDroppedImages");
+  const result = readSolution(filePath);
+  if (!result.ok) {
+    log.exit("importDroppedImages", startedAt, { ok: false, reason: result.reason });
+    return result;
+  }
+
+  const folder = String(result.project?.imagesFolder || "").trim();
+  if (!folder) {
+    log.exit("importDroppedImages", startedAt, { ok: false, reason: "missing-folder" });
+    return { ok: false, reason: "missing-folder" };
+  }
+  if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) {
+    log.exit("importDroppedImages", startedAt, { ok: false, reason: "invalid-folder" });
+    return { ok: false, reason: "invalid-folder" };
+  }
+
+  const destDir = path.resolve(folder);
+  const inputs = Array.isArray(sourcePaths) ? sourcePaths : [];
+  let copied = 0;
+  let skipped = 0;
+
+  for (const raw of inputs) {
+    const source = path.resolve(String(raw || "").trim());
+    if (!source || !fs.existsSync(source)) {
+      skipped += 1;
+      continue;
+    }
+    let stat;
+    try {
+      stat = fs.statSync(source);
+    } catch {
+      skipped += 1;
+      continue;
+    }
+    if (!stat.isFile()) {
+      skipped += 1;
+      continue;
+    }
+    const name = path.basename(source);
+    if (!isSafeImageName(name)) {
+      skipped += 1;
+      continue;
+    }
+    const dest = path.join(destDir, name);
+    if (sameDir(path.dirname(source), destDir) || fs.existsSync(dest)) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      fs.copyFileSync(source, dest);
+      copied += 1;
+    } catch (err) {
+      log.warn("could not copy dropped image", {
+        source,
+        dest,
+        error: String(err?.message || err),
+      });
+      skipped += 1;
+    }
+  }
+
+  const synced = refreshFolderDerivedState(result);
+  const listed = listImageFiles(destDir);
+  if (listed.ok) setAllowedImagesDir(listed.folderPath);
+
+  log.info("imported dropped images", { copied, skipped, folder: destDir });
+  log.exit("importDroppedImages", startedAt, { ok: true, copied, skipped });
+  return {
+    ok: true,
+    copied,
+    skipped,
+    filePath: synced.filePath || result.filePath,
+    name: synced.name || result.name,
+    project: synced.project || result.project,
+    folderPath: destDir,
+    files: listed.ok ? listed.files : [],
+  };
+}
+
 function listImageFolder(folderPath) {
   const startedAt = log.enter("listImageFolder");
   const listed = listImageFiles(folderPath);
@@ -592,4 +673,5 @@ module.exports = {
   closeProject,
   selectImagesFolder,
   listImageFolder,
+  importDroppedImages,
 };

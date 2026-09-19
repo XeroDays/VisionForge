@@ -559,6 +559,22 @@ Trash `stopPropagation` (does not enter rename) → `#delete-label-overlay` conf
 
 ---
 
+### Drop images onto workspace
+
+**Trigger:** Drag image files from Explorer (or another folder) over the main workspace / canvas while a project is open
+
+**Flow:**
+`dragenter`/`dragover` with `Files` → show `#workspace-drop-overlay` (“Drop images here”) on `.screen-section--main`. Ignore start page, Settings, and Process Image. Drop → resolve paths via `webUtils.getPathForFile` → filter to `png/jpg/jpeg/webp/bmp/gif/tif/tiff` → if `imagesFolder` is empty, alert “Select an Image Folder first.” Else `importDroppedImages` copies into `imagesFolder` (skip same-folder / existing basename, never overwrite) → `syncAssetsFromFolder` appends `{ name, width: 0, height: 0, detections: [] }` → optional empty-sidecar import → renderer refreshes playback + Assets. Loading overlay runs during copy/sync.
+
+**Files:**
+- `src/renderer/scripts/workspace-drop.js`
+- `src/renderer/scripts/workspace-canvas.js` — `refreshWorkspaceImages`
+- `src/renderer/index.html` — `#workspace-drop-overlay`
+- `src/main/middleware/project-service.js` — `importDroppedImages`
+- `src/preload/index.js` — `getPathForFile`, `importDroppedImages`
+
+---
+
 ### Select Image Folder
 
 **Trigger:** File → Select Image Folder, or Select Images tool
@@ -845,6 +861,7 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | License registration | `src/main/services/license-service.js` |
 | Release update UI | `src/renderer/scripts/release-update-panel.js` |
 | Workspace canvas / playback | `src/renderer/scripts/workspace-canvas.js` |
+| Workspace image drop | `src/renderer/scripts/workspace-drop.js` |
 | Process Image screen | `src/renderer/scripts/process-image-screen.js` |
 | Settings dialog | `src/renderer/scripts/settings-dialog.js` |
 | Auto detect (magic) | `src/renderer/scripts/magic-detect.js` |
@@ -1060,6 +1077,7 @@ Renderer
 **Changing impacts:**
 - Create / open / load / update / close `.VFSln` session (`onnxModelPath`, `onnxModelType`, `onnxConfidence` on create/update)
 - Image folder picker and listing
+- Dropped-image copy into `imagesFolder` (`importDroppedImages`)
 - Append-only `assets` sync
 - Delete Asset (unlink image + sidecars + VFSln row)
 - Start page and workspace canvas
@@ -1143,6 +1161,7 @@ Renderer
 | `visionforge:create-project` | invoke | `register.js` | Write `{Name}.VFSln` with `annotationType` / `annotationMode` / `assets: []` |
 | `visionforge:select-images-folder` | invoke | `register.js` | Native open-directory dialog for images |
 | `visionforge:list-image-folder` | invoke | `register.js` | List image files in a folder (non-recursive) |
+| `visionforge:import-dropped-images` | invoke | `register.js` | Copy dropped image files into `imagesFolder` and append VFSln `assets` |
 | `visionforge:load-project` | invoke | `register.js` | Read `.VFSln`, sync `assets`, import empty detections, record history |
 | `visionforge:update-project` | invoke | `register.js` | Merge keys into `.VFSln` and write (`imagesFolder` also syncs assets + detections) |
 | `visionforge:delete-asset` | invoke | `register.js` | Unlink image + sidecar txt/xml; remove VFSln `assets` row; return remaining folder files |
@@ -1193,7 +1212,7 @@ Renderer
 - **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder, labels, assets, annotationType, annotationMode, onnxModelPath, onnxModelType, onnxConfidence). Annotation type/mode come from the create dialog catalog and are required for new projects. All project config belongs in that file. `object-detection-bbox` and `oriented-object-detection` are creatable; all other types appear disabled with a **Coming soon** badge in the dropdown. The dialog defaults to Object Detection — Bounding Box. On an OBB project the left rail shows Hexagon instead of Box; **W** toggles Cursor and that draw tool. Click-drag creates an axis-aligned box (`angle: 0`); the selected box has a rotation handle (Shift snaps 15°) and Alt+wheel rotates it 1°. OBB detections store `{ xc, yc, w, h, angle }` (degrees). The middleware rejects coming-soon pairs via `isSupportedAnnotation`; existing projects with other types still load and export normally via `isValidAnnotation`.
 - **Open existing project** / **Recent** loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab). `loadProject` appends missing image names to `assets` and fills empty `detections` from sidecar txt/xml.
 - **Labels:** if VFSln `labels` is empty, import `{project-folder}/classes.txt` then `{imagesFolder}/classes.txt` as `{ id, name }` (id from 0) and list them in the Labels tab. Each row shows a circle in that `id`’s box color (golden-angle HSL) between the id and the name. Existing labels are never overwritten by that import. **Add**, **rename**, and **delete** write VFSln `labels` only (never `classes.txt`). Rename keeps the same `id`; delete does not renumber remaining ids.
-- **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open. That save also syncs `assets` (append-only) and imports empty detections.
+- **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open. That save also syncs `assets` (append-only) and imports empty detections. Drag image files onto the workspace (main screen / canvas) to copy them into that folder and append new `assets` rows. Requires a selected folder; existing names are not overwritten.
 - **Assets (VFSln):** `{ name, width, height, detections: [{ labelid, value }] }`. Folder sync is append-only; **Delete Asset** (Assets-tab right-click) removes the image file, matching `.txt`/`.xml` sidecars, and that VFSln row. Playback still lists the folder. `width`/`height` filled when that image is previewed (or on box persist). YOLO `value` is `{ xc, yc, w, h }` with `xc = ((x1+x2)/2)/image_width` (same pattern for `yc`, `w`, `h`), clamped to 0–1 and written to 6 decimal places on edit (LabelImg / Ultralytics style); VOC is integer `{ xmin, ymin, xmax, ymax }`. Non-empty detections are not overwritten by sidecar import.
 - **Loading project overlay:** non-dismissible spinner during `loadProject` / `imagesFolder` save until the image list is ready.
 - **Detections tab:** lists VFSln detections for the current image (label name by `labelid`, with the same color circle as the Labels tab); refreshes on frame change. Click a row to select that box; hover trash (or Delete / Backspace when a box is selected) removes that detection only.

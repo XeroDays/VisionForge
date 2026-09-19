@@ -207,6 +207,12 @@
             </div>
           </aside>
         </div>
+        <div id="workspace-drop-overlay" class="workspace-drop-overlay" hidden aria-hidden="true">
+          <div class="workspace-drop-overlay__card">
+            <i class="fa-solid fa-images workspace-drop-overlay__icon" aria-hidden="true"></i>
+            <p class="workspace-drop-overlay__message">Drop images here</p>
+          </div>
+        </div>
       </section>
 
       <div class="inspector-resize-handle" id="inspector-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize inspector" tabindex="0" hidden></div>
@@ -477,6 +483,7 @@
   <script src="scripts/renderer-logger.js"></script>
   <script src="scripts/workspace-panels.js"></script>
   <script src="scripts/workspace-canvas.js"></script>
+  <script src="scripts/workspace-drop.js"></script>
   <script src="scripts/process-image-screen.js"></script>
   <script src="scripts/start-page.js"></script>
   <script src="../shared/enums/annotation-types.js"></script>

@@ -2639,6 +2639,13 @@
     state.labels.map((label) => ({ id: label.id, name: label.name }));
   window.applyWorkspaceDetections = applyWorkspaceDetections;
   window.getWorkspaceFilePath = () => state.filePath || "";
+  window.getWorkspaceImagesFolder = () => state.imagesFolder || "";
+  window.refreshWorkspaceImages = (folderPath, files, assets) => {
+    if (assets !== undefined) setAssets(assets);
+    applyImageList(folderPath, files);
+  };
+  window.showWorkspaceLoading = showLoadingOverlay;
+  window.hideWorkspaceLoading = hideLoadingOverlay;
   window.getWorkspaceModel = () => ({
     path: state.onnxModelPath || "",
     type: normalizeWorkspaceModelType(state.onnxModelType),

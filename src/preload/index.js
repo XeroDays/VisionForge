@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 // Keep in sync with src/shared/ipc/channels.js (preload cannot reliably require() app files when sandbox is on).
 const CH = {
@@ -26,6 +26,7 @@ const CH = {
   CREATE_PROJECT: "visionforge:create-project",
   SELECT_IMAGES_FOLDER: "visionforge:select-images-folder",
   LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
+  IMPORT_DROPPED_IMAGES: "visionforge:import-dropped-images",
   LOAD_PROJECT: "visionforge:load-project",
   UPDATE_PROJECT: "visionforge:update-project",
   DELETE_ASSET: "visionforge:delete-asset",
@@ -63,6 +64,15 @@ contextBridge.exposeInMainWorld("visionforge", {
     ipcRenderer.invoke(CH.CREATE_PROJECT, name, location, annotation),
   selectImagesFolder: (defaultPath) => ipcRenderer.invoke(CH.SELECT_IMAGES_FOLDER, defaultPath),
   listImageFolder: (folderPath) => ipcRenderer.invoke(CH.LIST_IMAGE_FOLDER, folderPath),
+  importDroppedImages: (filePath, sourcePaths) =>
+    ipcRenderer.invoke(CH.IMPORT_DROPPED_IMAGES, filePath, sourcePaths),
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || "";
+    } catch {
+      return "";
+    }
+  },
   loadProject: (filePath) => ipcRenderer.invoke(CH.LOAD_PROJECT, filePath),
   updateProject: (filePath, patch) => ipcRenderer.invoke(CH.UPDATE_PROJECT, filePath, patch),
   deleteAsset: (filePath, imageName) => ipcRenderer.invoke(CH.DELETE_ASSET, filePath, imageName),
