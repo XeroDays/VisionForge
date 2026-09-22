@@ -1,18 +1,65 @@
-name: Build Windows
+name: Build Windows on Push
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Release tag (e.g. v1.0.0)
-        required: true
-        default: v1.0.0
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: release-on-version
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
+  check_version:
+    name: Check Version
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+      tag: ${{ steps.check.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compare package.json version to latest release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(jq -r .version package.json)
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "package.json version is missing."
+            exit 1
+          fi
+
+          LATEST=""
+          FETCHED=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>/dev/null || true)
+          if [ -n "$FETCHED" ]; then
+            LATEST="$FETCHED"
+          fi
+
+          NORM_LATEST="$LATEST"
+          case "$NORM_LATEST" in
+            v*|V*) NORM_LATEST="${NORM_LATEST#?}" ;;
+          esac
+
+          echo "package.json=${VERSION} latest_release=${LATEST}"
+
+          if [ -n "$LATEST" ] && [ "$VERSION" = "$NORM_LATEST" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Versions match; skipping build."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "Versions differ; will publish v${VERSION}."
+          fi
+
   build:
+    name: Build
+    needs: check_version
+    if: needs.check_version.outputs.skip != 'true'
     runs-on: windows-latest
 
     steps:
@@ -36,7 +83,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag }}
-          name: VisionForge ${{ github.event.inputs.tag }}
+          tag_name: ${{ needs.check_version.outputs.tag }}
+          name: VisionForge ${{ needs.check_version.outputs.tag }}
           generate_release_notes: true
           files: dist/*.exe
