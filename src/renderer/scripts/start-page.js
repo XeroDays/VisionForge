@@ -74,8 +74,9 @@
     }
     recentList.hidden = items.length === 0;
 
-    items.forEach((item) => {
+    items.forEach((item, index) => {
       const li = document.createElement("li");
+      li.style.setProperty("--i", String(index + 2));
       const button = document.createElement("button");
       button.type = "button";
       button.className = "start-recent__row";

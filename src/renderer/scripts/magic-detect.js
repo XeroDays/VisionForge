@@ -50,6 +50,8 @@
   function setBusy(next) {
     busy = Boolean(next);
     if (magicBtn) magicBtn.disabled = busy;
+    const scan = document.getElementById("detect-scanline");
+    if (scan) scan.hidden = !busy;
   }
 
   async function runMagicDetect() {

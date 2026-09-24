@@ -108,12 +108,16 @@
     fillModalFromPayload(state.payload);
     applyForceChrome(isForceUpdate(state.payload));
     await refreshInstallerState();
-    modal.hidden = false;
+    window.VisionForgeMotion?.showAnimated(modal);
+    if (!window.VisionForgeMotion) modal.hidden = false;
   }
 
   function closeModal() {
     if (state.forceUpdate) return;
-    if (modal) modal.hidden = true;
+    if (modal) {
+      if (window.VisionForgeMotion) void window.VisionForgeMotion.hideAnimated(modal);
+      else modal.hidden = true;
+    }
   }
 
   function applyLicenseResult(result) {

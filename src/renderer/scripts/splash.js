@@ -57,8 +57,17 @@
       log.debug("onSplashStatus", { text, loading, denied });
 
       if (statusText && typeof text === "string" && text) {
-        statusText.textContent = text;
-        statusText.classList.toggle("splash-status-text--denied", denied);
+        const applyText = () => {
+          statusText.textContent = text;
+          statusText.classList.toggle("splash-status-text--denied", denied);
+          statusText.classList.remove("is-fading");
+        };
+        if (statusText.textContent && statusText.textContent !== text) {
+          statusText.classList.add("is-fading");
+          window.setTimeout(applyText, 90);
+        } else {
+          applyText();
+        }
       }
       if (spinner) {
         spinner.classList.toggle("is-hidden", !loading);

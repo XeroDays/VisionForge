@@ -24,11 +24,15 @@
   const OBB_ANGLE_SNAP = 15;
   const OBB_WHEEL_ROTATE_SMALL = 1;
   const OBB_WHEEL_PERSIST_MS = 200;
+  const HISTORY_PROJECT_KEY = "__project__";
+  const NUDGE_PERSIST_MS = 200;
   const labelColorCache = new Map();
 
   const startPage = document.getElementById("start-page");
   const canvas = document.getElementById("workspace-canvas");
   const stage = document.getElementById("workspace-stage");
+  const workspaceEmpty = document.getElementById("workspace-empty");
+  const workspaceEmptyBtn = document.getElementById("btn-workspace-empty-folder");
   const workspaceView = document.getElementById("workspace-view");
   const imageEl = document.getElementById("workspace-image");
   const detectionOverlay = document.getElementById("detection-overlay");
@@ -58,6 +62,11 @@
   const fileMenuDropdown = document.getElementById("file-menu-dropdown");
   const selectFolderMenuItem = document.getElementById("btn-select-image-folder");
   const exportMenuItem = document.getElementById("btn-export");
+  const autoDetectAllMenuItem = document.getElementById("btn-auto-detect-all");
+  const detectionsSortBtn = document.getElementById("btn-detections-sort");
+  const assetsSearchInput = document.getElementById("assets-search");
+  const assetsFilterSelect = document.getElementById("assets-filter");
+  const assetsThumbsBtn = document.getElementById("btn-assets-thumbs");
   const titlebarExportBtn = document.getElementById("btn-titlebar-export");
   const revertBtn = document.getElementById("view-tool-revert");
   const gotoStartupMenuItem = document.getElementById("btn-goto-startup");
@@ -129,6 +138,14 @@
     assets: [],
     assetsByName: new Map(),
     magicRevert: null,
+    clipboard: null,
+    sortDetectionsByScore: false,
+    hiddenLabelIds: new Set(),
+    soloLabelId: null,
+    assetQuery: "",
+    assetFilter: "all",
+    assetThumbs: false,
+    visibleIndexes: [],
   };
 
   let fitScale = 1;
@@ -141,6 +158,10 @@
   let lastStagePointer = null;
   let wheelRotateTimer = null;
   let pendingWheelRotate = null;
+  let nudgeTimer = null;
+  let pendingNudge = null;
+  let historyBusy = false;
+  const PASTE_OFFSET_PX = 12;
 
   log.debug("workspace-canvas.js init");
 
@@ -188,6 +209,12 @@
     if (viewToolbar) viewToolbar.hidden = !visible;
   }
 
+  function syncEmptyStage() {
+    if (!workspaceEmpty) return;
+    const show = Boolean(state.filePath) && state.files.length === 0;
+    workspaceEmpty.hidden = !show;
+  }
+
   function setProcessImageBtnVisible() {
     const visible = Boolean(state.filePath && currentFile());
     if (processImageBtn) processImageBtn.hidden = !visible;
@@ -205,12 +232,15 @@
       setViewToolbarVisible(false);
       setProcessImageBtnVisible();
       clearMagicRevert();
+      syncEmptyStage();
       return;
     }
     if (workspaceView) workspaceView.hidden = false;
+    if (!state.playing) imageEl.classList.add("is-swapping");
     imageEl.src = previewSrc(file.filePath, state.previewToken);
     setViewToolbarVisible(true);
     setProcessImageBtnVisible();
+    syncEmptyStage();
     if (imageReady()) {
       computeFitScale();
       applyView();
@@ -220,21 +250,18 @@
   }
 
   function closeFileMenu() {
+    if (typeof window.closeAppMenus === "function") {
+      window.closeAppMenus();
+      return;
+    }
     if (!fileMenuDropdown || !fileMenuBtn) return;
     fileMenuDropdown.hidden = true;
     fileMenuBtn.classList.remove("is-open");
     fileMenuBtn.setAttribute("aria-expanded", "false");
   }
 
-  function toggleFileMenu() {
-    if (!fileMenuDropdown || !fileMenuBtn) return;
-    const open = fileMenuDropdown.hidden;
-    fileMenuDropdown.hidden = !open;
-    fileMenuBtn.classList.toggle("is-open", open);
-    fileMenuBtn.setAttribute("aria-expanded", open ? "true" : "false");
-  }
-
   function setWorkspaceChrome(visible) {
+    document.body.classList.toggle("is-workspace-open", visible);
     if (toolsRail) toolsRail.hidden = !visible;
     if (inspectorPanel) inspectorPanel.hidden = !visible;
     if (inspectorResizeHandle) inspectorResizeHandle.hidden = !visible;
@@ -251,6 +278,7 @@
     }
     if (selectFolderMenuItem) selectFolderMenuItem.disabled = !visible;
     if (exportMenuItem) exportMenuItem.disabled = !visible;
+    if (autoDetectAllMenuItem) autoDetectAllMenuItem.disabled = !visible;
     if (titlebarExportBtn) titlebarExportBtn.disabled = !visible;
     if (gotoStartupMenuItem) gotoStartupMenuItem.disabled = !visible;
     if (labelsAddBtn) labelsAddBtn.disabled = !visible;
@@ -299,28 +327,51 @@
     });
   }
 
+  function assetMatchesFilter(file) {
+    const query = state.assetQuery.trim().toLowerCase();
+    if (query && !String(file.name || "").toLowerCase().includes(query)) return false;
+    const count = detectionCountFor(file.name);
+    const flagged = Boolean(state.assetsByName.get(file.name)?.flagged);
+    if (state.assetFilter === "labeled") return count > 0;
+    if (state.assetFilter === "unlabeled") return count === 0;
+    if (state.assetFilter === "flagged") return flagged;
+    return true;
+  }
+
   function renderAssets() {
     if (!assetsList || !assetsEmpty) return;
     assetsList.replaceChildren();
+    state.visibleIndexes = [];
 
     if (!state.files.length) {
       assetsEmpty.hidden = false;
+      assetsEmpty.textContent = "No images selected";
       assetsList.hidden = true;
       return;
     }
 
-    assetsEmpty.hidden = true;
-    assetsList.hidden = false;
-
     state.files.forEach((file, index) => {
+      if (!assetMatchesFilter(file)) return;
+      state.visibleIndexes.push(index);
       const li = document.createElement("li");
       const button = document.createElement("button");
       button.type = "button";
       button.className = "assets-list__item";
+      if (state.assetThumbs) button.classList.add("has-thumb");
       if (index === state.frameIndex) button.classList.add("is-current");
       button.dataset.frameIndex = String(index);
       button.dataset.name = file.name;
       button.title = file.name;
+
+      if (state.assetThumbs && file.filePath) {
+        const thumb = document.createElement("img");
+        thumb.className = "assets-list__thumb";
+        thumb.alt = "";
+        thumb.loading = "lazy";
+        thumb.draggable = false;
+        thumb.src = previewSrc(file.filePath, state.previewToken);
+        button.appendChild(thumb);
+      }
 
       const nameEl = document.createElement("span");
       nameEl.className = "assets-list__name";
@@ -330,11 +381,50 @@
       countEl.className = "assets-list__count";
       fillAssetCountChip(countEl, detectionCountFor(file.name));
 
-      button.append(nameEl, countEl);
+      const flagBtn = document.createElement("span");
+      flagBtn.className = "assets-list__flag";
+      flagBtn.dataset.name = file.name;
+      flagBtn.title = "Flag";
+      flagBtn.setAttribute("role", "button");
+      flagBtn.setAttribute("aria-label", `Flag ${file.name}`);
+      if (state.assetsByName.get(file.name)?.flagged) flagBtn.classList.add("is-flagged");
+      flagBtn.innerHTML = '<i class="fa-solid fa-flag" aria-hidden="true"></i>';
+
+      button.append(nameEl, countEl, flagBtn);
       li.appendChild(button);
       assetsList.appendChild(li);
     });
+
+    const hasRows = state.visibleIndexes.length > 0;
+    assetsEmpty.hidden = hasRows;
+    assetsEmpty.textContent = state.files.length ? "No matching images" : "No images selected";
+    assetsList.hidden = !hasRows;
     scrollCurrentAssetIntoView();
+  }
+
+  async function toggleAssetFlag(name) {
+    if (!name || !state.filePath) return;
+    const asset = state.assetsByName.get(name);
+    if (!asset) return;
+    const nextAssets = state.assets.map((row) =>
+      row?.name === name ? formatAsset(row, { flagged: !row.flagged }) : row,
+    );
+    setAssets(nextAssets);
+    renderAssets();
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
+      if (updated?.ok) setAssets(updated.project?.assets);
+    } catch (err) {
+      log.error("toggleAssetFlag failed", { error: String(err?.message || err) });
+    }
+    renderAssets();
+  }
+
+  function labelVisibility(labelid) {
+    const id = Number(labelid);
+    if (state.hiddenLabelIds.has(id)) return "hidden";
+    if (state.soloLabelId != null && Number(state.soloLabelId) !== id) return "dim";
+    return "shown";
   }
 
   function waitForPaint() {
@@ -347,12 +437,15 @@
 
   async function showLoadingOverlay() {
     if (!loadingOverlay) return;
-    loadingOverlay.hidden = false;
+    window.VisionForgeMotion?.showAnimated(loadingOverlay);
+    if (!window.VisionForgeMotion) loadingOverlay.hidden = false;
     await waitForPaint();
   }
 
   function hideLoadingOverlay() {
-    if (loadingOverlay) loadingOverlay.hidden = true;
+    if (!loadingOverlay) return;
+    if (window.VisionForgeMotion) void window.VisionForgeMotion.hideAnimated(loadingOverlay);
+    else loadingOverlay.hidden = true;
   }
 
   function setAssets(assets) {
@@ -492,6 +585,7 @@
       if (options.openTab) window.selectInspectorTab?.("labels");
     }
     refreshDetectionSelection();
+    window.refreshEditMenu?.();
   }
 
   function pointInRect(pt, rect) {
@@ -784,6 +878,7 @@
       width: Number.isFinite(width) && width > 0 ? Math.round(width) : 0,
       height: Number.isFinite(height) && height > 0 ? Math.round(height) : 0,
       detections,
+      flagged: Boolean(patch.flagged ?? row?.flagged),
     };
   }
 
@@ -836,6 +931,27 @@
       el.setAttribute("width", String(t));
       el.setAttribute("height", String(t));
     });
+    const label = group.querySelector(".detection-overlay__label");
+    const labelBg = group.querySelector(".detection-overlay__label-bg");
+    if (label && labelBg) {
+      const name = group.dataset.labelName || "";
+      label.textContent = name;
+      const fontSize = Math.max(12, Math.min(18, t * 1.6));
+      const padX = 4;
+      const padY = 2;
+      const textWidth = Math.max(fontSize, name.length * fontSize * 0.58);
+      const boxH = fontSize + padY * 2;
+      const boxW = textWidth + padX * 2;
+      const boxX = rect.x;
+      const boxY = Math.max(0, rect.y - boxH - 2);
+      labelBg.setAttribute("x", String(boxX));
+      labelBg.setAttribute("y", String(boxY));
+      labelBg.setAttribute("width", String(boxW));
+      labelBg.setAttribute("height", String(boxH));
+      label.setAttribute("x", String(boxX + padX));
+      label.setAttribute("y", String(boxY + boxH - padY - 1));
+      label.setAttribute("font-size", String(fontSize));
+    }
     const stem = group.querySelector(".detection-overlay__rotate-stem");
     const rotate = group.querySelector('[data-edge="rotate"]');
     if (stem && rotate) {
@@ -951,13 +1067,14 @@
     pendingWheelRotate = null;
   }
 
-  async function persistDetectionValue(index, value, fileName) {
+  async function persistDetectionValue(index, value, fileName, options = {}) {
     const name = fileName || currentFile()?.name;
     if (!state.filePath || !name || !Number.isInteger(index)) return false;
     const asset = state.assetsByName.get(name);
     const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
     const prev = detections[index];
     if (!prev) return false;
+    if (options.verb) pushDetectionHistory(name, options.verb);
     detections[index] = { ...prev, value };
     const nextAssets = state.assets.map((row) =>
       row?.name === name
@@ -1002,6 +1119,7 @@
       ...prev.value,
       angle: normalizeAngle(detectionAngle(prev.value) + (deltaY < 0 ? -step : step)),
     };
+    if (!pendingWheelRotate) pushDetectionHistory(file.name, "rotate box");
     detections[index] = { ...prev, value };
     setAssets(
       state.assets.map((row) =>
@@ -1052,9 +1170,13 @@
       drawDetectionBoxes();
       return;
     }
+    const verb =
+      edit.edge === "move" ? "move box" : edit.edge === "rotate" ? "rotate box" : "resize box";
     await persistDetectionValue(
       edit.index,
       rectToValue(edit.currentRect, imageEl.naturalWidth, imageEl.naturalHeight, prev.value),
+      undefined,
+      { verb },
     );
     setSelectedDetection(edit.index, { openTab: true });
     drawDetectionBoxes();
@@ -1065,6 +1187,122 @@
       return JSON.parse(JSON.stringify(Array.isArray(detections) ? detections : []));
     } catch {
       return [];
+    }
+  }
+
+  function historyKey() {
+    return currentFile()?.name || HISTORY_PROJECT_KEY;
+  }
+
+  function detectionsFor(name) {
+    return cloneDetections(state.assetsByName.get(name)?.detections);
+  }
+
+  function pushDetectionHistory(name, verb) {
+    if (!name || !window.VisionForgeHistory) return;
+    window.VisionForgeHistory.push(name, { verb, detections: detectionsFor(name) });
+  }
+
+  function pushLabelHistory(verb) {
+    if (!window.VisionForgeHistory) return;
+    window.VisionForgeHistory.push(historyKey(), {
+      verb,
+      labels: state.labels.map((label) => ({ id: label.id, name: label.name })),
+    });
+  }
+
+  function assetsWithDetections(name, detections) {
+    const asset = state.assetsByName.get(name);
+    const nextAssets = state.assets.map((row) =>
+      row?.name === name
+        ? formatAsset(row, {
+            width: imageEl.naturalWidth || asset?.width,
+            height: imageEl.naturalHeight || asset?.height,
+            detections,
+          })
+        : row,
+    );
+    if (!nextAssets.some((row) => row?.name === name)) {
+      nextAssets.push(formatAsset({ name, detections: [] }, { detections }));
+    }
+    return nextAssets;
+  }
+
+  function snapshotOf(entry) {
+    const snapshot = { verb: entry.verb };
+    if (entry.detections !== undefined) snapshot.detections = detectionsFor(entry.name);
+    if (entry.labels !== undefined) {
+      snapshot.labels = state.labels.map((label) => ({ id: label.id, name: label.name }));
+    }
+    return snapshot;
+  }
+
+  async function applyHistoryEntry(entry) {
+    if (!entry || !state.filePath) return false;
+    const patch = {};
+    let nextAssets = null;
+    if (entry.detections !== undefined && entry.name && entry.name !== HISTORY_PROJECT_KEY) {
+      nextAssets = assetsWithDetections(entry.name, cloneDetections(entry.detections));
+      patch.assets = nextAssets;
+    }
+    if (entry.labels !== undefined) {
+      patch.labels = entry.labels.map((label) => ({ id: label.id, name: label.name }));
+    }
+    if (!Object.keys(patch).length) return false;
+
+    if (nextAssets) setAssets(nextAssets);
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, patch);
+      if (!updated?.ok) {
+        log.warn("could not apply history entry", { reason: updated?.reason, verb: entry.verb });
+        return false;
+      }
+      if (nextAssets) setAssets(updated.project?.assets);
+      if (patch.labels) renderLabels(updated.project?.labels || patch.labels);
+    } catch (err) {
+      log.error("applyHistoryEntry failed", { error: String(err?.message || err) });
+      return false;
+    }
+    setSelectedDetection(null);
+    renderDetections();
+    drawDetectionBoxes();
+    refreshAssetCountChips();
+    return true;
+  }
+
+  async function undoWorkspaceChange() {
+    const history = window.VisionForgeHistory;
+    if (!history || !state.filePath || historyBusy) return false;
+    const key = historyKey();
+    const pending = history.peekUndo(key);
+    if (!pending) return false;
+    historyBusy = true;
+    try {
+      await flushWheelRotatePersist();
+      const entry = history.undo(key, snapshotOf(pending));
+      const ok = await applyHistoryEntry(entry);
+      if (ok) log.info("undo", { verb: entry.verb, name: key });
+      return ok;
+    } finally {
+      historyBusy = false;
+    }
+  }
+
+  async function redoWorkspaceChange() {
+    const history = window.VisionForgeHistory;
+    if (!history || !state.filePath || historyBusy) return false;
+    const key = historyKey();
+    const pending = history.peekRedo(key);
+    if (!pending) return false;
+    historyBusy = true;
+    try {
+      await flushWheelRotatePersist();
+      const entry = history.redo(key, snapshotOf(pending));
+      const ok = await applyHistoryEntry(entry);
+      if (ok) log.info("redo", { verb: entry.verb, name: key });
+      return ok;
+    } finally {
+      historyBusy = false;
     }
   }
 
@@ -1129,37 +1367,13 @@
       return { ok: false, reason: "no-image" };
     }
     const previous = cloneDetections(state.assetsByName.get(file.name)?.detections);
+    pushDetectionHistory(file.name, "auto detect");
     const imgW = imageEl.naturalWidth;
     const imgH = imageEl.naturalHeight;
-    const template = valueTemplate();
-    const detections = (Array.isArray(items) ? items : [])
-      .map((item) => {
-        const labelid = Number.isInteger(Number(item.labelid)) ? Number(item.labelid) : 0;
-        const xc = Number(item?.xc);
-        const yc = Number(item?.yc);
-        const w = Number(item?.w);
-        const h = Number(item?.h);
-        if ([xc, yc, w, h].every(Number.isFinite)) {
-          const value = { xc, yc, w, h };
-          if (isObbProject() || Number.isFinite(Number(item?.angle))) {
-            value.angle = Number.isFinite(Number(item?.angle)) ? Number(item.angle) : 0;
-          }
-          return { labelid, value };
-        }
-        const xmin = Number(item?.xmin);
-        const ymin = Number(item?.ymin);
-        const xmax = Number(item?.xmax);
-        const ymax = Number(item?.ymax);
-        if (![xmin, ymin, xmax, ymax].every(Number.isFinite)) return null;
-        const value = rectToValue(
-          { x: xmin, y: ymin, width: xmax - xmin, height: ymax - ymin },
-          imgW,
-          imgH,
-          template,
-        );
-        return { labelid, value };
-      })
-      .filter(Boolean);
+    const mapDetections = window.VisionForgeDetectionMapping?.mapModelDetections;
+    const detections = mapDetections
+      ? mapDetections(items, { imgW, imgH, voc: isVocMode(), obb: isObbProject() })
+      : [];
 
     const nextAssets = state.assets.map((row) =>
       row?.name === file.name
@@ -1190,6 +1404,9 @@
     window.selectInspectorTab?.("detections");
     state.magicRevert = { name: file.name, detections: previous };
     syncMagicRevertButton();
+    const chip = assetsList?.querySelector(`.assets-list__item[data-name="${CSS.escape(file.name)}"] .assets-list__count`);
+    chip?.classList.add("is-pulse");
+    window.setTimeout(() => chip?.classList.remove("is-pulse"), 400);
     log.info("auto detections applied", { name: file.name, count: detections.length });
     log.exit("applyWorkspaceDetections", startedAt, { ok: true, count: detections.length });
     return { ok: true, count: detections.length };
@@ -1205,6 +1422,7 @@
     if ((rect?.width || 0) < BOX_MIN_SIZE || (rect?.height || 0) < BOX_MIN_SIZE) return;
     const asset = state.assetsByName.get(file.name);
     const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
+    pushDetectionHistory(file.name, "create box");
     detections.push({
       labelid,
       value: rectToValue({ ...rect, angle: isObbProject() ? Number(rect.angle) || 0 : undefined }, imgW, imgH, valueTemplate()),
@@ -1247,6 +1465,7 @@
     const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
     const prev = detections[index];
     if (!prev || Number(prev.labelid) === Number(labelid)) return;
+    pushDetectionHistory(file.name, "change box label");
     detections[index] = { ...prev, labelid };
     const nextAssets = state.assets.map((row) =>
       row?.name === file.name
@@ -1307,6 +1526,7 @@
     const asset = state.assetsByName.get(file.name);
     const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
     if (!Number.isInteger(index) || index < 0 || index >= detections.length) return;
+    pushDetectionHistory(file.name, "delete box");
     detections.splice(index, 1);
     const nextAssets = state.assets.map((row) =>
       row?.name === file.name
@@ -1331,6 +1551,108 @@
       log.error("persistDeleteDetection failed", { error: String(err?.message || err) });
     }
     renderDetections();
+  }
+
+  function copySelectedDetection() {
+    const file = currentFile();
+    if (!file || state.selectedDetectionIndex == null) return false;
+    const detection = currentDetections()[state.selectedDetectionIndex];
+    if (!detection) return false;
+    state.clipboard = {
+      labelid: Number(detection.labelid) || 0,
+      value: cloneDetections([detection])[0]?.value || null,
+    };
+    if (!state.clipboard.value) {
+      state.clipboard = null;
+      return false;
+    }
+    window.refreshEditMenu?.();
+    log.info("box copied", { name: file.name, index: state.selectedDetectionIndex });
+    return true;
+  }
+
+  async function pasteWorkspaceClipboard() {
+    const clip = state.clipboard;
+    const file = currentFile();
+    if (!clip?.value || !file || !state.filePath || !imageReady() || boxEdit || boxDraw) return false;
+    const imgW = imageEl.naturalWidth;
+    const imgH = imageEl.naturalHeight;
+    const source = detectionToRect(clip.value, imgW, imgH);
+    if (!source) return false;
+    const moved = { ...source, x: source.x + PASTE_OFFSET_PX, y: source.y + PASTE_OFFSET_PX };
+    const rect = isObbProject() ? clampObbRect(moved, imgW, imgH) : clampRect(moved, imgW, imgH);
+    const asset = state.assetsByName.get(file.name);
+    const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
+    pushDetectionHistory(file.name, "paste box");
+    detections.push({
+      labelid: clip.labelid,
+      value: rectToValue(rect, imgW, imgH, clip.value),
+    });
+    const nextAssets = assetsWithDetections(file.name, detections);
+    setAssets(nextAssets);
+    const newIndex = detections.length - 1;
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
+      if (updated?.ok) setAssets(updated.project?.assets);
+      else log.warn("could not paste box", { reason: updated?.reason });
+    } catch (err) {
+      log.error("pasteWorkspaceClipboard failed", { error: String(err?.message || err) });
+    }
+    setSelectedDetection(newIndex, { openTab: false });
+    renderDetections();
+    drawDetectionBoxes();
+    log.info("box pasted", { name: file.name, index: newIndex });
+    return true;
+  }
+
+  function cancelNudgePersist() {
+    if (nudgeTimer) {
+      clearTimeout(nudgeTimer);
+      nudgeTimer = null;
+    }
+    pendingNudge = null;
+  }
+
+  async function flushNudgePersist() {
+    const pending = pendingNudge;
+    cancelNudgePersist();
+    if (!pending) return;
+    await persistDetectionValue(pending.index, pending.value, pending.name);
+  }
+
+  function nudgeSelectedBox(dx, dy) {
+    if (state.currentTool !== "cursor" || !imageReady() || boxEdit || boxDraw) return false;
+    const index = state.selectedDetectionIndex;
+    const file = currentFile();
+    if (!file || index == null) return false;
+    const asset = state.assetsByName.get(file.name);
+    const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
+    const prev = detections[index];
+    if (!prev) return false;
+    const imgW = imageEl.naturalWidth || asset?.width || 0;
+    const imgH = imageEl.naturalHeight || asset?.height || 0;
+    const rect = detectionToRect(prev.value, imgW, imgH);
+    if (!rect) return false;
+    const moved = { ...rect, x: rect.x + dx, y: rect.y + dy };
+    const nextRect = isObbProject() ? clampObbRect(moved, imgW, imgH) : clampRect(moved, imgW, imgH);
+    const value = rectToValue(nextRect, imgW, imgH, prev.value);
+    if (!pendingNudge) pushDetectionHistory(file.name, "nudge box");
+    detections[index] = { ...prev, value };
+    setAssets(
+      state.assets.map((row) =>
+        row?.name === file.name
+          ? formatAsset(row, { width: imgW, height: imgH, detections })
+          : row,
+      ),
+    );
+    drawDetectionBoxes();
+    pendingNudge = { name: file.name, index, value };
+    if (nudgeTimer) clearTimeout(nudgeTimer);
+    nudgeTimer = window.setTimeout(() => {
+      nudgeTimer = null;
+      void flushNudgePersist();
+    }, NUDGE_PERSIST_MS);
+    return true;
   }
 
   function imageReady() {
@@ -1359,14 +1681,19 @@
     const imgH = imageEl.naturalHeight;
     const groups = [];
     currentDetections().forEach((detection, index) => {
+      if (labelVisibility(detection.labelid) === "hidden") return;
       const rect = detectionToRect(detection?.value, imgW, imgH);
       if (!rect || rect.width <= 0 || rect.height <= 0) return;
       const color = colorForLabelId(detection.labelid);
       const group = document.createElementNS(SVG_NS, "g");
       group.setAttribute("class", "detection-overlay__item");
+      if (labelVisibility(detection.labelid) === "dim") group.classList.add("is-dim");
       group.dataset.index = String(index);
+      group.dataset.labelName = labelNameForId(detection.labelid);
       if (index === state.selectedDetectionIndex) group.classList.add("is-selected");
       group.append(
+        svgRect("detection-overlay__label-bg", { fill: color }),
+        svgEl("text", "detection-overlay__label", { fill: "#111" }),
         svgRect("detection-overlay__box", { fill: "transparent", stroke: color }),
         svgRect("detection-overlay__handle", { "data-edge": "nw", fill: color }),
         svgRect("detection-overlay__handle", { "data-edge": "ne", fill: color }),
@@ -1400,13 +1727,18 @@
     detectionsEmpty.hidden = true;
     detectionsList.hidden = false;
 
-    items.forEach((detection, index) => {
+    const view = items.map((detection, index) => ({ detection, index }));
+    if (state.sortDetectionsByScore) {
+      view.sort((a, b) => (Number(b.detection?.score) || -1) - (Number(a.detection?.score) || -1));
+    }
+    view.forEach(({ detection, index }) => {
       const name = labelNameForId(detection?.labelid);
       const li = document.createElement("li");
       li.className = "detections-list__item";
       li.dataset.index = String(index);
       li.title = name;
       if (index === state.selectedDetectionIndex) li.classList.add("is-selected");
+      if (labelVisibility(detection?.labelid) !== "shown") li.classList.add("is-hidden");
 
       const swatch = document.createElement("span");
       swatch.className = "detections-list__swatch";
@@ -1414,7 +1746,15 @@
 
       const nameEl = document.createElement("span");
       nameEl.className = "detections-list__name";
+      const score = Number(detection?.score);
+      const scoreText = Number.isFinite(score) ? ` ${Math.round(score * 100)}%` : "";
       nameEl.textContent = `${index + 1}. ${name}`;
+      if (scoreText) {
+        const scoreEl = document.createElement("span");
+        scoreEl.className = "detections-list__score";
+        scoreEl.textContent = scoreText;
+        nameEl.appendChild(scoreEl);
+      }
 
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
@@ -1494,6 +1834,15 @@
       nameEl.className = "labels-list__name";
       nameEl.textContent = label.name;
 
+      const eyeBtn = document.createElement("button");
+      eyeBtn.type = "button";
+      eyeBtn.className = "labels-list__eye";
+      eyeBtn.dataset.labelId = String(label.id);
+      eyeBtn.title = state.hiddenLabelIds.has(label.id) ? "Show class" : "Hide class";
+      eyeBtn.setAttribute("aria-label", eyeBtn.title);
+      eyeBtn.innerHTML = `<i class="fa-solid ${state.hiddenLabelIds.has(label.id) ? "fa-eye-slash" : "fa-eye"}" aria-hidden="true"></i>`;
+      if (state.soloLabelId === label.id) li.classList.add("is-solo");
+
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
       deleteBtn.className = "labels-list__delete";
@@ -1502,7 +1851,7 @@
       deleteBtn.title = "Delete";
       deleteBtn.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
 
-      li.append(idEl, swatch, nameEl, deleteBtn);
+      li.append(idEl, swatch, nameEl, eyeBtn, deleteBtn);
       labelsList.appendChild(li);
     });
     if (!state.labels.some((label) => label.id === state.selectedLabelId)) {
@@ -1516,8 +1865,9 @@
     return Math.max(...state.labels.map((label) => label.id)) + 1;
   }
 
-  async function persistLabels(next, method) {
+  async function persistLabels(next, method, verb) {
     const startedAt = log.enter(method);
+    if (verb) pushLabelHistory(verb);
     const updated = await window.visionforge?.updateProject?.(state.filePath, { labels: next });
     if (!updated?.ok) {
       log.warn(`${method} persist failed`, { reason: updated?.reason });
@@ -1564,7 +1914,7 @@
       const next = state.labels.map((label) =>
         label.id === state.editingLabelId ? { id: label.id, name } : label,
       );
-      const ok = await persistLabels(next, "confirmRenameLabel");
+      const ok = await persistLabels(next, "confirmRenameLabel", "rename label");
       if (ok) log.info("label renamed", { id: current?.id, name });
     } catch (err) {
       log.error("confirmRenameLabel failed", { error: String(err?.message || err) });
@@ -1574,7 +1924,10 @@
   }
 
   function closeDeleteDialog() {
-    if (deleteLabelOverlay) deleteLabelOverlay.hidden = true;
+    if (deleteLabelOverlay) {
+      if (window.VisionForgeMotion) void window.VisionForgeMotion.hideAnimated(deleteLabelOverlay);
+      else deleteLabelOverlay.hidden = true;
+    }
     state.pendingDeleteId = null;
   }
 
@@ -1606,7 +1959,10 @@
   }
 
   function closeDeleteAssetDialog() {
-    if (deleteAssetOverlay) deleteAssetOverlay.hidden = true;
+    if (deleteAssetOverlay) {
+      if (window.VisionForgeMotion) void window.VisionForgeMotion.hideAnimated(deleteAssetOverlay);
+      else deleteAssetOverlay.hidden = true;
+    }
     if (!state.deletingAsset) state.pendingDeleteAssetName = null;
   }
 
@@ -1618,7 +1974,10 @@
     if (deleteAssetMessage) {
       deleteAssetMessage.textContent = `Delete "${name}"? This will remove the image and its detection file. This cannot be undone.`;
     }
-    if (deleteAssetOverlay) deleteAssetOverlay.hidden = false;
+    if (deleteAssetOverlay) {
+      window.VisionForgeMotion?.showAnimated(deleteAssetOverlay);
+      if (!window.VisionForgeMotion) deleteAssetOverlay.hidden = false;
+    }
   }
 
   async function confirmDeleteAsset() {
@@ -1672,9 +2031,26 @@
     cancelLabelEdit();
     state.pendingDeleteId = id;
     if (deleteLabelMessage) {
-      deleteLabelMessage.textContent = `Delete "${label.name}"? This cannot be undone.`;
+      let boxCount = 0;
+      let imageCount = 0;
+      state.assets.forEach((asset) => {
+        const used = (Array.isArray(asset?.detections) ? asset.detections : []).filter(
+          (detection) => Number(detection?.labelid) === Number(label.id),
+        ).length;
+        if (used > 0) {
+          boxCount += used;
+          imageCount += 1;
+        }
+      });
+      const usage = boxCount
+        ? ` ${boxCount} box${boxCount === 1 ? "" : "es"} on ${imageCount} image${imageCount === 1 ? "" : "s"} use this label and will be kept with id ${label.id}.`
+        : "";
+      deleteLabelMessage.textContent = `Delete "${label.name}"? This cannot be undone.${usage}`;
     }
-    if (deleteLabelOverlay) deleteLabelOverlay.hidden = false;
+    if (deleteLabelOverlay) {
+      window.VisionForgeMotion?.showAnimated(deleteLabelOverlay);
+      if (!window.VisionForgeMotion) deleteLabelOverlay.hidden = false;
+    }
   }
 
   async function confirmDeleteLabel() {
@@ -1684,7 +2060,7 @@
     try {
       const id = state.pendingDeleteId;
       const next = state.labels.filter((label) => label.id !== id);
-      const ok = await persistLabels(next, "confirmDeleteLabel");
+      const ok = await persistLabels(next, "confirmDeleteLabel", "delete label");
       if (ok) {
         log.info("label deleted", { id });
         closeDeleteDialog();
@@ -1732,6 +2108,7 @@
     if (labelsConfirmBtn) labelsConfirmBtn.disabled = true;
     try {
       const next = state.labels.concat([{ id: nextLabelId(), name }]);
+      pushLabelHistory("add label");
       const updated = await window.visionforge?.updateProject?.(state.filePath, { labels: next });
       if (!updated?.ok) {
         log.warn("could not persist label", { reason: updated?.reason });
@@ -1790,6 +2167,7 @@
 
   function setFrame(index, options = {}) {
     void flushWheelRotatePersist();
+    void flushNudgePersist();
     if (boxEdit) cancelBoxEdit();
     boxDraw = null;
     hideDraftRect();
@@ -1924,6 +2302,7 @@
       return;
     }
     window.closeProcessImageScreen?.({ restoreWorkspace: false });
+    window.VisionForgeHistory?.clear();
 
     try {
       await showLoadingOverlay();
@@ -1972,6 +2351,7 @@
     window.closeProcessImageScreen?.({ restoreWorkspace: false });
     stopPlay();
     void flushWheelRotatePersist();
+    void flushNudgePersist();
     boxEdit = null;
     boxDraw = null;
     hideCrosshair();
@@ -1981,6 +2361,7 @@
     closeDeleteAssetDialog();
     closeAssetContextMenu();
     clearMagicRevert();
+    window.VisionForgeHistory?.clear();
     window.selectWorkspaceTool?.("cursor");
     applyImageList("", []);
     renderLabels([]);
@@ -2000,11 +2381,19 @@
     state.savingLabel = false;
     state.selectedLabelId = null;
     state.selectedDetectionIndex = null;
+    state.hiddenLabelIds = new Set();
+    state.soloLabelId = null;
+    state.assetQuery = "";
+    state.assetFilter = "all";
+    state.visibleIndexes = [];
+    if (assetsSearchInput) assetsSearchInput.value = "";
+    if (assetsFilterSelect) assetsFilterSelect.value = "all";
     state.annotationType = "";
     state.annotationMode = "";
     applyWorkspaceModel("", window.VisionForgeAiModelTypes?.DEFAULT_TYPE || "object-detection");
     state.onnxConfidence = window.VisionForgeAiModelTypes?.DEFAULT_CONFIDENCE ?? 0.25;
     state.magicRevert = null;
+    state.clipboard = null;
     panning = false;
     lastFrameWheelAt = 0;
     setWorkspaceChrome(false);
@@ -2128,6 +2517,7 @@
   }
 
   imageEl?.addEventListener("load", () => {
+    imageEl.classList.remove("is-swapping");
     computeFitScale();
     applyView();
     drawDetectionBoxes();
@@ -2407,6 +2797,32 @@
   });
 
   labelsList?.addEventListener("click", (event) => {
+    const swatch = event.target.closest(".labels-list__swatch");
+    if (swatch && event.altKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      const id = Number(swatch.closest(".labels-list__item")?.dataset.labelId);
+      state.soloLabelId = state.soloLabelId === id ? null : id;
+      if (state.soloLabelId != null) state.hiddenLabelIds.delete(state.soloLabelId);
+      renderLabels(state.labels);
+      drawDetectionBoxes();
+      renderDetections();
+      return;
+    }
+    const eyeBtn = event.target.closest(".labels-list__eye");
+    if (eyeBtn) {
+      event.stopPropagation();
+      const id = Number(eyeBtn.dataset.labelId);
+      if (state.hiddenLabelIds.has(id)) state.hiddenLabelIds.delete(id);
+      else {
+        state.hiddenLabelIds.add(id);
+        if (state.soloLabelId === id) state.soloLabelId = null;
+      }
+      renderLabels(state.labels);
+      drawDetectionBoxes();
+      renderDetections();
+      return;
+    }
     const deleteBtn = event.target.closest(".labels-list__delete");
     if (deleteBtn) {
       event.stopPropagation();
@@ -2536,7 +2952,41 @@
     if (event.target === deleteAssetOverlay) closeDeleteAssetDialog();
   });
 
+  let assetSearchTimer = 0;
+  assetsSearchInput?.addEventListener("input", () => {
+    window.clearTimeout(assetSearchTimer);
+    assetSearchTimer = window.setTimeout(() => {
+      state.assetQuery = assetsSearchInput.value || "";
+      renderAssets();
+    }, 120);
+  });
+  assetsFilterSelect?.addEventListener("change", () => {
+    state.assetFilter = assetsFilterSelect.value || "all";
+    renderAssets();
+  });
+  assetsThumbsBtn?.addEventListener("click", () => {
+    state.assetThumbs = !state.assetThumbs;
+    assetsThumbsBtn.classList.toggle("is-selected", state.assetThumbs);
+    assetsThumbsBtn.setAttribute("aria-pressed", state.assetThumbs ? "true" : "false");
+    renderAssets();
+    void window.visionforge?.updateConfiguration?.({ assetsThumbnails: state.assetThumbs });
+  });
+  void window.visionforge?.getConfiguration?.().then((config) => {
+    state.assetThumbs = Boolean(config?.assetsThumbnails);
+    if (assetsThumbsBtn) {
+      assetsThumbsBtn.classList.toggle("is-selected", state.assetThumbs);
+      assetsThumbsBtn.setAttribute("aria-pressed", state.assetThumbs ? "true" : "false");
+    }
+  });
+
   assetsList?.addEventListener("click", (event) => {
+    const flag = event.target.closest(".assets-list__flag");
+    if (flag) {
+      event.stopPropagation();
+      event.preventDefault();
+      void toggleAssetFlag(flag.dataset.name);
+      return;
+    }
     const item = event.target.closest(".assets-list__item");
     if (!item || !assetsList.contains(item)) return;
     stopPlay();
@@ -2559,12 +3009,10 @@
 
   assetsPane?.addEventListener("scroll", () => closeAssetContextMenu());
 
-  fileMenuBtn?.addEventListener("click", (event) => {
-    event.stopPropagation();
-    toggleFileMenu();
-  });
-
   selectFolderMenuItem?.addEventListener("click", () => {
+    void selectImagesFolder();
+  });
+  workspaceEmptyBtn?.addEventListener("click", () => {
     void selectImagesFolder();
   });
 
@@ -2572,18 +3020,21 @@
     void closeWorkspace();
   });
 
+  autoDetectAllMenuItem?.addEventListener("click", () => {
+    window.openBatchDetectDialog?.();
+  });
+
+  detectionsSortBtn?.addEventListener("click", () => {
+    state.sortDetectionsByScore = !state.sortDetectionsByScore;
+    detectionsSortBtn.classList.toggle("is-selected", state.sortDetectionsByScore);
+    detectionsSortBtn.setAttribute("aria-pressed", state.sortDetectionsByScore ? "true" : "false");
+    renderDetections();
+  });
+
   document.addEventListener("click", (event) => {
     if (isAssetContextMenuOpen() && !event.target.closest("#asset-context-menu")) {
       closeAssetContextMenu();
     }
-    if (!fileMenuDropdown || fileMenuDropdown.hidden) return;
-    if (event.target.closest("#file-menu")) return;
-    closeFileMenu();
-  });
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    closeFileMenu();
   });
 
   function isTypingTarget(target) {
@@ -2593,13 +3044,47 @@
     return Boolean(target.closest("[contenteditable='true']"));
   }
 
+  function isAnyDialogOpen() {
+    return Boolean(document.querySelector(".settings-overlay:not([hidden])"));
+  }
+
+  function canvasShortcutsBlocked(target) {
+    if (!state.filePath) return true;
+    if (isDeleteDialogOpen() || isAnyDialogOpen()) return true;
+    if (isAssetContextMenuOpen()) return true;
+    if (window.isProcessImageScreenOpen?.()) return true;
+    return isTypingTarget(target);
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    if (canvasShortcutsBlocked(event.target)) return;
+    const key = String(event.key || "").toLowerCase();
+    if (key === "z" && !event.shiftKey) {
+      event.preventDefault();
+      void undoWorkspaceChange();
+      return;
+    }
+    if (key === "y" || (key === "z" && event.shiftKey)) {
+      event.preventDefault();
+      void redoWorkspaceChange();
+      return;
+    }
+    if (key === "c") {
+      event.preventDefault();
+      copySelectedDetection();
+      return;
+    }
+    if (key === "v") {
+      event.preventDefault();
+      void pasteWorkspaceClipboard();
+    }
+  });
+
   document.addEventListener("keydown", (event) => {
     if (!state.filePath || state.files.length === 0) return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
-    if (isDeleteDialogOpen()) return;
-    if (isAssetContextMenuOpen()) return;
-    if (window.isProcessImageScreenOpen?.()) return;
-    if (isTypingTarget(event.target)) return;
+    if (canvasShortcutsBlocked(event.target)) return;
     const key = event.key;
     if (key === "Delete" || key === "Backspace") {
       if (state.selectedDetectionIndex == null || boxEdit || boxDraw) return;
@@ -2613,15 +3098,46 @@
       window.selectWorkspaceTool?.(state.currentTool === drawTool ? "cursor" : drawTool);
       return;
     }
+    const step = event.shiftKey ? 10 : 1;
+    if (state.selectedDetectionIndex != null && state.currentTool === "cursor" && !boxEdit && !boxDraw) {
+      let dx = 0;
+      let dy = 0;
+      if (key === "ArrowLeft") dx = -step;
+      else if (key === "ArrowRight") dx = step;
+      else if (key === "ArrowUp") dy = -step;
+      else if (key === "ArrowDown") dy = step;
+      if (dx || dy) {
+        event.preventDefault();
+        nudgeSelectedBox(dx, dy);
+        return;
+      }
+    }
+    if (key === "f" || key === "F") {
+      const file = currentFile();
+      if (!file) return;
+      event.preventDefault();
+      void toggleAssetFlag(file.name);
+      return;
+    }
     let delta = 0;
     if (key === "a" || key === "A" || key === "ArrowLeft") delta = -1;
     else if (key === "d" || key === "D" || key === "ArrowRight") delta = 1;
     else return;
     event.preventDefault();
     stopPlay();
-    setFrame(state.frameIndex + delta);
+    const indexes = state.visibleIndexes.length ? state.visibleIndexes : state.files.map((_, index) => index);
+    const pos = indexes.indexOf(state.frameIndex);
+    const nextPos = pos < 0 ? 0 : Math.min(indexes.length - 1, Math.max(0, pos + delta));
+    setFrame(indexes[nextPos] ?? state.frameIndex);
   });
 
+  document.addEventListener("keyup", (event) => {
+    if (!pendingNudge) return;
+    if (!String(event.key || "").startsWith("Arrow")) return;
+    void flushNudgePersist();
+  });
+
+  window.setWorkspaceFrame = (index) => setFrame(index);
   window.showWorkspace = showWorkspace;
   window.selectImagesFolder = selectImagesFolder;
   window.stopWorkspacePlayback = stopPlay;
@@ -2639,6 +3155,7 @@
     state.labels.map((label) => ({ id: label.id, name: label.name }));
   window.applyWorkspaceDetections = applyWorkspaceDetections;
   window.getWorkspaceFilePath = () => state.filePath || "";
+  window.getWorkspaceFiles = () => state.files.map((file) => ({ name: file.name, filePath: file.filePath }));
   window.getWorkspaceImagesFolder = () => state.imagesFolder || "";
   window.refreshWorkspaceImages = (folderPath, files, assets) => {
     if (assets !== undefined) setAssets(assets);
@@ -2666,6 +3183,18 @@
     onnxModelType: state.onnxModelType,
     onnxConfidence: state.onnxConfidence,
   });
+  window.undoWorkspaceChange = undoWorkspaceChange;
+  window.redoWorkspaceChange = redoWorkspaceChange;
+  window.getWorkspaceHistoryKey = historyKey;
+  window.copySelectedDetection = copySelectedDetection;
+  window.pasteWorkspaceClipboard = pasteWorkspaceClipboard;
+  window.hasWorkspaceClipboard = () => Boolean(state.clipboard?.value);
+  window.deleteSelectedDetection = () => {
+    if (!state.filePath || state.selectedDetectionIndex == null || boxEdit || boxDraw) return false;
+    void persistDeleteDetection(state.selectedDetectionIndex);
+    return true;
+  };
+  window.hasSelectedDetection = () => state.selectedDetectionIndex != null;
   window.setWorkspaceTool = setWorkspaceTool;
   window.zoomWorkspace = (direction) => {
     if (direction < 0) zoomOut();

@@ -224,7 +224,8 @@
   }
 
   function closeDialog() {
-    overlay.hidden = true;
+    if (window.VisionForgeMotion) void window.VisionForgeMotion.hideAnimated(overlay);
+    else overlay.hidden = true;
     closeTypeDropdown();
     setError("");
     log.debug("create-project dialog closed");
@@ -240,7 +241,8 @@
     resetAnnotation();
     updateHint();
     setError("");
-    overlay.hidden = false;
+    window.VisionForgeMotion?.showAnimated(overlay);
+    if (!window.VisionForgeMotion) overlay.hidden = false;
     nameInput?.focus();
     nameInput?.select();
     log.info("create-project dialog opened");

@@ -137,12 +137,17 @@
       window.clearTimeout(closeTimer);
       closeTimer = 0;
     }
-    overlay.hidden = true;
+    if (window.VisionForgeMotion) void window.VisionForgeMotion.hideAnimated(overlay);
+    else overlay.hidden = true;
     resetDialog();
     log.debug("export dialog closed");
   }
 
   function closeFileMenu() {
+    if (typeof window.closeAppMenus === "function") {
+      window.closeAppMenus();
+      return;
+    }
     const fileMenuBtn = document.getElementById("btn-file-menu");
     const fileMenuDropdown = document.getElementById("file-menu-dropdown");
     if (fileMenuDropdown) fileMenuDropdown.hidden = true;
@@ -163,7 +168,8 @@
     if (locationInput) locationInput.value = destFolder;
     if (typeInput) typeInput.value = typeLabel(ctx.annotationType);
     renderModes(ctx.annotationType, ctx.annotationMode);
-    overlay.hidden = false;
+    window.VisionForgeMotion?.showAnimated(overlay);
+    if (!window.VisionForgeMotion) overlay.hidden = false;
     syncConfirm();
     log.debug("export dialog opened", { type: ctx.annotationType, mode: ctx.annotationMode, destFolder });
   }

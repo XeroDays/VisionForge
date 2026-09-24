@@ -131,4 +131,6 @@ function importEmptyDetections(project, imagesFolder) {
 module.exports = {
   importEmptyDetections,
   detectionsEmpty,
+  parseYoloTxt,
+  parseVocXml,
 };

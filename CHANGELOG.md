@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-09-24
+
+### Added
+
+- Undo and redo for box and label edits (Ctrl+Z / Ctrl+Y), plus Edit and Help menus, a keyboard-shortcut list, and About.
+- Copy, paste, and arrow-key nudge for the selected box. Class names show on hover or selection. Deleting a label warns when boxes still use that id.
+- Process Image can apply its preview boxes to the project. Detections keep an optional score and can be sorted by it.
+- Auto detect all images, with progress, cancel, and a list of frames that came back empty.
+- Oriented export for DOTA, rotated rectangle (xywhr), 4-point quadrilaterals, and rotated COCO.
+- Per-label show, hide, and solo. Assets search, labeled/unlabeled/flagged filters, a flag on each image, and optional thumbnails.
+- Short motion on the splash, start page, workspace chrome, dialogs, frame changes, and auto detect.
+- Font Awesome is bundled with the app so icons draw offline. An empty project stage asks for an image folder.
+- `npm test` covers box math, sidecar import, and export modes.
+
 ## [1.0.5] - 2026-09-20
 
 ### Added

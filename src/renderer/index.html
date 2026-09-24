@@ -4,10 +4,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: vfimg:;" />
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: vfimg:;" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VisionForge</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css" />
   <link rel="stylesheet" href="styles/app.css" />
 </head>
 
@@ -28,11 +28,42 @@
               <div class="app-menubar__dropdown" id="file-menu-dropdown" hidden role="menu">
                 <button type="button" class="app-menubar__dropdown-item" id="btn-select-image-folder" role="menuitem" disabled>Select Image Folder</button>
                 <button type="button" class="app-menubar__dropdown-item" id="btn-export" role="menuitem" disabled>Export</button>
+                <button type="button" class="app-menubar__dropdown-item" id="btn-auto-detect-all" role="menuitem" disabled>Auto detect all images</button>
                 <button type="button" class="app-menubar__dropdown-item" id="btn-goto-startup" role="menuitem" disabled>Goto Startup page</button>
               </div>
             </div>
-            <button type="button" class="app-menubar__item">Edit</button>
-            <button type="button" class="app-menubar__item">Help</button>
+            <div class="app-menubar__menu" id="edit-menu">
+              <button type="button" class="app-menubar__item" id="btn-edit-menu" aria-haspopup="true" aria-expanded="false" aria-controls="edit-menu-dropdown">Edit</button>
+              <div class="app-menubar__dropdown" id="edit-menu-dropdown" hidden role="menu">
+                <button type="button" class="app-menubar__dropdown-item app-menubar__dropdown-item--shortcut" id="btn-edit-undo" role="menuitem" disabled>
+                  <span id="edit-undo-label">Undo</span><kbd>Ctrl+Z</kbd>
+                </button>
+                <button type="button" class="app-menubar__dropdown-item app-menubar__dropdown-item--shortcut" id="btn-edit-redo" role="menuitem" disabled>
+                  <span id="edit-redo-label">Redo</span><kbd>Ctrl+Y</kbd>
+                </button>
+                <div class="app-menubar__dropdown-divider" role="separator"></div>
+                <button type="button" class="app-menubar__dropdown-item app-menubar__dropdown-item--shortcut" id="btn-edit-copy" role="menuitem" disabled>
+                  <span>Copy box</span><kbd>Ctrl+C</kbd>
+                </button>
+                <button type="button" class="app-menubar__dropdown-item app-menubar__dropdown-item--shortcut" id="btn-edit-paste" role="menuitem" disabled>
+                  <span>Paste box</span><kbd>Ctrl+V</kbd>
+                </button>
+                <button type="button" class="app-menubar__dropdown-item app-menubar__dropdown-item--shortcut" id="btn-edit-delete" role="menuitem" disabled>
+                  <span>Delete box</span><kbd>Del</kbd>
+                </button>
+                <div class="app-menubar__dropdown-divider" role="separator"></div>
+                <p class="app-menubar__dropdown-hint">Arrow keys nudge the selected box (Shift = 10 px)</p>
+              </div>
+            </div>
+            <div class="app-menubar__menu" id="help-menu">
+              <button type="button" class="app-menubar__item" id="btn-help-menu" aria-haspopup="true" aria-expanded="false" aria-controls="help-menu-dropdown">Help</button>
+              <div class="app-menubar__dropdown" id="help-menu-dropdown" hidden role="menu">
+                <button type="button" class="app-menubar__dropdown-item app-menubar__dropdown-item--shortcut" id="btn-help-shortcuts" role="menuitem">
+                  <span>Keyboard shortcuts</span><kbd>F1</kbd>
+                </button>
+                <button type="button" class="app-menubar__dropdown-item" id="btn-help-about" role="menuitem">About VisionForge</button>
+              </div>
+            </div>
           </nav>
           <span class="app-breadcrumb__current" id="app-breadcrumb">Welcome</span>
         </div>
@@ -112,6 +143,11 @@
         </div>
         <div class="workspace-canvas" id="workspace-canvas" hidden>
           <div class="workspace-stage" id="workspace-stage">
+            <div class="workspace-empty" id="workspace-empty" hidden>
+              <p class="workspace-empty__title">Select an image folder</p>
+              <button type="button" class="btn-primary" id="btn-workspace-empty-folder">Select Image Folder</button>
+              <p class="workspace-empty__hint">or drop images here</p>
+            </div>
             <div class="view-toolbar" id="view-toolbar" hidden>
               <button type="button" class="view-toolbar__btn" id="view-tool-zoom-in" data-view-tool="zoom-in" aria-label="Zoom In" title="Zoom In">
                 <i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i>
@@ -144,6 +180,7 @@
               <line class="box-draft__diagonal" id="box-draft-diagonal" />
               <circle class="box-draft__origin" id="box-draft-origin" />
             </svg>
+            <div class="detect-scanline" id="detect-scanline" hidden aria-hidden="true"></div>
             <div class="box-guides" id="box-guides" hidden aria-hidden="true">
               <div class="box-guides__line box-guides__line--h" id="box-guides-h"></div>
               <div class="box-guides__line box-guides__line--v" id="box-guides-v"></div>
@@ -190,7 +227,10 @@
           <aside class="process-image-panel" aria-label="Process configuration">
             <div class="process-image-panel__header">
               <h2 class="process-image-panel__title">Process Image</h2>
-              <button type="button" class="btn-secondary process-image-panel__back" id="btn-process-image-back">Back</button>
+              <div class="process-image-panel__actions">
+                <button type="button" class="btn-primary" id="btn-process-image-apply" disabled>Apply</button>
+                <button type="button" class="btn-secondary process-image-panel__back" id="btn-process-image-back">Back</button>
+              </div>
             </div>
             <div class="process-image-panel__tabs" role="tablist" aria-label="Process tabs">
               <button type="button" class="inspector-tab is-selected" id="process-tab-setup" role="tab" aria-selected="true" aria-controls="process-pane-setup" data-process-tab="setup">Setup</button>
@@ -199,6 +239,11 @@
             <div class="process-image-panel__body" id="process-pane-setup" role="tabpanel" aria-labelledby="process-tab-setup">
               <p class="process-image-hint">Uses the AI model from Settings.</p>
               <button type="button" class="btn-primary" id="btn-process-image-run">Process</button>
+              <div class="process-image-progress" id="process-image-progress" hidden>
+                <div class="release-progress-track" aria-hidden="true">
+                  <div class="release-progress-bar process-image-progress__bar"></div>
+                </div>
+              </div>
               <p class="process-image-status" id="process-image-status" hidden></p>
             </div>
             <div class="process-image-panel__body process-image-panel__body--list" id="process-pane-detections" role="tabpanel" aria-labelledby="process-tab-detections" hidden>
@@ -225,6 +270,18 @@
         </div>
         <div class="inspector-body">
           <div class="inspector-pane" id="panel-assets" role="tabpanel" aria-labelledby="tab-assets">
+            <div class="assets-header">
+              <input type="search" class="assets-header__search" id="assets-search" placeholder="Search images" aria-label="Search images" />
+              <div class="assets-header__row">
+                <select class="assets-header__filter" id="assets-filter" aria-label="Filter images">
+                  <option value="all">All</option>
+                  <option value="labeled">Labeled</option>
+                  <option value="unlabeled">Unlabeled</option>
+                  <option value="flagged">Flagged</option>
+                </select>
+                <button type="button" class="assets-header__thumbs" id="btn-assets-thumbs" aria-pressed="false">Thumbs</button>
+              </div>
+            </div>
             <p class="assets-empty" id="assets-empty">No images selected</p>
             <ul class="assets-list" id="assets-list" hidden></ul>
           </div>
@@ -251,6 +308,10 @@
             </div>
           </div>
           <div class="inspector-pane" id="panel-detections" role="tabpanel" aria-labelledby="tab-detections" hidden>
+            <div class="detections-header">
+              <span class="detections-header__title">Detections</span>
+              <button type="button" class="detections-header__sort" id="btn-detections-sort" aria-pressed="false" title="Sort by score">Score</button>
+            </div>
             <p class="detections-empty" id="detections-empty">No detections</p>
             <ul class="detections-list" id="detections-list" hidden></ul>
           </div>
@@ -476,12 +537,85 @@
     </div>
   </div>
 
+  <div id="shortcuts-overlay" class="settings-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="shortcuts-title">
+    <div class="settings-modal shortcuts-modal">
+      <div class="settings-modal-header">
+        <h2 class="settings-modal-title" id="shortcuts-title">Keyboard shortcuts</h2>
+        <button type="button" id="btn-shortcuts-close" class="icon-btn" aria-label="Close shortcuts">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="settings-modal-body shortcuts-body" id="shortcuts-body"></div>
+      <div class="settings-modal-footer">
+        <button type="button" id="btn-shortcuts-ok" class="btn-primary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="about-overlay" class="settings-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="about-title">
+    <div class="settings-modal settings-modal--compact about-modal">
+      <div class="settings-modal-header">
+        <h2 class="settings-modal-title" id="about-title">About VisionForge</h2>
+        <button type="button" id="btn-about-close" class="icon-btn" aria-label="Close about">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="settings-modal-body about-body">
+        <img class="about-logo" src="images/logo/VisionForge.png" alt="" width="64" height="64" />
+        <p class="about-name">VisionForge</p>
+        <p class="about-version" id="about-version">Version —</p>
+        <p class="about-tagline">Image annotation workspace for object detection datasets.</p>
+        <button type="button" class="about-link" id="btn-about-website">www.softasium.com</button>
+      </div>
+      <div class="settings-modal-footer">
+        <button type="button" id="btn-about-ok" class="btn-primary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="batch-detect-overlay" class="settings-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="batch-detect-title">
+    <div class="settings-modal settings-modal--compact">
+      <div class="settings-modal-header">
+        <h2 class="settings-modal-title" id="batch-detect-title">Auto detect all images</h2>
+        <button type="button" id="btn-batch-detect-close" class="icon-btn" aria-label="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="settings-modal-body">
+        <p class="batch-detect-note">Runs the project model on every image and replaces boxes. This cannot be undone with Ctrl+Z.</p>
+        <label class="batch-detect-skip">
+          <input type="checkbox" id="batch-detect-skip" checked />
+          Skip images that already have boxes
+        </label>
+        <div class="export-progress" id="batch-detect-progress" hidden>
+          <div class="release-progress-track" aria-hidden="true">
+            <div class="release-progress-bar" id="batch-detect-progress-bar"></div>
+          </div>
+          <span class="release-download-percent" id="batch-detect-progress-percent">0%</span>
+        </div>
+        <p class="batch-detect-status" id="batch-detect-status" hidden></p>
+        <ul class="batch-detect-review" id="batch-detect-review" hidden></ul>
+      </div>
+      <div class="settings-modal-footer delete-label-footer">
+        <button type="button" id="btn-batch-detect-cancel" class="btn-secondary">Cancel</button>
+        <button type="button" id="btn-batch-detect-start" class="btn-primary">Start</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="magic-context-menu" class="asset-context-menu" hidden role="menu" aria-label="Auto detect actions">
+    <button type="button" class="asset-context-menu__item" id="btn-magic-context-all" role="menuitem">Detect all images</button>
+  </div>
+
   <div id="asset-context-menu" class="asset-context-menu" hidden role="menu" aria-label="Asset actions">
     <button type="button" class="asset-context-menu__item" id="btn-asset-context-delete" role="menuitem">Delete</button>
   </div>
 
   <script src="scripts/renderer-logger.js"></script>
+  <script src="scripts/ui-motion.js"></script>
   <script src="scripts/workspace-panels.js"></script>
+  <script src="../shared/detection-mapping.js"></script>
+  <script src="scripts/workspace-history.js"></script>
   <script src="scripts/workspace-canvas.js"></script>
   <script src="scripts/workspace-drop.js"></script>
   <script src="scripts/process-image-screen.js"></script>
@@ -490,9 +624,13 @@
   <script src="../shared/enums/ai-model-types.js"></script>
   <script src="scripts/settings-dialog.js"></script>
   <script src="scripts/magic-detect.js"></script>
+  <script src="scripts/batch-detect-dialog.js"></script>
   <script src="scripts/create-project-dialog.js"></script>
   <script src="scripts/export-dialog.js"></script>
   <script src="scripts/release-update-panel.js"></script>
+  <script src="scripts/app-menus.js"></script>
+  <script src="scripts/shortcuts-dialog.js"></script>
+  <script src="scripts/about-dialog.js"></script>
   <script src="scripts/window-controls.js"></script>
 </body>
 

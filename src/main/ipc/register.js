@@ -5,6 +5,7 @@ const projectService = require("../middleware/project-service");
 const imageService = require("../middleware/image-service");
 const exportService = require("../middleware/export-service");
 const onnxDetectService = require("../middleware/onnx-detect-service");
+const batchDetectService = require("../middleware/batch-detect-service");
 const historyStore = require("../services/history-solutions-store");
 const configurationStore = require("../services/configuration-store");
 const { ipc: log } = require("../services/visionforge-logger");
@@ -170,6 +171,18 @@ function registerIpcHandlers() {
   ipcMain.handle(channels.RUN_ONNX_DETECT, async (_event, imagePath, modelPath, labels, modelType, confidence) => {
     log.info("RUN_ONNX_DETECT", { modelType, confidence });
     return onnxDetectService.runOnnxDetect(imagePath, modelPath, labels, modelType, confidence);
+  });
+
+  ipcMain.handle(channels.RUN_BATCH_DETECT, async (event, filePath, options) => {
+    log.info("RUN_BATCH_DETECT", { skipLabeled: Boolean(options?.skipLabeled) });
+    return batchDetectService.runBatchDetect(filePath, options || {}, (progress) => {
+      event.sender.send(channels.BATCH_DETECT_PROGRESS, progress);
+    });
+  });
+
+  ipcMain.handle(channels.CANCEL_BATCH_DETECT, async () => {
+    log.info("CANCEL_BATCH_DETECT");
+    return batchDetectService.cancelBatchDetect();
   });
 }
 

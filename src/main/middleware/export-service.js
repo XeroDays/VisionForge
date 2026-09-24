@@ -27,8 +27,13 @@ function escapeXml(value) {
 
 const YOLO_TXT_MODES = new Set(["yolo-bounding-box", "center-based-normalized-bounding-boxes"]);
 const YOLO_OBB_MODE = "yolo-obb";
+const DOTA_MODE = "dota";
+const XYWHR_MODE = "rotated-rectangle-obb";
+const QUAD_MODE = "4-point-quadrilateral";
+const ROTATED_COCO_MODE = "rotated-coco-json";
 const VOC_XML_MODE = "pascal-voc-bounding-box";
 const COCO_JSON_MODE = "coco-bounding-box";
+const CLASSES_TXT_MODES = new Set([...YOLO_TXT_MODES, YOLO_OBB_MODE, XYWHR_MODE, QUAD_MODE]);
 
 function isVocValue(value) {
   if (!value || typeof value !== "object") return false;
@@ -195,6 +200,52 @@ function detectionToYoloObb(value) {
   });
 }
 
+function cornersPixels(value, imgW, imgH) {
+  const corners = detectionToYoloObb(value);
+  if (!corners || !imgW || !imgH) return null;
+  return corners.map((pt) => ({
+    x: Number((pt.x * imgW).toFixed(2)),
+    y: Number((pt.y * imgH).toFixed(2)),
+  }));
+}
+
+function writeDotaTxt(destPath, detections, imgW, imgH, labels) {
+  const lines = [];
+  for (const detection of detections) {
+    const corners = cornersPixels(detection?.value, imgW, imgH);
+    if (!corners) continue;
+    const name = labelName(labels, detection?.labelid).replace(/\s+/g, "_");
+    const coords = corners.flatMap((pt) => [pt.x, pt.y]).join(" ");
+    lines.push(`${coords} ${name} 0`);
+  }
+  fs.writeFileSync(destPath, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
+}
+
+function writeXywhrTxt(destPath, detections, imgW, imgH) {
+  const lines = [];
+  for (const detection of detections) {
+    const yolo = detectionToYolo(detection?.value, imgW, imgH);
+    if (!yolo) continue;
+    const labelid = Number.isInteger(Number(detection.labelid)) ? Number(detection.labelid) : 0;
+    const degrees = Number.isFinite(Number(detection?.value?.angle)) ? Number(detection.value.angle) : 0;
+    const radians = Number(((degrees * Math.PI) / 180).toFixed(6));
+    lines.push(`${labelid} ${yolo.xc} ${yolo.yc} ${yolo.w} ${yolo.h} ${radians}`);
+  }
+  fs.writeFileSync(destPath, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
+}
+
+function writeQuadTxt(destPath, detections, imgW, imgH) {
+  const lines = [];
+  for (const detection of detections) {
+    const corners = cornersPixels(detection?.value, imgW, imgH);
+    if (!corners) continue;
+    const labelid = Number.isInteger(Number(detection.labelid)) ? Number(detection.labelid) : 0;
+    const coords = corners.flatMap((pt) => [pt.x, pt.y]).join(" ");
+    lines.push(`${labelid} ${coords}`);
+  }
+  fs.writeFileSync(destPath, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
+}
+
 function writeYoloObbTxt(destPath, detections) {
   const lines = [];
   for (const detection of detections) {
@@ -338,16 +389,22 @@ async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
   }
 
   const isYoloObbMode = exportMode === YOLO_OBB_MODE;
+  const isDotaMode = exportMode === DOTA_MODE;
+  const isXywhrMode = exportMode === XYWHR_MODE;
+  const isQuadMode = exportMode === QUAD_MODE;
+  const isRotatedCocoMode = exportMode === ROTATED_COCO_MODE;
   const isTxtMode = YOLO_TXT_MODES.has(exportMode) || isYoloObbMode;
   const isVocMode = exportMode === VOC_XML_MODE;
   const isCocoMode = exportMode === COCO_JSON_MODE;
-  if (!isTxtMode && !isVocMode && !isCocoMode) {
+  const isObbSidecar = isDotaMode || isXywhrMode || isQuadMode;
+  if (!isTxtMode && !isVocMode && !isCocoMode && !isObbSidecar && !isRotatedCocoMode) {
     log.exit("exportAnnotations", startedAt, { ok: false, reason: "invalid-mode" });
     return { ok: false, reason: "invalid-mode" };
   }
 
   const files = listImageFiles(imagesFolder);
-  const extraFiles = isTxtMode ? 1 : isCocoMode ? 1 : 0;
+  const writesClasses = CLASSES_TXT_MODES.has(exportMode);
+  const extraFiles = writesClasses || isCocoMode || isRotatedCocoMode ? 1 : 0;
   const total = files.length + extraFiles;
   reportProgress(onProgress, 0, total);
   const assetsByName = new Map();
@@ -375,6 +432,15 @@ async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
     if (isYoloObbMode) {
       writeYoloObbTxt(path.join(dest, `${base}.txt`), detections);
       count += 1;
+    } else if (isDotaMode) {
+      writeDotaTxt(path.join(dest, `${base}.txt`), detections, width, height, labels);
+      count += 1;
+    } else if (isXywhrMode) {
+      writeXywhrTxt(path.join(dest, `${base}.txt`), detections, width, height);
+      count += 1;
+    } else if (isQuadMode) {
+      writeQuadTxt(path.join(dest, `${base}.txt`), detections, width, height);
+      count += 1;
     } else if (isTxtMode) {
       writeYoloTxt(path.join(dest, `${base}.txt`), detections, width, height);
       count += 1;
@@ -390,6 +456,37 @@ async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
         labels,
       });
       count += 1;
+    } else if (isRotatedCocoMode) {
+      const imageId = index + 1;
+      cocoImages.push({
+        id: imageId,
+        file_name: file.name,
+        width,
+        height,
+      });
+      for (const detection of detections) {
+        const yolo = detectionToYolo(detection?.value, width, height);
+        const corners = cornersPixels(detection?.value, width, height);
+        if (!yolo || !corners) continue;
+        const degrees = Number.isFinite(Number(detection?.value?.angle)) ? Number(detection.value.angle) : 0;
+        const categoryId = Number.isInteger(Number(detection.labelid)) ? Number(detection.labelid) : 0;
+        cocoAnnotations.push({
+          id: annotationId,
+          image_id: imageId,
+          category_id: categoryId,
+          bbox: [
+            Number((yolo.xc * width).toFixed(2)),
+            Number((yolo.yc * height).toFixed(2)),
+            Number((yolo.w * width).toFixed(2)),
+            Number((yolo.h * height).toFixed(2)),
+            Number(degrees.toFixed(2)),
+          ],
+          segmentation: [corners.flatMap((pt) => [pt.x, pt.y])],
+          area: Number((yolo.w * width * yolo.h * height).toFixed(2)),
+          iscrowd: 0,
+        });
+        annotationId += 1;
+      }
     } else {
       const imageId = index + 1;
       cocoImages.push({
@@ -419,14 +516,14 @@ async function exportAnnotations(vfslnPath, destFolder, mode, onProgress) {
         annotationId += 1;
       }
     }
-    reportProgress(onProgress, isCocoMode ? index + 1 : count, total);
+    reportProgress(onProgress, isCocoMode || isRotatedCocoMode ? index + 1 : count, total);
   }
 
-  if (isTxtMode) {
+  if (writesClasses) {
     writeClassesTxt(path.join(dest, "classes.txt"), labels);
     count += 1;
     reportProgress(onProgress, count, total);
-  } else if (isCocoMode) {
+  } else if (isCocoMode || isRotatedCocoMode) {
     writeCocoJson(path.join(dest, "annotations.json"), cocoImages, cocoAnnotations, labels);
     count = 1;
     reportProgress(onProgress, total, total);

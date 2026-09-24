@@ -211,7 +211,8 @@
     const startedAt = log.enter("openSettings");
     await loadFields();
     selectSection("ai-model");
-    overlay.hidden = false;
+    window.VisionForgeMotion?.showAnimated(overlay);
+    if (!window.VisionForgeMotion) overlay.hidden = false;
     log.info("settings opened");
     log.exit("openSettings", startedAt, { ok: true });
   }
@@ -219,7 +220,8 @@
   function closeSettings() {
     if (!isOpen()) return;
     closeTypeDropdown();
-    overlay.hidden = true;
+    if (window.VisionForgeMotion) void window.VisionForgeMotion.hideAnimated(overlay);
+    else overlay.hidden = true;
     log.info("settings closed");
   }
 

@@ -7,7 +7,7 @@ const { DEFAULT_TYPE, normalizeType } = require("../../shared/enums/ai-model-typ
 const log = createLogger("configuration");
 
 const CONFIG_FILE_NAME = "configuration.vfson";
-const KNOWN_KEYS = ["onnxModelPath", "onnxModelType"];
+const KNOWN_KEYS = ["onnxModelPath", "onnxModelType", "assetsThumbnails"];
 
 function getConfigurationFilePath() {
   return path.join(app.getPath("documents"), "VisionForge", CONFIG_FILE_NAME);
@@ -19,6 +19,7 @@ function emptyConfiguration() {
     version: 1,
     onnxModelPath: "",
     onnxModelType: DEFAULT_TYPE,
+    assetsThumbnails: false,
   };
 }
 
@@ -30,6 +31,7 @@ function normalizeConfiguration(raw) {
     version: 1,
     onnxModelPath: String(raw.onnxModelPath || "").trim(),
     onnxModelType: normalizeType(raw.onnxModelType),
+    assetsThumbnails: Boolean(raw.assetsThumbnails),
   };
 }
 
@@ -78,6 +80,10 @@ function updateConfiguration(patch) {
     if (!Object.prototype.hasOwnProperty.call(patch || {}, key)) return;
     if (key === "onnxModelType") {
       next[key] = normalizeType(patch[key]);
+      return;
+    }
+    if (key === "assetsThumbnails") {
+      next[key] = Boolean(patch[key]);
       return;
     }
     next[key] = String(patch[key] || "").trim();

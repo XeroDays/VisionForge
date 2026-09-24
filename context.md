@@ -224,6 +224,8 @@ Open existing project → `openProjectFile()` → native dialog filtered to `.VF
 - `onnxModelPath` — absolute path to this project’s `.onnx` file (empty string until chosen). Edited from Settings → AI Model when a project is open. Older files may omit this (treated as `""`).
 - `onnxModelType` — `object-detection` (default) | `oriented-object-detection` (coming-soon types are not written). Older files may omit this (treated as `object-detection`).
 - `onnxConfidence` — detection score threshold `0.01`–`0.99` (default `0.25`). Used by Process Image and Auto detect. Edited from Settings → AI Model when a project is open. Older files may omit this (treated as `0.25` until Apply writes it).
+- `assets[].flagged` — optional boolean. Toggled from the Assets row or **F**. Older rows omit it (treated as false).
+- `assets[].detections[].score` — optional model score `0`–`1` written by Process Image Apply, Auto detect, and batch detect. Manual boxes omit it. Export ignores it.
 
 **Rule:** Do not store project config elsewhere (no parallel JSON/DB for project settings). When a new project setting is introduced, add it to the `.VFSln` schema and document the field in this section.
 
@@ -890,7 +892,13 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | Debug config | `.vscode/launch.json` |
 | Future business logic | `src/main/middleware/` (project-service.js exists) |
 | Future enums/DTOs | `src/shared/enums/` (`annotation-types.js` exists) |
-| Future about screen | `src/renderer/screens/about/` (empty) |
+| Undo / redo stacks | `src/renderer/scripts/workspace-history.js` |
+| App menus | `src/renderer/scripts/app-menus.js` |
+| Shortcuts / About dialogs | `src/renderer/scripts/shortcuts-dialog.js`, `src/renderer/scripts/about-dialog.js` |
+| UI motion helper | `src/renderer/scripts/ui-motion.js` |
+| Detection value mapping | `src/shared/detection-mapping.js` |
+| Batch auto detect | `src/main/middleware/batch-detect-service.js`, `src/renderer/scripts/batch-detect-dialog.js` |
+| Bundled icons | `scripts/copy-vendor.js` → `src/renderer/vendor/fontawesome/` |
 | Test placeholders | `tests/main/`, `tests/unit/` |
 
 ---
@@ -948,10 +956,10 @@ Renderer
 
 | Field | Value |
 |-------|-------|
-| Purpose | Window control icons in main UI |
-| Files | `src/renderer/index.html` |
-| Auth | None (public CDN) |
-| Entry | `<link>` to cdnjs.cloudflare.com |
+| Purpose | Window and tool icons in splash and main UI |
+| Files | `src/renderer/vendor/fontawesome/` (copied by `scripts/copy-vendor.js` from `@fortawesome/fontawesome-free`) |
+| Auth | None (npm package, bundled) |
+| Entry | `<link>` to `vendor/fontawesome/css/all.min.css` |
 
 ### sharp
 
@@ -1171,6 +1179,9 @@ Renderer
 | `visionforge:export-progress` | push (main→renderer) | `register.js` send | Export sidecar progress `{ current, total }` |
 | `visionforge:select-open-file` | invoke | `register.js` | Native open-file dialog (`title`, `filters`, `defaultPath`) |
 | `visionforge:run-onnx-detect` | invoke | `register.js` | Run YOLO ONNX (AABB or OBB by `modelType`) on an image using VFSln `labels`; return preview detections |
+| `visionforge:run-batch-detect` | invoke | `register.js` | Run ONNX across the image folder; write `assets` once (or on cancel) |
+| `visionforge:batch-detect-progress` | push (main→renderer) | `register.js` send | Batch progress `{ current, total, name, count }` |
+| `visionforge:cancel-batch-detect` | invoke | `register.js` | Ask the in-flight batch to stop after the current image |
 
 ---
 
@@ -1202,10 +1213,10 @@ Renderer
 
 ---
 
-## Current State Notes (as of v1.0.5, `BUILD_VERSION` 5)
+## Current State Notes (as of v1.0.6, `BUILD_VERSION` 6)
 
 - **Splash/bootstrap** — Flowter-parity: splash shows immediately, license prefetch overlaps heavy IPC load, Register during `"Checking for updates…"`, `LICENSE_UPDATE` before splash close (no 1s delay before the send)
-- **Updates:** `#btn-new-release` (top-right, gold glow) when local `BUILD_VERSION` 5 is less than server `buildVersion`. ForceUpdate locks the start page behind a non-dismissible download modal (`z-index` 1000)
+- **Updates:** `#btn-new-release` (top-right, gold glow) when local `BUILD_VERSION` 6 is less than server `buildVersion`. ForceUpdate locks the start page behind a non-dismissible download modal (`z-index` 1000)
 - **Minimize** uses `win.minimize()` so the app stays on the Windows taskbar (no system tray)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
@@ -1224,8 +1235,12 @@ Renderer
 - **Export:** File → Export or titlebar **Export** (left of Settings; both enabled while a project is open). Location defaults to `imagesFolder` (browse can change it); annotation type is locked; mode can change for that export only. Mode radios show the file extension. `yolo-bounding-box` / `center-based-normalized-bounding-boxes` write `{basename}.txt` (`labelid xc yc w h`) plus `classes.txt`; `yolo-obb` writes `{basename}.txt` (`labelid` + 8 normalized corners) plus `classes.txt`; `pascal-voc-bounding-box` writes `{basename}.xml`; `coco-bounding-box` writes one `annotations.json`. A progress bar runs during the write; **Exported N files.** then the dialog closes.
 - **Goto Startup page:** File menu item (enabled while a project is open) closes the workspace and returns to `#start-page` without deleting the VFSln or recents.
 - **Settings:** titlebar gear opens `#settings-overlay` (left sections / right pane). **AI Model** sets this project’s ONNX path, type (Object Detection and Oriented Object Detection enabled; Image Classification and Instance Segmentation show **Coming soon**), and confidence (1–99%, default 25%). All three fields are disabled on the start page. Apply writes `onnxModelPath` / `onnxModelType` / `onnxConfidence` to the open `.VFSln`. Cancel / Escape discard unsaved edits.
-- **Process Image:** left-rail `fa-image` command (visible only when a project is open and a canvas image is previewed). Opens `#process-image-screen` with that `vfimg:` snapshot fit-to-screen. Process uses the project AI Model (`object-detection` or `oriented-object-detection`) and `onnxConfidence`, runs YOLO ONNX in main, and draws preview-only boxes (rotated polygons for OBB) plus a Detections tab. Does not write VFSln. Back / Escape return to the workspace.
-- **Auto detect:** left-rail `fa-wand-magic-sparkles` (same visibility). If no model path is set on the solution, shows an error. If the type is not object detection or oriented object detection, shows an error. Otherwise runs ONNX on the current image using the project model and `onnxConfidence`, **replaces** that asset’s VFSln detections (including `angle` on OBB projects), and redraws canvas boxes / Detections tab. A **Revert** button appears on the top-left view toolbar until the image changes; Revert restores the previous detections. Changing images keeps the new boxes.
+- **Process Image:** left-rail `fa-image` command (visible only when a project is open and a canvas image is previewed). Opens `#process-image-screen` with that `vfimg:` snapshot fit-to-screen. Process uses the project AI Model (`object-detection` or `oriented-object-detection`) and `onnxConfidence`, runs YOLO ONNX in main, and draws preview boxes (rotated polygons for OBB) plus a Detections tab. **Apply** writes those boxes (including `score`) through `applyWorkspaceDetections` and returns to the workspace. Back / Escape return without writing.
+- **Auto detect:** left-rail `fa-wand-magic-sparkles` (same visibility). If no model path is set on the solution, shows an error. If the type is not object detection or oriented object detection, shows an error. Otherwise runs ONNX on the current image using the project model and `onnxConfidence`, **replaces** that asset’s VFSln detections (including `angle` on OBB projects and `score`), and redraws canvas boxes / Detections tab. A **Revert** button appears on the top-left view toolbar until the image changes; Revert restores the previous detections. Changing images keeps the new boxes. Right-click the wand, or File → **Auto detect all images**, runs the same model across the folder (`skipLabeled` optional). Batch writes are not on the undo stack.
+- **Edit / Help:** Undo, Redo, Copy, Paste, and Delete live on Edit. Help opens Keyboard shortcuts (also F1) and About. Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z undo and redo per image (label edits use a project-level stack key). History clears when the project closes.
+- **Assets:** search, All / Labeled / Unlabeled / Flagged, **F** or the flag icon toggles `flagged`, and Thumbs (stored as `assetsThumbnails` in `configuration.vfson`). A/D and arrow frame steps follow the filtered list. Labels have an eye (hide) and Alt+click on the color circle (solo).
+- **Export OBB modes:** `yolo-obb`, `dota` (pixel corners, class name, difficulty 0), `rotated-rectangle-obb` (normalized xywh + radians), `4-point-quadrilateral` (pixel corners), `rotated-coco-json` (`bbox` xc,yc,w,h,angle in pixels plus 8-point `segmentation`).
+- **Tests:** `npm test` runs `tests/unit` for detection mapping, sidecar parse, and export modes.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20). Right-click a row → **Remove from list** drops that entry from the file and refreshes the list; the `.VFSln` is not deleted.
-- **No tests** — `tests/` contains `.gitkeep` placeholders only
+- **Tests:** `npm test` (`node:test`) covers mapping math, YOLO/VOC sidecar parse, and export modes
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

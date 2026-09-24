@@ -68,6 +68,25 @@ body {
   object-fit: contain;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .splash-logo {
+    animation: splash-logo-in 240ms ease;
+  }
+
+  .splash-status-text {
+    transition: opacity 90ms ease;
+  }
+
+  .splash-status-text.is-fading {
+    opacity: 0;
+  }
+}
+
+@keyframes splash-logo-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+
 .splash-loading {
   display: flex;
   flex-direction: column;

@@ -37,4 +37,7 @@ module.exports = {
   EXPORT_PROGRESS: "visionforge:export-progress",
   SELECT_OPEN_FILE: "visionforge:select-open-file",
   RUN_ONNX_DETECT: "visionforge:run-onnx-detect",
+  RUN_BATCH_DETECT: "visionforge:run-batch-detect",
+  BATCH_DETECT_PROGRESS: "visionforge:batch-detect-progress",
+  CANCEL_BATCH_DETECT: "visionforge:cancel-batch-detect",
 };

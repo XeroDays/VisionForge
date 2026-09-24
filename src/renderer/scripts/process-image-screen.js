@@ -21,7 +21,9 @@
   const inspectorPanel = document.getElementById("inspector-panel");
   const inspectorResizeHandle = document.getElementById("inspector-resize-handle");
   const backBtn = document.getElementById("btn-process-image-back");
+  const applyBtn = document.getElementById("btn-process-image-apply");
   const processBtn = document.getElementById("btn-process-image-run");
+  const progressEl = document.getElementById("process-image-progress");
   const statusEl = document.getElementById("process-image-status");
   const detectionsEmpty = document.getElementById("process-detections-empty");
   const detectionsList = document.getElementById("process-detections-list");
@@ -76,6 +78,8 @@
 
   function updateProcessEnabled() {
     if (processBtn) processBtn.disabled = busy;
+    if (applyBtn) applyBtn.disabled = busy || !detections.length;
+    if (progressEl) progressEl.hidden = !busy;
   }
 
   function clearDetections() {
@@ -334,6 +338,13 @@
 
   processBtn?.addEventListener("click", () => {
     void runProcess();
+  });
+
+  applyBtn?.addEventListener("click", async () => {
+    if (busy || !detections.length) return;
+    const applied = await window.applyWorkspaceDetections?.(detections);
+    if (applied?.ok) closeProcessImageScreen();
+    else setStatus("Could not apply detections.", true);
   });
 
   document.addEventListener("keydown", (event) => {

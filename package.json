@@ -1,6 +1,6 @@
 {
   "name": "visionforge",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "VisionForge — an Electron desktop application.",
   "license": "MIT",
   "main": "src/main/index.js",
@@ -9,7 +9,8 @@
     "generate:icon": "node scripts/generate-windows-icon.js",
     "prebuild:win": "node scripts/generate-windows-icon.js",
     "build:win": "electron-builder --win nsis --publish never",
-    "postinstall": "node scripts/patch-electron-icon.js"
+    "postinstall": "node scripts/copy-vendor.js && node scripts/patch-electron-icon.js",
+    "test": "node --test tests/unit/detection-mapping.test.js tests/unit/detection-import-service.test.js tests/unit/export-service.test.js"
   },
   "build": {
     "appId": "com.visionforge.app",
@@ -65,6 +66,7 @@
     "rcedit": "^4.0.1"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^6.7.2",
     "electron-log": "^5.4.4",
     "onnxruntime-node": "^1.27.0",
     "sharp": "^0.34.3"
