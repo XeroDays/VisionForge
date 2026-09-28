@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-09-28
+
+### Added
+
+- Dropped images appear in the Assets list in the order they were added. New names stay teal until you leave that image for another one.
+- After a drop, the canvas opens the first new image.
+
+### Changed
+
+- Assets and playback follow each image’s added time. Older images without that timestamp stay first, in name order.
+
 ## [1.0.6] - 2026-09-24
 
 ### Added
