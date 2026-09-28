@@ -146,6 +146,7 @@
     assetFilter: "all",
     assetThumbs: false,
     visibleIndexes: [],
+    newFileNames: new Set(),
   };
 
   let fitScale = 1;
@@ -359,6 +360,7 @@
       button.className = "assets-list__item";
       if (state.assetThumbs) button.classList.add("has-thumb");
       if (index === state.frameIndex) button.classList.add("is-current");
+      if (state.newFileNames.has(file.name)) button.classList.add("is-new");
       button.dataset.frameIndex = String(index);
       button.dataset.name = file.name;
       button.title = file.name;
@@ -1999,7 +2001,14 @@
 
       setAssets(result.project?.assets);
       state.imagesFolder = result.folderPath || state.imagesFolder;
-      state.files = Array.isArray(result.files) ? result.files : [];
+      state.files = sortImageFiles(result.files);
+      state.newFileNames.delete(name);
+      if (keepName) {
+        const still = state.files.findIndex((file) => file.name === keepName);
+        state.frameIndex = still >= 0 ? still : 0;
+      } else {
+        state.frameIndex = -1;
+      }
       stopPlay();
       renderAssets();
 
@@ -2178,6 +2187,11 @@
     state.frameIndex = next;
     const nextName = currentFile()?.name || "";
     if (prevName !== nextName) clearMagicRevert();
+    if (prevName && prevName !== nextName && state.newFileNames.has(prevName)) {
+      state.newFileNames.delete(prevName);
+      const prevItem = assetsList?.querySelector(`.assets-list__item[data-name="${CSS.escape(prevName)}"]`);
+      prevItem?.classList.remove("is-new");
+    }
     syncPlaybackControls();
     highlightCurrentAsset();
     scrollCurrentAssetIntoView();
@@ -2216,9 +2230,19 @@
     startPlay();
   }
 
-  function applyImageList(folderPath, files) {
+  function sortImageFiles(files) {
+    return (Array.isArray(files) ? files : []).slice().sort((a, b) => {
+      const atA = state.assetsByName.get(a.name)?.addedAt ?? 0;
+      const atB = state.assetsByName.get(b.name)?.addedAt ?? 0;
+      if (atA !== atB) return atA - atB;
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+    });
+  }
+
+  function applyImageList(folderPath, files, keepNewHighlights = false) {
+    if (!keepNewHighlights) state.newFileNames = new Set();
     state.imagesFolder = folderPath || "";
-    state.files = Array.isArray(files) ? files : [];
+    state.files = sortImageFiles(files);
     state.previewToken = 0;
     stopPlay();
     setFrame(0, { resetView: true });
@@ -3157,9 +3181,14 @@
   window.getWorkspaceFilePath = () => state.filePath || "";
   window.getWorkspaceFiles = () => state.files.map((file) => ({ name: file.name, filePath: file.filePath }));
   window.getWorkspaceImagesFolder = () => state.imagesFolder || "";
-  window.refreshWorkspaceImages = (folderPath, files, assets) => {
+  window.refreshWorkspaceImages = (folderPath, files, assets, newFileNames) => {
     if (assets !== undefined) setAssets(assets);
-    applyImageList(folderPath, files);
+    if (newFileNames?.length) state.newFileNames = new Set(newFileNames);
+    applyImageList(folderPath, files, true);
+    if (newFileNames?.length) {
+      const idx = state.files.findIndex((file) => state.newFileNames.has(file.name));
+      if (idx >= 0) setFrame(idx, { resetView: true });
+    }
   };
   window.showWorkspaceLoading = showLoadingOverlay;
   window.hideWorkspaceLoading = hideLoadingOverlay;

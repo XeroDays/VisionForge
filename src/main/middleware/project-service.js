@@ -314,7 +314,7 @@ function syncAssetsFromFolder(result) {
   let added = 0;
   for (const file of listed.files) {
     if (existing.has(file.name)) continue;
-    assets.push({ name: file.name, width: 0, height: 0, detections: [] });
+    assets.push({ name: file.name, width: 0, height: 0, detections: [], addedAt: Date.now() });
     existing.add(file.name);
     added += 1;
   }
@@ -579,6 +579,7 @@ function importDroppedImages(filePath, sourcePaths) {
 
   const destDir = path.resolve(folder);
   const inputs = Array.isArray(sourcePaths) ? sourcePaths : [];
+  const newlyCopied = [];
   let copied = 0;
   let skipped = 0;
 
@@ -611,6 +612,7 @@ function importDroppedImages(filePath, sourcePaths) {
     }
     try {
       fs.copyFileSync(source, dest);
+      newlyCopied.push(name);
       copied += 1;
     } catch (err) {
       log.warn("could not copy dropped image", {
@@ -637,6 +639,7 @@ function importDroppedImages(filePath, sourcePaths) {
     project: synced.project || result.project,
     folderPath: destDir,
     files: listed.ok ? listed.files : [],
+    newFiles: newlyCopied,
   };
 }
 

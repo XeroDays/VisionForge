@@ -1012,6 +1012,10 @@ body {
   color: #f4b42a;
 }
 
+.assets-list__item.is-new .assets-list__name {
+  color: #5eead4;
+}
+
 .start-page {
   flex: 1 1 auto;
   display: flex;

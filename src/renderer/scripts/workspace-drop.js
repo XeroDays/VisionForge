@@ -109,7 +109,7 @@
         log.exit("handleDrop", startedAt, { ok: false, reason: result?.reason });
         return;
       }
-      window.refreshWorkspaceImages?.(result.folderPath, result.files, result.project?.assets);
+      window.refreshWorkspaceImages?.(result.folderPath, result.files, result.project?.assets, result.newFiles);
       log.info("dropped images imported", {
         copied: result.copied,
         skipped: result.skipped,
