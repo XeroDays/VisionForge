@@ -8,7 +8,16 @@ const log = createLogger("image-protocol");
 const SCHEME = "vfimg";
 
 let allowedDir = "";
+let extraAllowedDir = "";
 let handlerRegistered = false;
+
+function isUnderDir(root, filePath) {
+  if (!root) return false;
+  const resolvedFile = path.resolve(String(filePath || ""));
+  const rel = path.relative(root, resolvedFile);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return false;
+  return true;
+}
 
 function registerPrivilegedScheme() {
   protocol.registerSchemesAsPrivileged([
@@ -31,16 +40,17 @@ function setAllowedImagesDir(dir) {
   log.debug("allowed images dir", { allowedDir: allowedDir || "(none)" });
 }
 
+function setExtraAllowedImagesDir(dir) {
+  extraAllowedDir = dir ? path.resolve(String(dir)) : "";
+  log.debug("extra allowed images dir", { extraAllowedDir: extraAllowedDir || "(none)" });
+}
+
 function getAllowedImagesDir() {
   return allowedDir;
 }
 
 function isAllowedImagePath(filePath) {
-  if (!allowedDir) return false;
-  const resolvedFile = path.resolve(String(filePath || ""));
-  const rel = path.relative(allowedDir, resolvedFile);
-  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return false;
-  return true;
+  return isUnderDir(allowedDir, filePath) || isUnderDir(extraAllowedDir, filePath);
 }
 
 function registerHandler() {
@@ -70,6 +80,7 @@ module.exports = {
   registerPrivilegedScheme,
   registerHandler,
   setAllowedImagesDir,
+  setExtraAllowedImagesDir,
   getAllowedImagesDir,
   isAllowedImagePath,
 };

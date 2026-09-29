@@ -6,6 +6,7 @@ const imageService = require("../middleware/image-service");
 const exportService = require("../middleware/export-service");
 const onnxDetectService = require("../middleware/onnx-detect-service");
 const batchDetectService = require("../middleware/batch-detect-service");
+const videoFrameService = require("../middleware/video-frame-service");
 const historyStore = require("../services/history-solutions-store");
 const configurationStore = require("../services/configuration-store");
 const { ipc: log } = require("../services/visionforge-logger");
@@ -183,6 +184,15 @@ function registerIpcHandlers() {
   ipcMain.handle(channels.CANCEL_BATCH_DETECT, async () => {
     log.info("CANCEL_BATCH_DETECT");
     return batchDetectService.cancelBatchDetect();
+  });
+
+  ipcMain.handle(channels.EXTRACT_VIDEO_FRAMES, async (_event, videoPath, frameJump) => {
+    if (!String(videoPath || "").trim()) {
+      log.info("EXTRACT_VIDEO_FRAMES clear");
+      return videoFrameService.clearVideoFrameAccess();
+    }
+    log.info("EXTRACT_VIDEO_FRAMES", { frameJump });
+    return videoFrameService.extractVideoFrames(videoPath, frameJump);
   });
 }
 

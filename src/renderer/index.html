@@ -220,11 +220,32 @@
           </footer>
         </div>
         <div class="import-from-video-screen" id="import-from-video-screen" hidden>
-          <header class="import-from-video-screen__header">
-            <h2 class="import-from-video-screen__title">Import From Video</h2>
-            <button type="button" class="btn-secondary" id="btn-import-from-video-back">Back</button>
-          </header>
-          <p class="import-from-video-screen__hint">Frames generated here will be added to the project.</p>
+          <div class="import-video-grid-pane">
+            <p class="import-video-grid-empty" id="import-video-empty">No frames yet</p>
+            <div class="import-video-grid" id="import-video-grid" hidden></div>
+          </div>
+          <aside class="process-image-panel" aria-label="Import from video">
+            <div class="process-image-panel__header">
+              <h2 class="process-image-panel__title">Import From Video</h2>
+              <button type="button" class="btn-secondary" id="btn-import-from-video-back">Back</button>
+            </div>
+            <div class="process-image-panel__body">
+              <div class="create-project-field">
+                <span class="create-project-label">Video file</span>
+                <div class="create-project-location-row">
+                  <input type="text" id="import-video-path" class="create-project-input" readonly aria-label="Video file" />
+                  <button type="button" id="btn-import-video-browse" class="create-project-browse" aria-label="Choose video">...</button>
+                </div>
+              </div>
+              <div class="create-project-field">
+                <label class="create-project-label" for="import-video-jump">Frame jump</label>
+                <input type="number" id="import-video-jump" class="create-project-input" min="1" step="1" value="1" />
+              </div>
+              <button type="button" class="btn-primary" id="btn-import-video-process" disabled>Process</button>
+              <button type="button" class="btn-primary" id="btn-import-video-import" hidden>Import</button>
+              <p class="process-image-status" id="import-video-status" hidden></p>
+            </div>
+          </aside>
         </div>
         <div class="process-image-screen" id="process-image-screen" hidden>
           <div class="process-image-preview" id="process-image-pane">
