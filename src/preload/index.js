@@ -40,6 +40,7 @@ const CH = {
   BATCH_DETECT_PROGRESS: "visionforge:batch-detect-progress",
   CANCEL_BATCH_DETECT: "visionforge:cancel-batch-detect",
   EXTRACT_VIDEO_FRAMES: "visionforge:extract-video-frames",
+  PROBE_VIDEO: "visionforge:probe-video",
   SPLASH_LOG: "visionforge:splash-log",
 };
 
@@ -91,6 +92,7 @@ contextBridge.exposeInMainWorld("visionforge", {
   cancelBatchDetect: () => ipcRenderer.invoke(CH.CANCEL_BATCH_DETECT),
   extractVideoFrames: (videoPath, frameJump) =>
     ipcRenderer.invoke(CH.EXTRACT_VIDEO_FRAMES, videoPath, frameJump),
+  probeVideo: (videoPath) => ipcRenderer.invoke(CH.PROBE_VIDEO, videoPath),
   log(level, namespace, message, meta) {
     ipcRenderer.send(CH.SPLASH_LOG, { level, namespace, message, meta });
   },

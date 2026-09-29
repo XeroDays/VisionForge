@@ -220,7 +220,7 @@
           </footer>
         </div>
         <div class="import-from-video-screen" id="import-from-video-screen" hidden>
-          <div class="import-video-grid-pane">
+          <div class="import-video-grid-pane" id="import-video-grid-pane">
             <p class="import-video-grid-empty" id="import-video-empty">No frames yet</p>
             <div class="import-video-grid" id="import-video-grid" hidden></div>
           </div>
@@ -237,6 +237,7 @@
                   <button type="button" id="btn-import-video-browse" class="create-project-browse" aria-label="Choose video">...</button>
                 </div>
               </div>
+              <div class="import-video-info" id="import-video-info" hidden></div>
               <div class="create-project-field">
                 <label class="create-project-label" for="import-video-jump">Frame jump</label>
                 <input type="number" id="import-video-jump" class="create-project-input" min="1" step="1" value="1" />

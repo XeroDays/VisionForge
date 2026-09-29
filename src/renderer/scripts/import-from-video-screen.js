@@ -22,7 +22,9 @@
   const jumpInput = document.getElementById("import-video-jump");
   const statusEl = document.getElementById("import-video-status");
   const emptyEl = document.getElementById("import-video-empty");
+  const gridPane = document.getElementById("import-video-grid-pane");
   const gridEl = document.getElementById("import-video-grid");
+  const infoEl = document.getElementById("import-video-info");
   const canvas = document.getElementById("workspace-canvas");
   const inspectorPanel = document.getElementById("inspector-panel");
   const inspectorResizeHandle = document.getElementById("inspector-resize-handle");
@@ -31,18 +33,26 @@
 
   log.debug("import-from-video-screen.js init");
 
+  const CELL_MIN = 80;
+  const CELL_MAX = 360;
+  const CELL_STEP = 24;
+
   let videoPath = "";
+  let videoInfo = null;
   let frames = [];
   const selected = new Set();
   let busy = false;
+  let cellSize = 140;
 
   function isOpen() {
     return !screen.hidden;
   }
 
   function frameJump() {
-    const n = Math.round(Number(jumpInput?.value));
-    if (!Number.isFinite(n) || n < 1) return 1;
+    let n = Math.round(Number(jumpInput?.value));
+    if (!Number.isFinite(n) || n < 1) n = 1;
+    const cap = Number(videoInfo?.jumpMax);
+    if (Number.isFinite(cap) && cap >= 1) n = Math.min(n, cap);
     return n;
   }
 
@@ -61,13 +71,38 @@
   }
 
   function updateActions() {
-    if (processBtn) processBtn.disabled = busy || !videoPath;
+    if (processBtn) processBtn.disabled = busy || !videoPath || !videoInfo;
     if (browseBtn) browseBtn.disabled = busy;
     if (jumpInput) jumpInput.disabled = busy;
     if (importBtn) {
-      importBtn.hidden = selected.size < 2;
+      importBtn.hidden = selected.size < 1;
       importBtn.disabled = busy;
     }
+  }
+
+  function renderInfo(info) {
+    if (!infoEl) return;
+    infoEl.replaceChildren();
+    if (!info) {
+      infoEl.hidden = true;
+      return;
+    }
+    infoEl.hidden = false;
+    [
+      `Duration: ${info.duration}`,
+      `Size: ${info.width}×${info.height}`,
+      `Frame rate: ${info.fps} fps`,
+      `Total frames: ${info.totalFrames}`,
+    ].forEach((text) => {
+      const line = document.createElement("p");
+      line.textContent = text;
+      infoEl.appendChild(line);
+    });
+  }
+
+  function applyCellSize() {
+    if (!gridPane) return;
+    gridPane.style.setProperty("--import-video-cell", `${cellSize}px`);
   }
 
   function previewSrc(filePath) {
@@ -132,17 +167,38 @@
         return;
       }
       videoPath = result.filePath;
+      videoInfo = null;
+      renderInfo(null);
       if (pathInput) pathInput.value = videoPath;
+      if (jumpInput) jumpInput.removeAttribute("max");
+      busy = true;
       updateActions();
-      log.exit("browseVideo", startedAt, { ok: true });
+      setStatus("Reading video…");
+      const probed = await window.visionforge?.probeVideo?.(videoPath);
+      if (!probed?.ok || !probed.totalFrames) {
+        setStatus("Could not read this video.", true);
+        updateActions();
+        log.exit("browseVideo", startedAt, { ok: false, reason: probed?.reason || "unreadable" });
+        return;
+      }
+      videoInfo = probed;
+      renderInfo(probed);
+      if (jumpInput) jumpInput.max = String(probed.jumpMax);
+      snapFrameJump();
+      setStatus("");
+      updateActions();
+      log.exit("browseVideo", startedAt, { ok: true, totalFrames: probed.totalFrames });
     } catch (err) {
       log.error("browseVideo failed", { error: String(err?.message || err) });
       log.exit("browseVideo", startedAt, { error: true });
+    } finally {
+      busy = false;
+      updateActions();
     }
   }
 
   async function processVideo() {
-    if (busy || !videoPath) return;
+    if (busy || !videoPath || !videoInfo) return;
     const jump = snapFrameJump();
     const startedAt = log.enter("processVideo");
     busy = true;
@@ -179,7 +235,7 @@
   }
 
   async function importSelected() {
-    if (busy || selected.size < 2) return;
+    if (busy || selected.size < 1) return;
     const paths = frames.filter((file) => selected.has(file.filePath)).map((file) => file.filePath);
     const startedAt = log.enter("importSelected");
     busy = true;
@@ -213,6 +269,9 @@
     if (inspectorResizeHandle) inspectorResizeHandle.hidden = true;
     if (pathInput) pathInput.value = videoPath;
     if (jumpInput && !jumpInput.value) jumpInput.value = "1";
+    if (jumpInput && videoInfo?.jumpMax) jumpInput.max = String(videoInfo.jumpMax);
+    renderInfo(videoInfo);
+    applyCellSize();
     screen.hidden = false;
     updateActions();
     log.info("import from video screen opened");
@@ -232,6 +291,18 @@
     log.info("import from video screen closed", { restoreWorkspace });
     log.exit("closeImportFromVideoScreen", startedAt, { restoreWorkspace });
   }
+
+  gridPane?.addEventListener(
+    "wheel",
+    (event) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      const next = cellSize + (event.deltaY < 0 ? CELL_STEP : -CELL_STEP);
+      cellSize = Math.min(CELL_MAX, Math.max(CELL_MIN, next));
+      applyCellSize();
+    },
+    { passive: false },
+  );
 
   browseBtn?.addEventListener("click", () => {
     void browseVideo();
@@ -257,6 +328,7 @@
     closeImportFromVideoScreen();
   });
 
+  applyCellSize();
   updateActions();
   window.openImportFromVideoScreen = openImportFromVideoScreen;
   window.closeImportFromVideoScreen = closeImportFromVideoScreen;

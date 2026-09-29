@@ -194,6 +194,11 @@ function registerIpcHandlers() {
     log.info("EXTRACT_VIDEO_FRAMES", { frameJump });
     return videoFrameService.extractVideoFrames(videoPath, frameJump);
   });
+
+  ipcMain.handle(channels.PROBE_VIDEO, async (_event, videoPath) => {
+    log.info("PROBE_VIDEO");
+    return videoFrameService.probeVideo(videoPath);
+  });
 }
 
 module.exports = { registerIpcHandlers };

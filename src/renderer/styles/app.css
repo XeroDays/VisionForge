@@ -2467,6 +2467,7 @@ body {
 }
 
 .import-video-grid-pane {
+  --import-video-cell: 140px;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
@@ -2483,7 +2484,7 @@ body {
 
 .import-video-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--import-video-cell), 1fr));
   gap: 0.6rem;
 }
 
@@ -2510,9 +2511,20 @@ body {
 .import-video-grid__thumb {
   display: block;
   width: 100%;
-  height: 100px;
+  height: calc(var(--import-video-cell) * 0.72);
   object-fit: cover;
   background: #0b0b0d;
+}
+
+.import-video-info {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.import-video-info p {
+  margin: 0;
 }
 
 .import-video-grid__name {

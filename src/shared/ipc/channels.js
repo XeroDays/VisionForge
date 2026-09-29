@@ -41,4 +41,5 @@ module.exports = {
   BATCH_DETECT_PROGRESS: "visionforge:batch-detect-progress",
   CANCEL_BATCH_DETECT: "visionforge:cancel-batch-detect",
   EXTRACT_VIDEO_FRAMES: "visionforge:extract-video-frames",
+  PROBE_VIDEO: "visionforge:probe-video",
 };

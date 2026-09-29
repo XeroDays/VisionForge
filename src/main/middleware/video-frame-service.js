@@ -29,10 +29,35 @@ function safeBaseName(videoPath) {
   return (base || "frame").slice(0, 40);
 }
 
-function normalizeJump(value) {
-  const n = Math.round(Number(value));
-  if (!Number.isFinite(n) || n < 1) return 1;
+function normalizeJump(value, jumpMax) {
+  let n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < 1) n = 1;
+  const cap = Math.round(Number(jumpMax));
+  if (Number.isFinite(cap) && cap >= 1) n = Math.min(n, cap);
   return n;
+}
+
+function parseProbe(stderr) {
+  const text = String(stderr || "");
+  const durationMatch = text.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!durationMatch) return null;
+  const durationSeconds = Number(durationMatch[1]) * 3600 + Number(durationMatch[2]) * 60 + Number(durationMatch[3]);
+  const videoLine = text.split(/\r?\n/).find((line) => /Video:/.test(line));
+  if (!videoLine) return null;
+  const sizeMatch = videoLine.match(/(\d{2,5})x(\d{2,5})/);
+  const fpsMatch = videoLine.match(/([\d.]+)\s*fps/);
+  if (!sizeMatch || !fpsMatch) return null;
+  const fps = Number(fpsMatch[1]);
+  if (!Number.isFinite(fps) || fps <= 0 || !Number.isFinite(durationSeconds) || durationSeconds <= 0) return null;
+  const totalFrames = Math.max(1, Math.round(durationSeconds * fps));
+  return {
+    duration: `${durationMatch[1]}:${durationMatch[2]}:${durationMatch[3]}`,
+    width: Number(sizeMatch[1]),
+    height: Number(sizeMatch[2]),
+    fps,
+    totalFrames,
+    jumpMax: Math.max(1, Math.floor(totalFrames / 2)),
+  };
 }
 
 function resetFramesDir() {
@@ -64,10 +89,35 @@ function runFfmpeg(bin, args) {
   });
 }
 
+async function probeVideo(videoPath) {
+  const startedAt = log.enter("probeVideo");
+  const source = path.resolve(String(videoPath || "").trim());
+  if (!source || !fs.existsSync(source) || !fs.statSync(source).isFile()) {
+    log.exit("probeVideo", startedAt, { ok: false, reason: "missing-file" });
+    return { ok: false, reason: "missing-file" };
+  }
+  if (!VIDEO_EXTENSIONS.has(path.extname(source).toLowerCase())) {
+    log.exit("probeVideo", startedAt, { ok: false, reason: "unsupported-type" });
+    return { ok: false, reason: "unsupported-type" };
+  }
+  const bin = resolveFfmpegPath();
+  if (!bin || !fs.existsSync(bin)) {
+    log.exit("probeVideo", startedAt, { ok: false, reason: "missing-ffmpeg" });
+    return { ok: false, reason: "missing-ffmpeg" };
+  }
+  const result = await runFfmpeg(bin, ["-hide_banner", "-i", source]);
+  const info = parseProbe(result.stderr);
+  if (!info) {
+    log.exit("probeVideo", startedAt, { ok: false, reason: "unreadable" });
+    return { ok: false, reason: "unreadable" };
+  }
+  log.exit("probeVideo", startedAt, { ok: true, totalFrames: info.totalFrames });
+  return { ok: true, ...info };
+}
+
 async function extractVideoFrames(videoPath, frameJump) {
   const startedAt = log.enter("extractVideoFrames");
   const source = path.resolve(String(videoPath || "").trim());
-  const jump = normalizeJump(frameJump);
   if (!source || !fs.existsSync(source) || !fs.statSync(source).isFile()) {
     log.exit("extractVideoFrames", startedAt, { ok: false, reason: "missing-file" });
     return { ok: false, reason: "missing-file" };
@@ -82,6 +132,8 @@ async function extractVideoFrames(videoPath, frameJump) {
     return { ok: false, reason: "missing-ffmpeg" };
   }
 
+  const probed = await probeVideo(source);
+  const jump = normalizeJump(frameJump, probed.ok ? probed.jumpMax : undefined);
   const dir = resetFramesDir();
   const base = safeBaseName(source);
   const pattern = path.join(dir, `${base}_%06d.jpg`);
@@ -124,5 +176,6 @@ async function extractVideoFrames(videoPath, frameJump) {
 
 module.exports = {
   extractVideoFrames,
+  probeVideo,
   clearVideoFrameAccess,
 };
