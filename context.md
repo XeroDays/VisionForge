@@ -497,7 +497,7 @@ Renderer `showWorkspace(filePath)` → show **Loading project** overlay → `loa
 **Trigger:** File → Goto Startup page (project must be open)
 
 **Flow:**
-`closeWorkspace` → close Process Image screen (no restore) → stop playback, clear assets/preview/labels, reset tool to Cursor, hide canvas / show `#start-page`, breadcrumb Welcome → `closeProject` clears `vfimg:` allowed dir → refresh recents. Does not delete the `.VFSln` or history.
+`closeWorkspace` → close Process Image and Import From Video screens (no restore) → stop playback, clear assets/preview/labels, reset tool to Cursor, hide canvas / show `#start-page`, breadcrumb Welcome → `closeProject` clears `vfimg:` allowed dir → refresh recents. Does not delete the `.VFSln` or history.
 
 **Files:**
 - `src/renderer/scripts/workspace-canvas.js`
@@ -567,7 +567,7 @@ Trash `stopPropagation` (does not enter rename) → `#delete-label-overlay` conf
 **Trigger:** Drag image files from Explorer (or another folder) over the main workspace / canvas while a project is open
 
 **Flow:**
-`dragenter`/`dragover` with `Files` → show `#workspace-drop-overlay` (“Drop images here”) on `.screen-section--main`. Ignore start page, Settings, and Process Image. Drop → resolve paths via `webUtils.getPathForFile` → filter to `png/jpg/jpeg/webp/bmp/gif/tif/tiff` → if `imagesFolder` is empty, alert “Select an Image Folder first.” Else `importDroppedImages` copies into `imagesFolder` (skip same-folder / existing basename, never overwrite) → `syncAssetsFromFolder` appends `{ name, width: 0, height: 0, detections: [], addedAt }` → optional empty-sidecar import → renderer refreshes playback + Assets sorted by `addedAt` (missing timestamps first, then name). Copied names stay teal (`is-new`) until the frame changes away from that file. The canvas then opens the first new image. Loading overlay runs during copy/sync.
+`dragenter`/`dragover` with `Files` → show `#workspace-drop-overlay` (“Drop images here”) on `.screen-section--main`. Ignore start page, Settings, Process Image, and Import From Video. Drop → resolve paths via `webUtils.getPathForFile` → filter to `png/jpg/jpeg/webp/bmp/gif/tif/tiff` → `importWorkspaceImages` (same path as File → Import images). No `imagesFolder` alerts “Select an Image Folder first.” Otherwise `importDroppedImages` copies into `imagesFolder` (skip same-folder / existing basename, never overwrite) → `syncAssetsFromFolder` appends `{ name, width: 0, height: 0, detections: [], addedAt }` → optional empty-sidecar import → renderer refreshes playback + Assets sorted by `addedAt` (missing timestamps first, then name). Copied names stay teal (`is-new`) until the frame changes away from that file. The canvas then opens the first new image. Loading overlay runs during copy/sync.
 
 **Files:**
 - `src/renderer/scripts/workspace-drop.js`
@@ -575,6 +575,35 @@ Trash `stopPropagation` (does not enter rename) → `#delete-label-overlay` conf
 - `src/renderer/index.html` — `#workspace-drop-overlay`
 - `src/main/middleware/project-service.js` — `importDroppedImages`
 - `src/preload/index.js` — `getPathForFile`, `importDroppedImages`
+
+---
+
+### Import images
+
+**Trigger:** File → Import images (enabled only while a project is open)
+
+**Flow:**
+Close the File menu → if `imagesFolder` is empty, alert “Select an Image Folder first.” → native multi-select dialog titled **Import images** (`png/jpg/jpeg/webp/bmp/gif/tif/tiff`; `selectOpenFile` with `multiple: true` returns `filePaths`; single-file callers still get `filePath`) → cancel does nothing → `importWorkspaceImages` (same copy, teal names, added-time order, and jump to the first new image as a drop).
+
+**Files:**
+- `src/renderer/index.html` — `#btn-import-images`
+- `src/renderer/scripts/workspace-canvas.js` — `importWorkspaceImages`
+- `src/main/middleware/project-service.js` — `selectOpenFile`, `importDroppedImages`
+
+---
+
+### Import From Video
+
+**Trigger:** File → Import from video (enabled only while a project is open)
+
+**Flow:**
+Close the File menu → `openImportFromVideoScreen` stops playback, hides the canvas, inspector, and resize handle, and shows `#import-from-video-screen` (title **Import From Video**, placeholder hint, **Back**). Back or Escape restores the workspace. Goto Startup page and opening another project close it without restoring. Drag-and-drop is ignored while it is open. The screen does not generate frames yet. `window.importWorkspaceImages(paths)` is the path a later change on this screen will use to copy generated files into the open project; the screen stays open after that import.
+
+**Files:**
+- `src/renderer/index.html` — `#import-from-video-screen`, `#btn-import-from-video`
+- `src/renderer/scripts/import-from-video-screen.js`
+- `src/renderer/scripts/workspace-canvas.js` — `importWorkspaceImages`
+- `src/renderer/styles/app.css`
 
 ---
 
@@ -865,6 +894,7 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | Release update UI | `src/renderer/scripts/release-update-panel.js` |
 | Workspace canvas / playback | `src/renderer/scripts/workspace-canvas.js` |
 | Workspace image drop | `src/renderer/scripts/workspace-drop.js` |
+| Import From Video screen | `src/renderer/scripts/import-from-video-screen.js` |
 | Process Image screen | `src/renderer/scripts/process-image-screen.js` |
 | Settings dialog | `src/renderer/scripts/settings-dialog.js` |
 | Auto detect (magic) | `src/renderer/scripts/magic-detect.js` |
@@ -1224,7 +1254,7 @@ Renderer
 - **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder, labels, assets, annotationType, annotationMode, onnxModelPath, onnxModelType, onnxConfidence). Annotation type/mode come from the create dialog catalog and are required for new projects. All project config belongs in that file. `object-detection-bbox` and `oriented-object-detection` are creatable; all other types appear disabled with a **Coming soon** badge in the dropdown. The dialog defaults to Object Detection — Bounding Box. On an OBB project the left rail shows Hexagon instead of Box; **W** toggles Cursor and that draw tool. Click-drag creates an axis-aligned box (`angle: 0`); the selected box has a rotation handle (Shift snaps 15°) and Alt+wheel rotates it 1°. OBB detections store `{ xc, yc, w, h, angle }` (degrees). The middleware rejects coming-soon pairs via `isSupportedAnnotation`; existing projects with other types still load and export normally via `isValidAnnotation`.
 - **Open existing project** / **Recent** loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab). `loadProject` appends missing image names to `assets` and fills empty `detections` from sidecar txt/xml.
 - **Labels:** if VFSln `labels` is empty, import `{project-folder}/classes.txt` then `{imagesFolder}/classes.txt` as `{ id, name }` (id from 0) and list them in the Labels tab. Each row shows a circle in that `id`’s box color (golden-angle HSL) between the id and the name. Existing labels are never overwritten by that import. **Add**, **rename**, and **delete** write VFSln `labels` only (never `classes.txt`). Rename keeps the same `id`; delete does not renumber remaining ids.
-- **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open. That save also syncs `assets` (append-only, with `addedAt` on new rows) and imports empty detections. Drag image files onto the workspace (main screen / canvas) to copy them into that folder and append new `assets` rows. Requires a selected folder; existing names are not overwritten. After a drop, the canvas opens the first new image. Those names stay teal in Assets until the frame changes away from that file.
+- **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open. That save also syncs `assets` (append-only, with `addedAt` on new rows) and imports empty detections. Drag image files onto the workspace, or File → **Import images** (multi-select), copies them into that folder and appends new `assets` rows through `importWorkspaceImages`. Requires a selected folder; existing names are not overwritten. After an import, the canvas opens the first new image. Those names stay teal in Assets until the frame changes away from that file. File → **Import from video** opens `#import-from-video-screen` (placeholder). Back or Escape returns to the workspace. Generated frames will use `importWorkspaceImages` and leave that screen open. Both File items stay disabled until a project is open.
 - **Assets (VFSln):** `{ name, width, height, detections: [{ labelid, value }] }`. Folder sync is append-only; **Delete Asset** (Assets-tab right-click) removes the image file, matching `.txt`/`.xml` sidecars, and that VFSln row. Playback still lists the folder. `width`/`height` filled when that image is previewed (or on box persist). YOLO `value` is `{ xc, yc, w, h }` with `xc = ((x1+x2)/2)/image_width` (same pattern for `yc`, `w`, `h`), clamped to 0–1 and written to 6 decimal places on edit (LabelImg / Ultralytics style); VOC is integer `{ xmin, ymin, xmax, ymax }`. Non-empty detections are not overwritten by sidecar import.
 - **Loading project overlay:** non-dismissible spinner during `loadProject` / `imagesFolder` save until the image list is ready.
 - **Detections tab:** lists VFSln detections for the current image (label name by `labelid`, with the same color circle as the Labels tab); refreshes on frame change. Click a row to select that box; hover trash (or Delete / Backspace when a box is selected) removes that detection only.

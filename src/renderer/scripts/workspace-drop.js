@@ -33,6 +33,7 @@
     if (!window.isWorkspaceOpen?.()) return false;
     if (window.isSettingsOpen?.()) return false;
     if (window.isProcessImageScreenOpen?.()) return false;
+    if (window.isImportFromVideoScreenOpen?.()) return false;
     return true;
   }
 
@@ -98,30 +99,13 @@
 
     busy = true;
     try {
-      await window.showWorkspaceLoading?.();
-      const result = await window.visionforge?.importDroppedImages?.(projectPath, sourcePaths);
-      if (!result?.ok) {
-        if (result?.reason === "missing-folder") {
-          window.showAppAlert?.("Select an Image Folder first.");
-        } else {
-          window.showAppAlert?.("Could not add dropped images.");
-        }
-        log.exit("handleDrop", startedAt, { ok: false, reason: result?.reason });
-        return;
-      }
-      window.refreshWorkspaceImages?.(result.folderPath, result.files, result.project?.assets, result.newFiles);
-      log.info("dropped images imported", {
-        copied: result.copied,
-        skipped: result.skipped,
-        total: result.files?.length || 0,
-      });
-      log.exit("handleDrop", startedAt, { ok: true, copied: result.copied, skipped: result.skipped });
+      await window.importWorkspaceImages?.(sourcePaths);
+      log.exit("handleDrop", startedAt, { ok: true });
     } catch (err) {
       window.showAppAlert?.("Could not add dropped images.");
       log.error("handleDrop failed", { error: String(err?.message || err) });
       log.exit("handleDrop", startedAt, { error: true });
     } finally {
-      window.hideWorkspaceLoading?.();
       busy = false;
     }
   }

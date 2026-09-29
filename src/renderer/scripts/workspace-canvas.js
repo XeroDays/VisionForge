@@ -61,6 +61,8 @@
   const fileMenuBtn = document.getElementById("btn-file-menu");
   const fileMenuDropdown = document.getElementById("file-menu-dropdown");
   const selectFolderMenuItem = document.getElementById("btn-select-image-folder");
+  const importImagesMenuItem = document.getElementById("btn-import-images");
+  const importFromVideoMenuItem = document.getElementById("btn-import-from-video");
   const exportMenuItem = document.getElementById("btn-export");
   const autoDetectAllMenuItem = document.getElementById("btn-auto-detect-all");
   const detectionsSortBtn = document.getElementById("btn-detections-sort");
@@ -278,6 +280,8 @@
       syncDrawTools();
     }
     if (selectFolderMenuItem) selectFolderMenuItem.disabled = !visible;
+    if (importImagesMenuItem) importImagesMenuItem.disabled = !visible;
+    if (importFromVideoMenuItem) importFromVideoMenuItem.disabled = !visible;
     if (exportMenuItem) exportMenuItem.disabled = !visible;
     if (autoDetectAllMenuItem) autoDetectAllMenuItem.disabled = !visible;
     if (titlebarExportBtn) titlebarExportBtn.disabled = !visible;
@@ -2326,6 +2330,7 @@
       return;
     }
     window.closeProcessImageScreen?.({ restoreWorkspace: false });
+    window.closeImportFromVideoScreen?.({ restoreWorkspace: false });
     window.VisionForgeHistory?.clear();
 
     try {
@@ -2373,6 +2378,7 @@
     if (!state.filePath) return;
     const startedAt = log.enter("closeWorkspace");
     window.closeProcessImageScreen?.({ restoreWorkspace: false });
+    window.closeImportFromVideoScreen?.({ restoreWorkspace: false });
     stopPlay();
     void flushWheelRotatePersist();
     void flushNudgePersist();
@@ -3033,8 +3039,47 @@
 
   assetsPane?.addEventListener("scroll", () => closeAssetContextMenu());
 
+  const IMPORT_IMAGE_FILTERS = [
+    { name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "gif", "tif", "tiff"] },
+  ];
+
+  async function importImagesFromDialog() {
+    if (!state.filePath) return;
+    if (!state.imagesFolder) {
+      window.showAppAlert?.("Select an Image Folder first.");
+      return;
+    }
+    const startedAt = log.enter("importImagesFromDialog");
+    try {
+      const result = await window.visionforge?.selectOpenFile?.({
+        title: "Import images",
+        multiple: true,
+        filters: IMPORT_IMAGE_FILTERS,
+        defaultPath: state.imagesFolder,
+      });
+      if (!result?.ok || result.canceled || !result.filePaths?.length) {
+        log.exit("importImagesFromDialog", startedAt, { canceled: true });
+        return;
+      }
+      await window.importWorkspaceImages?.(result.filePaths);
+      log.exit("importImagesFromDialog", startedAt, { ok: true, count: result.filePaths.length });
+    } catch (err) {
+      window.showAppAlert?.("Could not add images.");
+      log.error("importImagesFromDialog failed", { error: String(err?.message || err) });
+      log.exit("importImagesFromDialog", startedAt, { error: true });
+    }
+  }
+
   selectFolderMenuItem?.addEventListener("click", () => {
     void selectImagesFolder();
+  });
+  importImagesMenuItem?.addEventListener("click", () => {
+    closeFileMenu();
+    void importImagesFromDialog();
+  });
+  importFromVideoMenuItem?.addEventListener("click", () => {
+    closeFileMenu();
+    window.openImportFromVideoScreen?.();
   });
   workspaceEmptyBtn?.addEventListener("click", () => {
     void selectImagesFolder();
@@ -3077,6 +3122,7 @@
     if (isDeleteDialogOpen() || isAnyDialogOpen()) return true;
     if (isAssetContextMenuOpen()) return true;
     if (window.isProcessImageScreenOpen?.()) return true;
+    if (window.isImportFromVideoScreenOpen?.()) return true;
     return isTypingTarget(target);
   }
 
@@ -3188,6 +3234,40 @@
     if (newFileNames?.length) {
       const idx = state.files.findIndex((file) => state.newFileNames.has(file.name));
       if (idx >= 0) setFrame(idx, { resetView: true });
+    }
+  };
+  window.importWorkspaceImages = async (paths) => {
+    const sourcePaths = (Array.isArray(paths) ? paths : []).map((item) => String(item || "").trim()).filter(Boolean);
+    if (!state.filePath) return { ok: false, reason: "no-project" };
+    if (!state.imagesFolder) {
+      window.showAppAlert?.("Select an Image Folder first.");
+      return { ok: false, reason: "missing-folder" };
+    }
+    if (!sourcePaths.length) return { ok: false, reason: "no-images" };
+    const startedAt = log.enter("importWorkspaceImages");
+    await showLoadingOverlay();
+    try {
+      const result = await window.visionforge?.importDroppedImages?.(state.filePath, sourcePaths);
+      if (!result?.ok) {
+        if (result?.reason === "missing-folder") {
+          window.showAppAlert?.("Select an Image Folder first.");
+        } else {
+          window.showAppAlert?.("Could not add images.");
+        }
+        log.exit("importWorkspaceImages", startedAt, { ok: false, reason: result?.reason });
+        return { ok: false, reason: result?.reason || "failed" };
+      }
+      window.refreshWorkspaceImages?.(result.folderPath, result.files, result.project?.assets, result.newFiles);
+      log.info("images imported", { copied: result.copied, skipped: result.skipped });
+      log.exit("importWorkspaceImages", startedAt, { ok: true, copied: result.copied, skipped: result.skipped });
+      return { ok: true, copied: result.copied, skipped: result.skipped };
+    } catch (err) {
+      window.showAppAlert?.("Could not add images.");
+      log.error("importWorkspaceImages failed", { error: String(err?.message || err) });
+      log.exit("importWorkspaceImages", startedAt, { error: true });
+      return { ok: false, reason: "error" };
+    } finally {
+      hideLoadingOverlay();
     }
   };
   window.showWorkspaceLoading = showLoadingOverlay;

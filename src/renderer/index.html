@@ -27,6 +27,8 @@
               <button type="button" class="app-menubar__item" id="btn-file-menu" aria-haspopup="true" aria-expanded="false" aria-controls="file-menu-dropdown">File</button>
               <div class="app-menubar__dropdown" id="file-menu-dropdown" hidden role="menu">
                 <button type="button" class="app-menubar__dropdown-item" id="btn-select-image-folder" role="menuitem" disabled>Select Image Folder</button>
+                <button type="button" class="app-menubar__dropdown-item" id="btn-import-images" role="menuitem" disabled>Import images</button>
+                <button type="button" class="app-menubar__dropdown-item" id="btn-import-from-video" role="menuitem" disabled>Import from video</button>
                 <button type="button" class="app-menubar__dropdown-item" id="btn-export" role="menuitem" disabled>Export</button>
                 <button type="button" class="app-menubar__dropdown-item" id="btn-auto-detect-all" role="menuitem" disabled>Auto detect all images</button>
                 <button type="button" class="app-menubar__dropdown-item" id="btn-goto-startup" role="menuitem" disabled>Goto Startup page</button>
@@ -216,6 +218,13 @@
               <input type="number" class="playback-frame__input" id="playback-frame" min="0" max="0" value="0" step="1" />
             </label>
           </footer>
+        </div>
+        <div class="import-from-video-screen" id="import-from-video-screen" hidden>
+          <header class="import-from-video-screen__header">
+            <h2 class="import-from-video-screen__title">Import From Video</h2>
+            <button type="button" class="btn-secondary" id="btn-import-from-video-back">Back</button>
+          </header>
+          <p class="import-from-video-screen__hint">Frames generated here will be added to the project.</p>
         </div>
         <div class="process-image-screen" id="process-image-screen" hidden>
           <div class="process-image-preview" id="process-image-pane">
@@ -619,6 +628,7 @@
   <script src="scripts/workspace-canvas.js"></script>
   <script src="scripts/workspace-drop.js"></script>
   <script src="scripts/process-image-screen.js"></script>
+  <script src="scripts/import-from-video-screen.js"></script>
   <script src="scripts/start-page.js"></script>
   <script src="../shared/enums/annotation-types.js"></script>
   <script src="../shared/enums/ai-model-types.js"></script>

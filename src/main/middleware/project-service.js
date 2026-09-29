@@ -81,16 +81,23 @@ async function selectOpenFile(sender, options = {}) {
   const defaultPath = resolveDialogDefault(options?.defaultPath);
   const filters = sanitizeOpenFileFilters(options?.filters);
 
+  const multiple = Boolean(options?.multiple);
   const result = await dialog.showOpenDialog(win || undefined, {
     title,
     defaultPath,
-    properties: ["openFile"],
+    properties: multiple ? ["openFile", "multiSelections"] : ["openFile"],
     ...(filters ? { filters } : {}),
   });
 
   if (result.canceled || !result.filePaths?.[0]) {
     log.exit("selectOpenFile", startedAt, { canceled: true });
     return { ok: true, canceled: true };
+  }
+
+  if (multiple) {
+    const filePaths = result.filePaths;
+    log.exit("selectOpenFile", startedAt, { count: filePaths.length });
+    return { ok: true, canceled: false, filePaths };
   }
 
   const filePath = result.filePaths[0];
