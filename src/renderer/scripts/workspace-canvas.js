@@ -64,7 +64,6 @@
   const importImagesMenuItem = document.getElementById("btn-import-images");
   const importFromVideoMenuItem = document.getElementById("btn-import-from-video");
   const exportMenuItem = document.getElementById("btn-export");
-  const autoDetectAllMenuItem = document.getElementById("btn-auto-detect-all");
   const detectionsSortBtn = document.getElementById("btn-detections-sort");
   const assetsSearchInput = document.getElementById("assets-search");
   const assetsFilterSelect = document.getElementById("assets-filter");
@@ -284,7 +283,6 @@
     if (importImagesMenuItem) importImagesMenuItem.disabled = !visible;
     if (importFromVideoMenuItem) importFromVideoMenuItem.disabled = !visible;
     if (exportMenuItem) exportMenuItem.disabled = !visible;
-    if (autoDetectAllMenuItem) autoDetectAllMenuItem.disabled = !visible;
     if (titlebarExportBtn) titlebarExportBtn.disabled = !visible;
     if (gotoStartupMenuItem) gotoStartupMenuItem.disabled = !visible;
     if (labelsAddBtn) labelsAddBtn.disabled = !visible;
@@ -880,13 +878,16 @@
       : Array.isArray(row?.detections)
         ? row.detections
         : [];
-    return {
+    const asset = {
       name,
       width: Number.isFinite(width) && width > 0 ? Math.round(width) : 0,
       height: Number.isFinite(height) && height > 0 ? Math.round(height) : 0,
       detections,
       flagged: Boolean(patch.flagged ?? row?.flagged),
     };
+    const addedAt = Number(patch.addedAt ?? row?.addedAt);
+    if (Number.isFinite(addedAt) && addedAt > 0) asset.addedAt = addedAt;
+    return asset;
   }
 
   function handleThickness() {
@@ -3152,10 +3153,6 @@
     void closeWorkspace();
   });
 
-  autoDetectAllMenuItem?.addEventListener("click", () => {
-    window.openBatchDetectDialog?.();
-  });
-
   detectionsSortBtn?.addEventListener("click", () => {
     state.sortDetectionsByScore = !state.sortDetectionsByScore;
     detectionsSortBtn.classList.toggle("is-selected", state.sortDetectionsByScore);
@@ -3293,10 +3290,12 @@
   window.getWorkspaceImagesFolder = () => state.imagesFolder || "";
   window.refreshWorkspaceImages = (folderPath, files, assets, newFileNames) => {
     if (assets !== undefined) setAssets(assets);
-    if (newFileNames?.length) state.newFileNames = new Set(newFileNames);
+    const batch = (Array.isArray(newFileNames) ? newFileNames : []).map((name) => String(name || "").trim()).filter(Boolean);
+    batch.forEach((name) => state.newFileNames.add(name));
     applyImageList(folderPath, files, true);
-    if (newFileNames?.length) {
-      const idx = state.files.findIndex((file) => state.newFileNames.has(file.name));
+    if (batch.length) {
+      const batchNames = new Set(batch);
+      const idx = state.files.findIndex((file) => batchNames.has(file.name));
       if (idx >= 0) setFrame(idx, { resetView: true });
     }
   };

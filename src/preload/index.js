@@ -36,9 +36,6 @@ const CH = {
   EXPORT_PROGRESS: "visionforge:export-progress",
   SELECT_OPEN_FILE: "visionforge:select-open-file",
   RUN_ONNX_DETECT: "visionforge:run-onnx-detect",
-  RUN_BATCH_DETECT: "visionforge:run-batch-detect",
-  BATCH_DETECT_PROGRESS: "visionforge:batch-detect-progress",
-  CANCEL_BATCH_DETECT: "visionforge:cancel-batch-detect",
   EXTRACT_VIDEO_FRAMES: "visionforge:extract-video-frames",
   CANCEL_EXTRACT_VIDEO_FRAMES: "visionforge:cancel-extract-video-frames",
   PROBE_VIDEO: "visionforge:probe-video",
@@ -89,8 +86,6 @@ contextBridge.exposeInMainWorld("visionforge", {
   selectOpenFile: (options) => ipcRenderer.invoke(CH.SELECT_OPEN_FILE, options),
   runOnnxDetect: (imagePath, modelPath, labels, modelType, confidence) =>
     ipcRenderer.invoke(CH.RUN_ONNX_DETECT, imagePath, modelPath, labels, modelType, confidence),
-  runBatchDetect: (filePath, options) => ipcRenderer.invoke(CH.RUN_BATCH_DETECT, filePath, options),
-  cancelBatchDetect: () => ipcRenderer.invoke(CH.CANCEL_BATCH_DETECT),
   extractVideoFrames: (videoPath, frameJump) =>
     ipcRenderer.invoke(CH.EXTRACT_VIDEO_FRAMES, videoPath, frameJump),
   cancelExtractVideoFrames: () => ipcRenderer.invoke(CH.CANCEL_EXTRACT_VIDEO_FRAMES),
@@ -112,10 +107,5 @@ contextBridge.exposeInMainWorld("visionforge", {
     const subscription = (_event, payload) => callback(payload);
     ipcRenderer.on(CH.EXPORT_PROGRESS, subscription);
     return () => ipcRenderer.removeListener(CH.EXPORT_PROGRESS, subscription);
-  },
-  onBatchDetectProgress(callback) {
-    const subscription = (_event, payload) => callback(payload);
-    ipcRenderer.on(CH.BATCH_DETECT_PROGRESS, subscription);
-    return () => ipcRenderer.removeListener(CH.BATCH_DETECT_PROGRESS, subscription);
   },
 });

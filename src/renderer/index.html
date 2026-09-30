@@ -30,7 +30,6 @@
                 <button type="button" class="app-menubar__dropdown-item" id="btn-import-images" role="menuitem" disabled>Import images</button>
                 <button type="button" class="app-menubar__dropdown-item" id="btn-import-from-video" role="menuitem" disabled>Import from video</button>
                 <button type="button" class="app-menubar__dropdown-item" id="btn-export" role="menuitem" disabled>Export</button>
-                <button type="button" class="app-menubar__dropdown-item" id="btn-auto-detect-all" role="menuitem" disabled>Auto detect all images</button>
                 <button type="button" class="app-menubar__dropdown-item" id="btn-goto-startup" role="menuitem" disabled>Goto Startup page</button>
               </div>
             </div>
@@ -608,40 +607,6 @@
     </div>
   </div>
 
-  <div id="batch-detect-overlay" class="settings-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="batch-detect-title">
-    <div class="settings-modal settings-modal--compact">
-      <div class="settings-modal-header">
-        <h2 class="settings-modal-title" id="batch-detect-title">Auto detect all images</h2>
-        <button type="button" id="btn-batch-detect-close" class="icon-btn" aria-label="Close">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-      <div class="settings-modal-body">
-        <p class="batch-detect-note">Runs the project model on every image and replaces boxes. This cannot be undone with Ctrl+Z.</p>
-        <label class="batch-detect-skip">
-          <input type="checkbox" id="batch-detect-skip" checked />
-          Skip images that already have boxes
-        </label>
-        <div class="export-progress" id="batch-detect-progress" hidden>
-          <div class="release-progress-track" aria-hidden="true">
-            <div class="release-progress-bar" id="batch-detect-progress-bar"></div>
-          </div>
-          <span class="release-download-percent" id="batch-detect-progress-percent">0%</span>
-        </div>
-        <p class="batch-detect-status" id="batch-detect-status" hidden></p>
-        <ul class="batch-detect-review" id="batch-detect-review" hidden></ul>
-      </div>
-      <div class="settings-modal-footer delete-label-footer">
-        <button type="button" id="btn-batch-detect-cancel" class="btn-secondary">Cancel</button>
-        <button type="button" id="btn-batch-detect-start" class="btn-primary">Start</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="magic-context-menu" class="asset-context-menu" hidden role="menu" aria-label="Auto detect actions">
-    <button type="button" class="asset-context-menu__item" id="btn-magic-context-all" role="menuitem">Detect all images</button>
-  </div>
-
   <div id="asset-context-menu" class="asset-context-menu" hidden role="menu" aria-label="Asset actions">
     <button type="button" class="asset-context-menu__item" id="btn-asset-context-delete" role="menuitem">Delete</button>
   </div>
@@ -660,7 +625,6 @@
   <script src="../shared/enums/ai-model-types.js"></script>
   <script src="scripts/settings-dialog.js"></script>
   <script src="scripts/magic-detect.js"></script>
-  <script src="scripts/batch-detect-dialog.js"></script>
   <script src="scripts/create-project-dialog.js"></script>
   <script src="scripts/export-dialog.js"></script>
   <script src="scripts/release-update-panel.js"></script>

@@ -304,6 +304,24 @@ function listImageFiles(folderPath) {
   return { ok: true, folderPath: dir, files };
 }
 
+function storedAddedAt(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function fileAddedAt(filePath) {
+  try {
+    const stat = fs.statSync(filePath);
+    const birth = Number(stat.birthtimeMs);
+    if (Number.isFinite(birth) && birth > 0) return Math.round(birth);
+    const modified = Number(stat.mtimeMs);
+    if (Number.isFinite(modified) && modified > 0) return Math.round(modified);
+  } catch {
+    // Fall through to the current time when the file cannot be stated.
+  }
+  return Date.now();
+}
+
 function syncAssetsFromFolder(result) {
   if (!result?.ok) return result;
   const folder = String(result.project?.imagesFolder || "").trim();
@@ -316,7 +334,16 @@ function syncAssetsFromFolder(result) {
   }
 
   const hadAssets = Array.isArray(result.project.assets);
-  const assets = hadAssets ? result.project.assets.slice() : [];
+  const byPath = new Map(listed.files.map((file) => [file.name, file.filePath]));
+  let assets = hadAssets ? result.project.assets.slice() : [];
+  let filled = 0;
+  assets = assets.map((row) => {
+    if (storedAddedAt(row?.addedAt)) return row;
+    const filePath = byPath.get(String(row?.name || ""));
+    if (!filePath) return row;
+    filled += 1;
+    return { ...row, addedAt: fileAddedAt(filePath) };
+  });
   const existing = new Set(assets.map((row) => String(row?.name || "")));
   let added = 0;
   for (const file of listed.files) {
@@ -326,16 +353,16 @@ function syncAssetsFromFolder(result) {
     added += 1;
   }
 
-  if (!added && hadAssets) return result;
+  if (!added && !filled && hadAssets) return result;
 
   const updated = updateProject(result.filePath, { assets }, { skipPostHooks: true });
   if (!updated.ok) {
-    log.warn("could not persist synced assets", { reason: updated.reason, added });
+    log.warn("could not persist synced assets", { reason: updated.reason, added, filled });
     result.project.assets = assets;
     return result;
   }
 
-  log.info("synced assets from folder", { added, total: assets.length, folder });
+  log.info("synced assets from folder", { added, filled, total: assets.length, folder });
   return updated;
 }
 

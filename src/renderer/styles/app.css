@@ -1907,48 +1907,6 @@ body {
   color: #f4b42a;
 }
 
-.batch-detect-note,
-.batch-detect-status {
-  margin: 0 0 0.75rem;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 0.8125rem;
-  line-height: 1.4;
-}
-
-.batch-detect-skip {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.8125rem;
-}
-
-.batch-detect-review {
-  margin: 0.5rem 0 0;
-  padding: 0;
-  list-style: none;
-  max-height: 180px;
-  overflow: auto;
-}
-
-.batch-detect-review button {
-  display: block;
-  width: 100%;
-  padding: 0.3rem 0.4rem;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: #e7ecf3;
-  font: inherit;
-  font-size: 0.8125rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.batch-detect-review button:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
 @keyframes process-indeterminate {
   0% { transform: translateX(-120%); }
   100% { transform: translateX(280%); }
