@@ -1,6 +1,6 @@
 {
   "name": "visionforge",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "VisionForge — an Electron desktop application.",
   "license": "MIT",
   "main": "src/main/index.js",

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-09-30
+
+### Added
+
+- File → **Import images** copies a multi-select of images into the project folder. New names stay teal, and the canvas opens the first new image.
+- File → **Import from video** extracts frames from MP4, M4V, or WebM. Set a frame jump, optionally run the project detection model, pick thumbnails, and import them with their boxes.
+
+### Changed
+
+- Images that have no added time are dated once from the file creation time, then stay in that order.
+- A later import keeps earlier unvisited names teal until you leave those images.
+- Auto detect stays disabled until the open project has a detection model.
+
+### Removed
+
+- **Auto detect all images** (batch detect across the folder).
+
 ## [1.0.7] - 2026-09-28
 
 ### Added
