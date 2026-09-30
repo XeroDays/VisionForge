@@ -2508,12 +2508,46 @@ body {
   border-color: #f4b42a;
 }
 
+.import-video-grid__media {
+  position: relative;
+  width: 100%;
+  height: calc(var(--import-video-cell) * 0.72);
+  background: #0b0b0d;
+}
+
 .import-video-grid__thumb {
   display: block;
   width: 100%;
-  height: calc(var(--import-video-cell) * 0.72);
-  object-fit: cover;
-  background: #0b0b0d;
+  height: 100%;
+  object-fit: contain;
+  background: transparent;
+}
+
+.import-video-grid__overlay {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.import-video-grid__overlay rect,
+.import-video-grid__overlay polygon {
+  fill: none;
+  stroke: #f4b42a;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.import-video-detect {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.75rem;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.8125rem;
+}
+
+.import-video-detect:has(input:disabled) {
+  opacity: 0.45;
 }
 
 .import-video-info {

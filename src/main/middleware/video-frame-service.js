@@ -8,8 +8,14 @@ const { createLogger } = require("../services/visionforge-logger");
 const log = createLogger("video-frames");
 const VIDEO_EXTENSIONS = new Set([".mp4", ".m4v", ".webm"]);
 
-function framesDir() {
-  return path.join(app.getPath("temp"), "VisionForge", "video-frames");
+let activeFramesDir = "";
+
+function framesRoot() {
+  return path.join(app.getPath("temp"), "VisionForge");
+}
+
+function defaultFramesDir() {
+  return path.join(framesRoot(), "video-frames");
 }
 
 function resolveFfmpegPath() {
@@ -60,10 +66,40 @@ function parseProbe(stderr) {
   };
 }
 
+function removeDir(dir) {
+  if (!dir || !fs.existsSync(dir)) return true;
+  try {
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    return true;
+  } catch (err) {
+    log.warn("could not remove frames dir", { dir, error: String(err?.message || err) });
+    return false;
+  }
+}
+
 function resetFramesDir() {
-  const dir = framesDir();
-  fs.rmSync(dir, { recursive: true, force: true });
+  const root = framesRoot();
+  fs.mkdirSync(root, { recursive: true });
+  const previous = activeFramesDir;
+  let dir = defaultFramesDir();
+  if (!removeDir(dir)) {
+    dir = path.join(root, `video-frames-${Date.now()}`);
+    log.warn("frames dir locked, using a new folder", { dir });
+  }
+  if (previous && path.resolve(previous) !== path.resolve(dir)) removeDir(previous);
+  try {
+    const names = fs.readdirSync(root);
+    names.forEach((name) => {
+      if (name !== "video-frames" && !name.startsWith("video-frames-")) return;
+      const candidate = path.join(root, name);
+      if (path.resolve(candidate) === path.resolve(dir)) return;
+      removeDir(candidate);
+    });
+  } catch (err) {
+    log.warn("could not sweep old frame folders", { error: String(err?.message || err) });
+  }
   fs.mkdirSync(dir, { recursive: true });
+  activeFramesDir = dir;
   return dir;
 }
 
@@ -134,7 +170,14 @@ async function extractVideoFrames(videoPath, frameJump) {
 
   const probed = await probeVideo(source);
   const jump = normalizeJump(frameJump, probed.ok ? probed.jumpMax : undefined);
-  const dir = resetFramesDir();
+  let dir = "";
+  try {
+    dir = resetFramesDir();
+  } catch (err) {
+    log.error("could not prepare frames dir", { error: String(err?.message || err) });
+    log.exit("extractVideoFrames", startedAt, { ok: false, reason: "frames-locked" });
+    return { ok: false, reason: "frames-locked" };
+  }
   const base = safeBaseName(source);
   const pattern = path.join(dir, `${base}_%06d.jpg`);
   const args = [

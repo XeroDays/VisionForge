@@ -17,6 +17,7 @@
   const backBtn = document.getElementById("btn-import-from-video-back");
   const browseBtn = document.getElementById("btn-import-video-browse");
   const processBtn = document.getElementById("btn-import-video-process");
+  const detectInput = document.getElementById("import-video-detect");
   const importBtn = document.getElementById("btn-import-video-import");
   const pathInput = document.getElementById("import-video-path");
   const jumpInput = document.getElementById("import-video-jump");
@@ -36,6 +37,12 @@
   const CELL_MIN = 80;
   const CELL_MAX = 360;
   const CELL_STEP = 24;
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const MODEL_STOP_REASONS = new Set(["missing-model", "invalid-model"]);
+  const DETECT_ERRORS = {
+    "missing-model": "Select an AI model in Settings first.",
+    "invalid-model": "Could not load the ONNX model.",
+  };
 
   let videoPath = "";
   let videoInfo = null;
@@ -70,10 +77,25 @@
     statusEl.classList.toggle("is-error", Boolean(isError && text));
   }
 
+  function modelCanDetect() {
+    const model = window.getWorkspaceModel?.() || {};
+    const modelPath = String(model.path || "").trim();
+    const modelType = model.type || window.VisionForgeAiModelTypes?.DEFAULT_TYPE;
+    return Boolean(modelPath && window.VisionForgeAiModelTypes?.supportsDetection?.(modelType));
+  }
+
+  function syncDetectCheckbox() {
+    if (!detectInput) return;
+    const ready = modelCanDetect();
+    detectInput.disabled = busy || !ready;
+    if (!ready) detectInput.checked = false;
+  }
+
   function updateActions() {
     if (processBtn) processBtn.disabled = busy || !videoPath || !videoInfo;
     if (browseBtn) browseBtn.disabled = busy;
     if (jumpInput) jumpInput.disabled = busy;
+    syncDetectCheckbox();
     if (importBtn) {
       importBtn.hidden = selected.size < 1;
       importBtn.disabled = busy;
@@ -100,9 +122,103 @@
     });
   }
 
+  function fittedImageRect(img, media) {
+    const boxW = media?.clientWidth || 0;
+    const boxH = media?.clientHeight || 0;
+    const nw = img?.naturalWidth || 0;
+    const nh = img?.naturalHeight || 0;
+    if (!nw || !nh || boxW <= 0 || boxH <= 0) return null;
+    const scale = Math.min(boxW / nw, boxH / nh);
+    const w = nw * scale;
+    const h = nh * scale;
+    return { x: (boxW - w) / 2, y: (boxH - h) / 2, w, h };
+  }
+
+  function obbPoints(item) {
+    const xc = Number(item.xc);
+    const yc = Number(item.yc);
+    const w = Number(item.w);
+    const h = Number(item.h);
+    const rad = ((Number(item.angle) || 0) * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const hw = w / 2;
+    const hh = h / 2;
+    return [
+      [-hw, -hh],
+      [hw, -hh],
+      [hw, hh],
+      [-hw, hh],
+    ]
+      .map(([dx, dy]) => `${xc + dx * cos - dy * sin},${yc + dx * sin + dy * cos}`)
+      .join(" ");
+  }
+
+  function drawOverlay(svg, detections) {
+    svg.replaceChildren();
+    svg.setAttribute("viewBox", "0 0 1 1");
+    svg.setAttribute("preserveAspectRatio", "none");
+    (Array.isArray(detections) ? detections : []).forEach((item) => {
+      const xc = Number(item?.xc);
+      const yc = Number(item?.yc);
+      const w = Number(item?.w);
+      const h = Number(item?.h);
+      if (![xc, yc, w, h].every(Number.isFinite) || w <= 0 || h <= 0) return;
+      const angle = Number(item.angle);
+      if (Number.isFinite(angle) && angle !== 0) {
+        const polygon = document.createElementNS(SVG_NS, "polygon");
+        polygon.setAttribute("points", obbPoints(item));
+        svg.appendChild(polygon);
+        return;
+      }
+      const rect = document.createElementNS(SVG_NS, "rect");
+      rect.setAttribute("x", String(xc - w / 2));
+      rect.setAttribute("y", String(yc - h / 2));
+      rect.setAttribute("width", String(w));
+      rect.setAttribute("height", String(h));
+      svg.appendChild(rect);
+    });
+  }
+
+  function layoutOverlays() {
+    if (!gridEl) return;
+    gridEl.querySelectorAll(".import-video-grid__item").forEach((button) => {
+      const media = button.querySelector(".import-video-grid__media");
+      const img = button.querySelector(".import-video-grid__thumb");
+      const svg = button.querySelector(".import-video-grid__overlay");
+      if (!media || !img || !svg) return;
+      const fit = fittedImageRect(img, media);
+      if (!fit) {
+        svg.hidden = true;
+        return;
+      }
+      svg.hidden = false;
+      svg.style.left = `${fit.x}px`;
+      svg.style.top = `${fit.y}px`;
+      svg.style.width = `${fit.w}px`;
+      svg.style.height = `${fit.h}px`;
+    });
+  }
+
+  function scheduleOverlayLayout() {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(layoutOverlays);
+    });
+  }
+
   function applyCellSize() {
     if (!gridPane) return;
     gridPane.style.setProperty("--import-video-cell", `${cellSize}px`);
+    scheduleOverlayLayout();
+  }
+
+  function paintOverlay(file) {
+    if (!gridEl || !file?.filePath) return;
+    const button = gridEl.querySelector(`[data-path="${CSS.escape(file.filePath)}"]`);
+    const svg = button?.querySelector(".import-video-grid__overlay");
+    if (!svg) return;
+    drawOverlay(svg, file.detections);
+    layoutOverlays();
   }
 
   function previewSrc(filePath) {
@@ -125,17 +241,30 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = "import-video-grid__item";
+      button.dataset.path = file.filePath;
       if (selected.has(file.filePath)) button.classList.add("is-selected");
       button.title = file.name;
+      const media = document.createElement("span");
+      media.className = "import-video-grid__media";
       const img = document.createElement("img");
       img.className = "import-video-grid__thumb";
       img.alt = "";
       img.draggable = false;
+      img.addEventListener("load", () => {
+        file.width = img.naturalWidth || file.width || 0;
+        file.height = img.naturalHeight || file.height || 0;
+        layoutOverlays();
+      });
       img.src = previewSrc(file.filePath);
+      const svg = document.createElementNS(SVG_NS, "svg");
+      svg.classList.add("import-video-grid__overlay");
+      svg.setAttribute("aria-hidden", "true");
+      drawOverlay(svg, file.detections);
+      media.append(img, svg);
       const name = document.createElement("span");
       name.className = "import-video-grid__name";
       name.textContent = file.name;
-      button.append(img, name);
+      button.append(media, name);
       button.addEventListener("click", () => {
         if (selected.has(file.filePath)) selected.delete(file.filePath);
         else selected.add(file.filePath);
@@ -145,6 +274,19 @@
       gridEl.appendChild(button);
     });
     updateActions();
+    scheduleOverlayLayout();
+  }
+
+  function releaseFramePreviews() {
+    gridEl?.querySelectorAll("img").forEach((img) => {
+      img.removeAttribute("src");
+    });
+  }
+
+  function waitForPreviewRelease() {
+    return new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
   }
 
   function clearFrames() {
@@ -199,12 +341,15 @@
 
   async function processVideo() {
     if (busy || !videoPath || !videoInfo) return;
+    syncDetectCheckbox();
     const jump = snapFrameJump();
     const startedAt = log.enter("processVideo");
     busy = true;
     updateActions();
     setStatus("Extracting frames…");
+    releaseFramePreviews();
     clearFrames();
+    await waitForPreviewRelease();
     try {
       const result = await window.visionforge?.extractVideoFrames?.(videoPath, jump);
       if (!result?.ok) {
@@ -218,11 +363,24 @@
         log.exit("processVideo", startedAt, { ok: false, reason: result?.reason });
         return;
       }
-      frames = Array.isArray(result.files) ? result.files : [];
+      frames = (Array.isArray(result.files) ? result.files : []).map((file) => ({
+        name: file.name,
+        filePath: file.filePath,
+        detections: [],
+        width: 0,
+        height: 0,
+      }));
       selected.clear();
       renderGrid();
-      setStatus("");
       log.info("video frames extracted", { count: frames.length, jump });
+      if (detectInput?.checked && modelCanDetect()) {
+        const detected = await detectExtractedFrames();
+        if (!detected.ok) {
+          log.exit("processVideo", startedAt, { ok: false, reason: detected.reason, count: frames.length });
+          return;
+        }
+      }
+      setStatus("");
       log.exit("processVideo", startedAt, { ok: true, count: frames.length });
     } catch (err) {
       setStatus("Could not extract frames.", true);
@@ -234,9 +392,39 @@
     }
   }
 
+  async function detectExtractedFrames() {
+    const model = window.getWorkspaceModel?.() || {};
+    const modelPath = String(model.path || "").trim();
+    const labels = window.getWorkspaceLabels?.() || [];
+    const confidence = window.getWorkspaceConfidence?.();
+    for (let index = 0; index < frames.length; index += 1) {
+      const file = frames[index];
+      setStatus(`Detecting ${index + 1} of ${frames.length}…`);
+      const result = await window.visionforge?.runOnnxDetect?.(
+        file.filePath,
+        modelPath,
+        labels,
+        model.type,
+        confidence,
+      );
+      if (!result?.ok) {
+        if (MODEL_STOP_REASONS.has(result?.reason)) {
+          setStatus(DETECT_ERRORS[result.reason] || "Could not load the ONNX model.", true);
+          return { ok: false, reason: result.reason };
+        }
+        file.detections = [];
+      } else {
+        file.detections = Array.isArray(result.detections) ? result.detections : [];
+      }
+      paintOverlay(file);
+    }
+    return { ok: true };
+  }
+
   async function importSelected() {
     if (busy || selected.size < 1) return;
-    const paths = frames.filter((file) => selected.has(file.filePath)).map((file) => file.filePath);
+    const chosen = frames.filter((file) => selected.has(file.filePath));
+    const paths = chosen.map((file) => file.filePath);
     const startedAt = log.enter("importSelected");
     busy = true;
     updateActions();
@@ -246,8 +434,28 @@
         log.exit("importSelected", startedAt, { ok: false, reason: result?.reason });
         return;
       }
-      log.info("video frames imported", { count: paths.length, copied: result.copied });
-      log.exit("importSelected", startedAt, { ok: true, count: paths.length });
+      const imported = new Set(Array.isArray(result.newFiles) ? result.newFiles : []);
+      const writeDetections = Boolean(detectInput?.checked) && modelCanDetect();
+      const entries = writeDetections
+        ? chosen
+            .filter((file) => imported.has(file.name) && Array.isArray(file.detections) && file.detections.length)
+            .map((file) => ({
+              name: file.name,
+              detections: file.detections,
+              width: file.width || videoInfo?.width || 0,
+              height: file.height || videoInfo?.height || 0,
+            }))
+        : [];
+      if (entries.length) {
+        const applied = await window.applyImportedAssetDetections?.(entries);
+        if (!applied?.ok) {
+          setStatus("Could not save detections.", true);
+          log.exit("importSelected", startedAt, { ok: false, reason: applied?.reason || "detections" });
+          return;
+        }
+      }
+      log.info("video frames imported", { count: paths.length, copied: result.copied, detections: entries.length });
+      log.exit("importSelected", startedAt, { ok: true, count: paths.length, detections: entries.length });
     } catch (err) {
       log.error("importSelected failed", { error: String(err?.message || err) });
       log.exit("importSelected", startedAt, { error: true });
@@ -304,6 +512,13 @@
     { passive: false },
   );
 
+  if (typeof ResizeObserver === "function" && gridPane) {
+    const gridObserver = new ResizeObserver(() => {
+      layoutOverlays();
+    });
+    gridObserver.observe(gridPane);
+  }
+
   browseBtn?.addEventListener("click", () => {
     void browseVideo();
   });
@@ -333,4 +548,5 @@
   window.openImportFromVideoScreen = openImportFromVideoScreen;
   window.closeImportFromVideoScreen = closeImportFromVideoScreen;
   window.isImportFromVideoScreenOpen = isOpen;
+  window.syncImportVideoDetect = syncDetectCheckbox;
 })();

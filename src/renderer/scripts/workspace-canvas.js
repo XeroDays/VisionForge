@@ -222,6 +222,7 @@
     const visible = Boolean(state.filePath && currentFile());
     if (processImageBtn) processImageBtn.hidden = !visible;
     if (magicBtn) magicBtn.hidden = !visible;
+    window.syncMagicDetectButton?.();
   }
 
   function loadPreview() {
@@ -1416,6 +1417,68 @@
     log.info("auto detections applied", { name: file.name, count: detections.length });
     log.exit("applyWorkspaceDetections", startedAt, { ok: true, count: detections.length });
     return { ok: true, count: detections.length };
+  }
+
+  async function applyImportedAssetDetections(entries) {
+    const startedAt = log.enter("applyImportedAssetDetections");
+    const list = Array.isArray(entries) ? entries : [];
+    if (!state.filePath || !list.length) {
+      log.exit("applyImportedAssetDetections", startedAt, { ok: false, reason: "no-entries" });
+      return { ok: false, reason: "no-entries" };
+    }
+    const mapDetections = window.VisionForgeDetectionMapping?.mapModelDetections;
+    if (!mapDetections) {
+      log.exit("applyImportedAssetDetections", startedAt, { ok: false, reason: "no-mapper" });
+      return { ok: false, reason: "no-mapper" };
+    }
+    const byName = new Map();
+    list.forEach((entry) => {
+      const name = String(entry?.name || "").trim();
+      const items = Array.isArray(entry?.detections) ? entry.detections : [];
+      if (!name || !items.length) return;
+      const imgW = Number(entry.width) || 0;
+      const imgH = Number(entry.height) || 0;
+      const detections = mapDetections(items, { imgW, imgH, voc: isVocMode(), obb: isObbProject() });
+      if (!detections.length) return;
+      byName.set(name, { detections, imgW, imgH });
+    });
+    if (!byName.size) {
+      log.exit("applyImportedAssetDetections", startedAt, { ok: true, count: 0 });
+      return { ok: true, count: 0 };
+    }
+    const nextAssets = state.assets.map((row) => {
+      const patch = byName.get(row?.name);
+      if (!patch) return row;
+      return {
+        ...row,
+        width: patch.imgW > 0 ? Math.round(patch.imgW) : row.width,
+        height: patch.imgH > 0 ? Math.round(patch.imgH) : row.height,
+        detections: patch.detections,
+      };
+    });
+    setAssets(nextAssets);
+    try {
+      const updated = await window.visionforge?.updateProject?.(state.filePath, { assets: nextAssets });
+      if (!updated?.ok) {
+        log.warn("could not persist imported detections", { reason: updated?.reason });
+        log.exit("applyImportedAssetDetections", startedAt, { ok: false, reason: updated?.reason });
+        return { ok: false, reason: updated?.reason || "persist-failed" };
+      }
+      setAssets(updated.project?.assets);
+    } catch (err) {
+      log.error("applyImportedAssetDetections failed", { error: String(err?.message || err) });
+      log.exit("applyImportedAssetDetections", startedAt, { error: true });
+      return { ok: false, reason: "persist-failed" };
+    }
+    const file = currentFile();
+    if (file && byName.has(file.name)) {
+      setSelectedDetection(null);
+      renderDetections();
+      drawDetectionBoxes();
+    }
+    log.info("imported detections applied", { count: byName.size });
+    log.exit("applyImportedAssetDetections", startedAt, { ok: true, count: byName.size });
+    return { ok: true, count: byName.size };
   }
 
   async function persistNewBox(rect) {
@@ -3224,6 +3287,7 @@
   window.getWorkspaceLabels = () =>
     state.labels.map((label) => ({ id: label.id, name: label.name }));
   window.applyWorkspaceDetections = applyWorkspaceDetections;
+  window.applyImportedAssetDetections = applyImportedAssetDetections;
   window.getWorkspaceFilePath = () => state.filePath || "";
   window.getWorkspaceFiles = () => state.files.map((file) => ({ name: file.name, filePath: file.filePath }));
   window.getWorkspaceImagesFolder = () => state.imagesFolder || "";
@@ -3260,7 +3324,12 @@
       window.refreshWorkspaceImages?.(result.folderPath, result.files, result.project?.assets, result.newFiles);
       log.info("images imported", { copied: result.copied, skipped: result.skipped });
       log.exit("importWorkspaceImages", startedAt, { ok: true, copied: result.copied, skipped: result.skipped });
-      return { ok: true, copied: result.copied, skipped: result.skipped };
+      return {
+        ok: true,
+        copied: result.copied,
+        skipped: result.skipped,
+        newFiles: Array.isArray(result.newFiles) ? result.newFiles : [],
+      };
     } catch (err) {
       window.showAppAlert?.("Could not add images.");
       log.error("importWorkspaceImages failed", { error: String(err?.message || err) });
@@ -3276,7 +3345,12 @@
     path: state.onnxModelPath || "",
     type: normalizeWorkspaceModelType(state.onnxModelType),
   });
-  window.setWorkspaceModel = ({ path, type } = {}) => applyWorkspaceModel(path, type);
+  window.setWorkspaceModel = ({ path, type } = {}) => {
+    const applied = applyWorkspaceModel(path, type);
+    window.syncMagicDetectButton?.();
+    window.syncImportVideoDetect?.();
+    return applied;
+  };
   window.getWorkspaceConfidence = () =>
     (window.VisionForgeAiModelTypes?.normalizeConfidence || ((v) => Number(v) || 0.25))(state.onnxConfidence);
   window.setWorkspaceConfidence = (value) => {

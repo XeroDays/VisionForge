@@ -185,7 +185,7 @@
   });
 
   magicTool?.addEventListener("contextmenu", (event) => {
-    if (!magicTool || magicTool.hidden) return;
+    if (!magicTool || magicTool.hidden || magicTool.disabled) return;
     event.preventDefault();
     if (!magicMenu) return;
     magicMenu.hidden = false;

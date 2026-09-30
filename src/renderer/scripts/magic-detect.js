@@ -47,9 +47,21 @@
     overlay.hidden = false;
   }
 
+  function modelCanDetect() {
+    const model = window.getWorkspaceModel?.() || {};
+    const modelPath = String(model.path || "").trim();
+    const modelType = model.type || window.VisionForgeAiModelTypes?.DEFAULT_TYPE;
+    return Boolean(modelPath && window.VisionForgeAiModelTypes?.supportsDetection?.(modelType));
+  }
+
+  function syncMagicButton() {
+    if (!magicBtn) return;
+    magicBtn.disabled = busy || !modelCanDetect();
+  }
+
   function setBusy(next) {
     busy = Boolean(next);
-    if (magicBtn) magicBtn.disabled = busy;
+    syncMagicButton();
     const scan = document.getElementById("detect-scanline");
     if (scan) scan.hidden = !busy;
   }
@@ -121,6 +133,8 @@
     closeAlert();
   });
 
+  syncMagicButton();
   window.runMagicDetect = runMagicDetect;
   window.showAppAlert = showAlert;
+  window.syncMagicDetectButton = syncMagicButton;
 })();
