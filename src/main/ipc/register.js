@@ -186,6 +186,11 @@ function registerIpcHandlers() {
     return batchDetectService.cancelBatchDetect();
   });
 
+  ipcMain.handle(channels.CANCEL_EXTRACT_VIDEO_FRAMES, async () => {
+    log.info("CANCEL_EXTRACT_VIDEO_FRAMES");
+    return videoFrameService.cancelExtractVideoFrames();
+  });
+
   ipcMain.handle(channels.EXTRACT_VIDEO_FRAMES, async (_event, videoPath, frameJump) => {
     if (!String(videoPath || "").trim()) {
       log.info("EXTRACT_VIDEO_FRAMES clear");

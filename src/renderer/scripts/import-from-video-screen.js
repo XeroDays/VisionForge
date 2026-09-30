@@ -49,6 +49,8 @@
   let frames = [];
   const selected = new Set();
   let busy = false;
+  let processing = false;
+  let cancelRequested = false;
   let cellSize = 140;
 
   function isOpen() {
@@ -92,13 +94,17 @@
   }
 
   function updateActions() {
-    if (processBtn) processBtn.disabled = busy || !videoPath || !videoInfo;
+    if (processBtn) {
+      processBtn.textContent = processing ? "Cancel" : "Process";
+      processBtn.disabled = processing ? false : busy || !videoPath || !videoInfo;
+    }
     if (browseBtn) browseBtn.disabled = busy;
     if (jumpInput) jumpInput.disabled = busy;
     syncDetectCheckbox();
     if (importBtn) {
       importBtn.hidden = selected.size < 1;
       importBtn.disabled = busy;
+      importBtn.textContent = selected.size > 0 ? `Import (${selected.size})` : "Import";
     }
   }
 
@@ -154,29 +160,45 @@
       .join(" ");
   }
 
-  function drawOverlay(svg, detections) {
+  function appendNormRect(svg, x, y, w, h) {
+    if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) return;
+    const rect = document.createElementNS(SVG_NS, "rect");
+    rect.setAttribute("x", String(x));
+    rect.setAttribute("y", String(y));
+    rect.setAttribute("width", String(w));
+    rect.setAttribute("height", String(h));
+    svg.appendChild(rect);
+  }
+
+  function drawOverlay(svg, detections, imgW, imgH) {
     svg.replaceChildren();
     svg.setAttribute("viewBox", "0 0 1 1");
     svg.setAttribute("preserveAspectRatio", "none");
+    const width = Number(imgW) || 0;
+    const height = Number(imgH) || 0;
     (Array.isArray(detections) ? detections : []).forEach((item) => {
       const xc = Number(item?.xc);
       const yc = Number(item?.yc);
       const w = Number(item?.w);
       const h = Number(item?.h);
-      if (![xc, yc, w, h].every(Number.isFinite) || w <= 0 || h <= 0) return;
-      const angle = Number(item.angle);
-      if (Number.isFinite(angle) && angle !== 0) {
-        const polygon = document.createElementNS(SVG_NS, "polygon");
-        polygon.setAttribute("points", obbPoints(item));
-        svg.appendChild(polygon);
+      if ([xc, yc, w, h].every(Number.isFinite) && w > 0 && h > 0) {
+        const angle = Number(item.angle);
+        if (Number.isFinite(angle) && angle !== 0) {
+          const polygon = document.createElementNS(SVG_NS, "polygon");
+          polygon.setAttribute("points", obbPoints(item));
+          svg.appendChild(polygon);
+          return;
+        }
+        appendNormRect(svg, xc - w / 2, yc - h / 2, w, h);
         return;
       }
-      const rect = document.createElementNS(SVG_NS, "rect");
-      rect.setAttribute("x", String(xc - w / 2));
-      rect.setAttribute("y", String(yc - h / 2));
-      rect.setAttribute("width", String(w));
-      rect.setAttribute("height", String(h));
-      svg.appendChild(rect);
+      const xmin = Number(item?.xmin);
+      const ymin = Number(item?.ymin);
+      const xmax = Number(item?.xmax);
+      const ymax = Number(item?.ymax);
+      if (!width || !height) return;
+      if (![xmin, ymin, xmax, ymax].every(Number.isFinite) || xmax <= xmin || ymax <= ymin) return;
+      appendNormRect(svg, xmin / width, ymin / height, (xmax - xmin) / width, (ymax - ymin) / height);
     });
   }
 
@@ -212,12 +234,27 @@
     scheduleOverlayLayout();
   }
 
+  function framePixelSize(file) {
+    return {
+      width: Number(file?.width) || Number(videoInfo?.width) || 0,
+      height: Number(file?.height) || Number(videoInfo?.height) || 0,
+    };
+  }
+
+  function overlayFor(file) {
+    if (!gridEl || !file?.filePath) return null;
+    const buttons = gridEl.querySelectorAll(".import-video-grid__item");
+    for (const button of buttons) {
+      if (button.dataset.path === file.filePath) return button.querySelector(".import-video-grid__overlay");
+    }
+    return null;
+  }
+
   function paintOverlay(file) {
-    if (!gridEl || !file?.filePath) return;
-    const button = gridEl.querySelector(`[data-path="${CSS.escape(file.filePath)}"]`);
-    const svg = button?.querySelector(".import-video-grid__overlay");
+    const svg = overlayFor(file);
     if (!svg) return;
-    drawOverlay(svg, file.detections);
+    const size = framePixelSize(file);
+    drawOverlay(svg, file.detections, size.width, size.height);
     layoutOverlays();
   }
 
@@ -253,13 +290,13 @@
       img.addEventListener("load", () => {
         file.width = img.naturalWidth || file.width || 0;
         file.height = img.naturalHeight || file.height || 0;
-        layoutOverlays();
+        paintOverlay(file);
       });
-      img.src = previewSrc(file.filePath);
       const svg = document.createElementNS(SVG_NS, "svg");
       svg.classList.add("import-video-grid__overlay");
       svg.setAttribute("aria-hidden", "true");
-      drawOverlay(svg, file.detections);
+      const size = framePixelSize(file);
+      drawOverlay(svg, file.detections, size.width, size.height);
       media.append(img, svg);
       const name = document.createElement("span");
       name.className = "import-video-grid__name";
@@ -272,6 +309,7 @@
         updateActions();
       });
       gridEl.appendChild(button);
+      img.src = previewSrc(file.filePath);
     });
     updateActions();
     scheduleOverlayLayout();
@@ -293,6 +331,20 @@
     frames = [];
     selected.clear();
     renderGrid();
+  }
+
+  function resetImportVideoScreen() {
+    releaseFramePreviews();
+    videoPath = "";
+    videoInfo = null;
+    if (pathInput) pathInput.value = "";
+    if (jumpInput) {
+      jumpInput.value = "1";
+      jumpInput.removeAttribute("max");
+    }
+    renderInfo(null);
+    setStatus("");
+    clearFrames();
   }
 
   async function browseVideo() {
@@ -339,12 +391,33 @@
     }
   }
 
+  function showExtractedFrames(files) {
+    frames = (Array.isArray(files) ? files : []).map((file) => ({
+      name: file.name,
+      filePath: file.filePath,
+      detections: [],
+      width: 0,
+      height: 0,
+    }));
+    selected.clear();
+    renderGrid();
+  }
+
+  function cancelProcess() {
+    if (!processing) return;
+    cancelRequested = true;
+    void window.visionforge?.cancelExtractVideoFrames?.();
+    log.info("process cancel requested");
+  }
+
   async function processVideo() {
     if (busy || !videoPath || !videoInfo) return;
     syncDetectCheckbox();
     const jump = snapFrameJump();
     const startedAt = log.enter("processVideo");
     busy = true;
+    processing = true;
+    cancelRequested = false;
     updateActions();
     setStatus("Extracting frames…");
     releaseFramePreviews();
@@ -352,6 +425,13 @@
     await waitForPreviewRelease();
     try {
       const result = await window.visionforge?.extractVideoFrames?.(videoPath, jump);
+      if (result?.reason === "canceled" || cancelRequested) {
+        const partial = Array.isArray(result?.files) ? result.files : [];
+        if (partial.length) showExtractedFrames(partial);
+        setStatus("Canceled.");
+        log.exit("processVideo", startedAt, { ok: false, reason: "canceled", count: partial.length });
+        return;
+      }
       if (!result?.ok) {
         const message =
           result?.reason === "missing-ffmpeg"
@@ -363,19 +443,17 @@
         log.exit("processVideo", startedAt, { ok: false, reason: result?.reason });
         return;
       }
-      frames = (Array.isArray(result.files) ? result.files : []).map((file) => ({
-        name: file.name,
-        filePath: file.filePath,
-        detections: [],
-        width: 0,
-        height: 0,
-      }));
-      selected.clear();
-      renderGrid();
+      showExtractedFrames(result.files);
       log.info("video frames extracted", { count: frames.length, jump });
+      if (cancelRequested) {
+        setStatus("Canceled.");
+        log.exit("processVideo", startedAt, { ok: false, reason: "canceled", count: frames.length });
+        return;
+      }
       if (detectInput?.checked && modelCanDetect()) {
         const detected = await detectExtractedFrames();
         if (!detected.ok) {
+          if (detected.reason === "canceled") setStatus("Canceled.");
           log.exit("processVideo", startedAt, { ok: false, reason: detected.reason, count: frames.length });
           return;
         }
@@ -388,6 +466,7 @@
       log.exit("processVideo", startedAt, { error: true });
     } finally {
       busy = false;
+      processing = false;
       updateActions();
     }
   }
@@ -398,6 +477,7 @@
     const labels = window.getWorkspaceLabels?.() || [];
     const confidence = window.getWorkspaceConfidence?.();
     for (let index = 0; index < frames.length; index += 1) {
+      if (cancelRequested) return { ok: false, reason: "canceled" };
       const file = frames[index];
       setStatus(`Detecting ${index + 1} of ${frames.length}…`);
       const result = await window.visionforge?.runOnnxDetect?.(
@@ -417,6 +497,7 @@
         file.detections = Array.isArray(result.detections) ? result.detections : [];
       }
       paintOverlay(file);
+      if (cancelRequested) return { ok: false, reason: "canceled" };
     }
     return { ok: true };
   }
@@ -456,6 +537,8 @@
       }
       log.info("video frames imported", { count: paths.length, copied: result.copied, detections: entries.length });
       log.exit("importSelected", startedAt, { ok: true, count: paths.length, detections: entries.length });
+      resetImportVideoScreen();
+      closeImportFromVideoScreen({ restoreWorkspace: true });
     } catch (err) {
       log.error("importSelected failed", { error: String(err?.message || err) });
       log.exit("importSelected", startedAt, { error: true });
@@ -488,6 +571,7 @@
 
   function closeImportFromVideoScreen({ restoreWorkspace = true } = {}) {
     if (!isOpen()) return;
+    if (processing) cancelProcess();
     const startedAt = log.enter("closeImportFromVideoScreen");
     screen.hidden = true;
     void window.visionforge?.extractVideoFrames?.("", 0);
@@ -523,6 +607,10 @@
     void browseVideo();
   });
   processBtn?.addEventListener("click", () => {
+    if (processing) {
+      cancelProcess();
+      return;
+    }
     void processVideo();
   });
   importBtn?.addEventListener("click", () => {

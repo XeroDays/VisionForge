@@ -103,24 +103,73 @@ function resetFramesDir() {
   return dir;
 }
 
+let activeChild = null;
+let extractCanceled = false;
+
 function clearVideoFrameAccess() {
   setExtraAllowedImagesDir("");
   return { ok: true };
 }
 
-function runFfmpeg(bin, args) {
+function cancelExtractVideoFrames() {
+  extractCanceled = true;
+  const child = activeChild;
+  if (child && !child.killed) child.kill();
+  log.info("extract cancel requested");
+  return { ok: true };
+}
+
+function listFrameFiles(dir) {
+  if (!dir || !fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((name) => name.toLowerCase().endsWith(".jpg"))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
+    .map((name) => ({ name, filePath: path.join(dir, name) }));
+}
+
+function assignUnixNames(files) {
+  let stamp = 0;
+  let repeat = 0;
+  return files.map((file) => {
+    const now = Date.now();
+    if (now !== stamp) {
+      stamp = now;
+      repeat = 0;
+    }
+    repeat += 1;
+    const name = repeat === 1 ? `${stamp}.jpg` : `${stamp}-${repeat}.jpg`;
+    const dest = path.join(path.dirname(file.filePath), name);
+    if (path.resolve(dest) !== path.resolve(file.filePath)) fs.renameSync(file.filePath, dest);
+    return { name, filePath: dest };
+  });
+}
+
+function runFfmpeg(bin, args, { cancelable = false } = {}) {
   return new Promise((resolve) => {
+    if (cancelable && extractCanceled) {
+      resolve({ code: 1, canceled: true, stderr: "" });
+      return;
+    }
     const child = spawn(bin, args, { windowsHide: true });
+    if (cancelable) activeChild = child;
     let stderr = "";
+    let settled = false;
+    const finish = (payload) => {
+      if (settled) return;
+      settled = true;
+      if (cancelable && activeChild === child) activeChild = null;
+      resolve(payload);
+    };
     child.stderr.on("data", (chunk) => {
       stderr += String(chunk);
       if (stderr.length > 8000) stderr = stderr.slice(-8000);
     });
     child.on("error", (err) => {
-      resolve({ code: 1, stderr: String(err?.message || err) });
+      finish({ code: 1, canceled: cancelable && extractCanceled, stderr: String(err?.message || err) });
     });
     child.on("close", (code) => {
-      resolve({ code: code == null ? 1 : code, stderr });
+      finish({ code: code == null ? 1 : code, canceled: cancelable && extractCanceled, stderr });
     });
   });
 }
@@ -168,6 +217,8 @@ async function extractVideoFrames(videoPath, frameJump) {
     return { ok: false, reason: "missing-ffmpeg" };
   }
 
+  extractCanceled = false;
+  activeChild = null;
   const probed = await probeVideo(source);
   const jump = normalizeJump(frameJump, probed.ok ? probed.jumpMax : undefined);
   let dir = "";
@@ -193,7 +244,15 @@ async function extractVideoFrames(videoPath, frameJump) {
     pattern,
   ];
   log.info("extracting video frames", { source, jump });
-  const result = await runFfmpeg(bin, args);
+  const result = await runFfmpeg(bin, args, { cancelable: true });
+  if (result.canceled) {
+    const files = assignUnixNames(listFrameFiles(dir));
+    if (files.length) setExtraAllowedImagesDir(dir);
+    else setExtraAllowedImagesDir("");
+    log.info("extract canceled", { count: files.length });
+    log.exit("extractVideoFrames", startedAt, { ok: false, reason: "canceled", count: files.length });
+    return { ok: false, reason: "canceled", files };
+  }
   if (result.code !== 0) {
     setExtraAllowedImagesDir("");
     log.warn("ffmpeg failed", { code: result.code, stderr: result.stderr.slice(-500) });
@@ -201,11 +260,7 @@ async function extractVideoFrames(videoPath, frameJump) {
     return { ok: false, reason: "ffmpeg-failed" };
   }
 
-  const files = fs
-    .readdirSync(dir)
-    .filter((name) => name.toLowerCase().endsWith(".jpg"))
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
-    .map((name) => ({ name, filePath: path.join(dir, name) }));
+  const files = assignUnixNames(listFrameFiles(dir));
   if (!files.length) {
     setExtraAllowedImagesDir("");
     log.exit("extractVideoFrames", startedAt, { ok: false, reason: "no-frames" });
@@ -219,6 +274,7 @@ async function extractVideoFrames(videoPath, frameJump) {
 
 module.exports = {
   extractVideoFrames,
+  cancelExtractVideoFrames,
   probeVideo,
   clearVideoFrameAccess,
 };
