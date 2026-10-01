@@ -1061,6 +1061,75 @@
     return { x, y, width, height };
   }
 
+  const OBB_OPPOSITE_EDGE = { nw: "se", ne: "sw", sw: "ne", se: "nw" };
+
+  function obbLocalCorner(rect, edge) {
+    const left = Number(rect.x);
+    const top = Number(rect.y);
+    const right = left + Number(rect.width);
+    const bottom = top + Number(rect.height);
+    if (edge === "ne") return { x: right, y: top };
+    if (edge === "sw") return { x: left, y: bottom };
+    if (edge === "se") return { x: right, y: bottom };
+    return { x: left, y: top };
+  }
+
+  function obbWorldCorner(rect, edge) {
+    const local = obbLocalCorner(rect, edge);
+    const center = rectCenter(rect);
+    return rotatePoint(local, center.x, center.y, Number(rect.angle) || 0);
+  }
+
+  function lockObbAnchor(rect, anchorEdge, fixed) {
+    const now = obbWorldCorner(rect, anchorEdge);
+    return {
+      ...rect,
+      x: rect.x + (fixed.x - now.x),
+      y: rect.y + (fixed.y - now.y),
+    };
+  }
+
+  function normalizeBoxSize(rect) {
+    let { x, y, width, height } = rect;
+    if (width < 0) {
+      x += width;
+      width = -width;
+    }
+    if (height < 0) {
+      y += height;
+      height = -height;
+    }
+    return { ...rect, x, y, width, height };
+  }
+
+  function nearestObbCorner(rect, point) {
+    let best = "nw";
+    let bestDist = Infinity;
+    ["nw", "ne", "sw", "se"].forEach((edge) => {
+      const corner = obbWorldCorner(rect, edge);
+      const dist = (corner.x - point.x) ** 2 + (corner.y - point.y) ** 2;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = edge;
+      }
+    });
+    return best;
+  }
+
+  function resizeObbEdge(start, edge, dx, dy) {
+    const anchorEdge = OBB_OPPOSITE_EDGE[edge] || "nw";
+    const fixed = obbWorldCorner(start, anchorEdge);
+    let next = {
+      ...applyBoxEdge(start, edge, dx, dy),
+      angle: Number(start.angle) || 0,
+    };
+    next = lockObbAnchor(next, anchorEdge, fixed);
+    next = normalizeBoxSize(next);
+    if (next.width < BOX_MIN_SIZE) next.width = BOX_MIN_SIZE;
+    if (next.height < BOX_MIN_SIZE) next.height = BOX_MIN_SIZE;
+    return lockObbAnchor(next, nearestObbCorner(next, fixed), fixed);
+  }
+
   function cancelBoxEdit() {
     if (!boxEdit) return;
     boxEdit = null;
@@ -2672,11 +2741,9 @@
       const center = rectCenter(start);
       const localStart = rotatePoint(boxEdit.startPt, center.x, center.y, -start.angle);
       const localNow = rotatePoint(pt, center.x, center.y, -start.angle);
-      next = clampObbRect(
-        applyBoxEdge(start, boxEdit.edge, localNow.x - localStart.x, localNow.y - localStart.y),
-        imgW,
-        imgH,
-      );
+      const localDx = localNow.x - localStart.x;
+      const localDy = localNow.y - localStart.y;
+      next = clampObbRect(resizeObbEdge(start, boxEdit.edge, localDx, localDy), imgW, imgH);
       next.angle = start.angle;
     } else if (start.angle && boxEdit.edge === "move") {
       next = clampObbRect(
