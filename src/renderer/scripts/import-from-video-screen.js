@@ -347,20 +347,40 @@
     clearFrames();
   }
 
+  function parentDir(filePath) {
+    const normalized = String(filePath || "").replace(/[\\/]+$/, "");
+    const index = Math.max(normalized.lastIndexOf("\\"), normalized.lastIndexOf("/"));
+    return index > 0 ? normalized.slice(0, index) : "";
+  }
+
+  async function rememberedVideoFolder() {
+    if (videoPath) return videoPath;
+    const config = await window.visionforge?.getConfiguration?.();
+    return String(config?.lastVideoBrowseDir || "").trim();
+  }
+
+  function rememberVideoFolder(filePath) {
+    const folder = parentDir(filePath);
+    if (!folder) return;
+    void window.visionforge?.updateConfiguration?.({ lastVideoBrowseDir: folder });
+  }
+
   async function browseVideo() {
     if (busy) return;
     const startedAt = log.enter("browseVideo");
     try {
+      const defaultPath = await rememberedVideoFolder();
       const result = await window.visionforge?.selectOpenFile?.({
         title: "Select video",
         filters: VIDEO_FILTERS,
-        defaultPath: videoPath,
+        defaultPath,
       });
       if (!result?.ok || result.canceled || !result.filePath) {
         log.exit("browseVideo", startedAt, { canceled: true });
         return;
       }
       videoPath = result.filePath;
+      rememberVideoFolder(videoPath);
       videoInfo = null;
       renderInfo(null);
       if (pathInput) pathInput.value = videoPath;

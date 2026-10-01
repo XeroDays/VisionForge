@@ -21,7 +21,7 @@ npm start
 npm run build:win
 ```
 
-The installer is written to `dist/VisionForgev{version}.exe` (for the current version, `dist/VisionForgev1.0.9.exe`). `{version}` is the `version` field in `package.json`.
+The installer is written to `dist/VisionForgev{version}.exe` (for the current version, `dist/VisionForgev1.0.10.exe`). `{version}` is the `version` field in `package.json`.
 
 ## Project Structure
 

@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.10] - 2026-10-01
+
 ### Changed
 
-- The Windows installer filename is `VisionForgev{version}.exe` (for example `VisionForgev1.0.9.exe`).
+- Import from video opens the file browser in the folder of the last video you chose. Until a video has been chosen, it opens in `Documents\VisionForge`.
+- The Windows installer filename is `VisionForgev{version}.exe` (for example `VisionForgev1.0.10.exe`).
+- The splash version label reads `Version 1.0.10 Build +10`.
 
 ## [1.0.9] - 2026-10-01
 

@@ -7,7 +7,7 @@ const { DEFAULT_TYPE, normalizeType } = require("../../shared/enums/ai-model-typ
 const log = createLogger("configuration");
 
 const CONFIG_FILE_NAME = "configuration.vfson";
-const KNOWN_KEYS = ["onnxModelPath", "onnxModelType", "assetsThumbnails"];
+const KNOWN_KEYS = ["onnxModelPath", "onnxModelType", "assetsThumbnails", "lastVideoBrowseDir"];
 
 function getConfigurationFilePath() {
   return path.join(app.getPath("documents"), "VisionForge", CONFIG_FILE_NAME);
@@ -20,6 +20,7 @@ function emptyConfiguration() {
     onnxModelPath: "",
     onnxModelType: DEFAULT_TYPE,
     assetsThumbnails: false,
+    lastVideoBrowseDir: "",
   };
 }
 
@@ -32,6 +33,7 @@ function normalizeConfiguration(raw) {
     onnxModelPath: String(raw.onnxModelPath || "").trim(),
     onnxModelType: normalizeType(raw.onnxModelType),
     assetsThumbnails: Boolean(raw.assetsThumbnails),
+    lastVideoBrowseDir: String(raw.lastVideoBrowseDir || "").trim(),
   };
 }
 

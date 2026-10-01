@@ -458,11 +458,10 @@ function resolveDialogDefault(defaultPath) {
   const raw = String(defaultPath || "").trim();
   if (!raw) return ensureDefaultProjectsDir();
   try {
-    if (fs.existsSync(raw) && fs.statSync(raw).isFile()) {
-      return path.dirname(raw);
-    }
+    if (!fs.existsSync(raw)) return ensureDefaultProjectsDir();
+    if (fs.statSync(raw).isFile()) return path.dirname(raw);
   } catch {
-    return raw;
+    return ensureDefaultProjectsDir();
   }
   return raw;
 }
