@@ -4,6 +4,7 @@ const imageProtocol = require("./services/image-protocol");
 const { createSplashWindow } = require("./windows/splash-window");
 const { registerSplashHandlers } = require("./ipc/register-splash-handlers");
 const channels = require("../shared/ipc/channels");
+const { findSolutionArg } = require("./helpers/solution-argv");
 
 imageProtocol.registerPrivilegedScheme();
 
@@ -59,7 +60,32 @@ function getMainWindow() {
   return windows.length > 0 ? windows[0] : null;
 }
 
+let pendingOpenPath = findSolutionArg(process.argv);
+let startupReady = false;
+let accessDenied = false;
+
+function focusMainWindow() {
+  const mainWin = getMainWindow();
+  if (!mainWin || mainWin.isDestroyed()) return;
+  if (mainWin.isMinimized()) mainWin.restore();
+  mainWin.show();
+  mainWin.focus();
+}
+
+function deliverPendingOpen() {
+  if (!startupReady || accessDenied || !pendingOpenPath) return;
+  const mainWin = getMainWindow();
+  if (!mainWin || mainWin.isDestroyed() || !mainWin.webContents || mainWin.webContents.isDestroyed()) return;
+  const filePath = pendingOpenPath;
+  pendingOpenPath = "";
+  mainWin.webContents.send(channels.OPEN_SOLUTION, { filePath });
+  focusMainWindow();
+  log.mark("OPEN_SOLUTION sent", { filePath });
+}
+
 async function bootstrap() {
+  startupReady = false;
+  accessDenied = false;
   initFileLogging();
   const bootstrapStartedAt = log.enter("bootstrap");
 
@@ -132,6 +158,8 @@ async function bootstrap() {
       denied: true,
     });
     if (!main.isDestroyed()) main.destroy();
+    pendingOpenPath = "";
+    accessDenied = true;
     log.exit("bootstrap", bootstrapStartedAt, { outcome: "access-denied" });
     return;
   }
@@ -161,26 +189,44 @@ async function bootstrap() {
     log.mark("main.maximize + show + focus");
   }
 
+  startupReady = true;
+  deliverPendingOpen();
+
   log.exit("bootstrap", bootstrapStartedAt, { outcome: "success" });
 }
 
-app.whenReady().then(() => {
-  log.mark("app.whenReady");
-  imageProtocol.registerHandler();
-  Menu.setApplicationMenu(null);
-  bootstrap();
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
-  app.on("activate", () => {
-    const mainWin = getMainWindow();
-    if (!mainWin) {
-      bootstrap();
-    } else if (!mainWin.isDestroyed()) {
-      mainWin.show();
-      mainWin.focus();
-    }
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, argv) => {
+    if (accessDenied) return;
+    const filePath = findSolutionArg(argv);
+    if (filePath) pendingOpenPath = filePath;
+    if (!startupReady) return;
+    if (filePath) deliverPendingOpen();
+    else focusMainWindow();
   });
-});
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
+  app.whenReady().then(() => {
+    log.mark("app.whenReady");
+    imageProtocol.registerHandler();
+    Menu.setApplicationMenu(null);
+    bootstrap();
+
+    app.on("activate", () => {
+      const mainWin = getMainWindow();
+      if (!mainWin) {
+        bootstrap();
+      } else if (!mainWin.isDestroyed()) {
+        mainWin.show();
+        mainWin.focus();
+      }
+    });
+  });
+
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+  });
+}

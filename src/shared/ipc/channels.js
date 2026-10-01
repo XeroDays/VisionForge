@@ -29,6 +29,8 @@ module.exports = {
   LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
   IMPORT_DROPPED_IMAGES: "visionforge:import-dropped-images",
   LOAD_PROJECT: "visionforge:load-project",
+  /** Main → renderer: `{ filePath }` from a double-clicked `.VFSln` or a second launch. */
+  OPEN_SOLUTION: "visionforge:open-solution",
   UPDATE_PROJECT: "visionforge:update-project",
   DELETE_ASSET: "visionforge:delete-asset",
   ROTATE_IMAGE: "visionforge:rotate-image",

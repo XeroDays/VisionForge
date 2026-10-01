@@ -217,6 +217,13 @@
     closeContextMenu();
   });
 
+  window.visionforge?.onOpenSolution?.(({ filePath } = {}) => {
+    const resolvedPath = String(filePath || "").trim();
+    if (!resolvedPath) return;
+    log.info("open solution from shell", { filePath: resolvedPath });
+    window.showWorkspace?.({ filePath: resolvedPath });
+  });
+
   window.refreshSolutionHistory = refreshSolutionHistory;
   void refreshSolutionHistory();
 })();

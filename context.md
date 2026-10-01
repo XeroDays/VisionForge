@@ -112,13 +112,14 @@
 - `src/preload/splash-preload.js`
 - `src/preload/index.js`
 - `src/renderer/scripts/splash.js`
+- `src/main/helpers/solution-argv.js`
 
 **Dependencies:**
 - `visionforge-logger.js`
 - `channels.js`
 
 **Workflow:**
-`app.whenReady` → register splash IPC → create splash → `splash.show()` immediately → `"Starting…"` → `licenseService.prefetchRegistrationData()` in parallel with lazy-load IPC/windows/icon → create hidden main → `"Checking for updates…"` → parallel `register()` + main load → on deny stay on splash / on grant `"Loading workspace…"` → `LICENSE_UPDATE` immediately → close splash → maximize/show main
+`requestSingleInstanceLock` (second process quits; `second-instance` forwards a `.VFSln` argv) → `app.whenReady` → register splash IPC → create splash → `splash.show()` immediately → `"Starting…"` → `licenseService.prefetchRegistrationData()` in parallel with lazy-load IPC/windows/icon → create hidden main → `"Checking for updates…"` → parallel `register()` + main load → on deny stay on splash and drop the pending path / on grant `"Loading workspace…"` → `LICENSE_UPDATE` immediately → close splash → maximize/show main → `visionforge:open-solution` if a `.VFSln` argv is pending
 
 ---
 
@@ -160,7 +161,7 @@ Tool click → selected highlight for Cursor and the draw tool (Box on AABB proj
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-Create / Open / Recent → `showWorkspace(filePath)` → **Loading project** overlay → load VFSln (append-only `assets` sync + empty-detection sidecar import if `imagesFolder` set) → hide `#start-page` → select Cursor tool → restore `imagesFolder` if set → playback range = image count (`listImageFolder`, not `assets`) → current frame previewed fit-to-screen via `vfimg:` protocol → Detections tab + SVG boxes for that file → hide overlay. File → **Select Image Folder** and the Select Images tool share the same picker (same overlay while sync/import runs). File → **Export** opens the export dialog (destination folder, locked annotation type, changeable mode with file-extension labels) and writes YOLO/center `.txt`, YOLO OBB 8-point `.txt`, VOC `.xml`, or one COCO `annotations.json`. File → **Goto Startup page** closes the project (`closeWorkspace` + `closeProject`) and returns to `#start-page`. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names with a detection-count chip (`assets[].detections.length`); click sets the current frame (Detections list and boxes update). Right-click an asset → Delete → confirm (`#delete-asset-overlay`) → `deleteAsset` unlinks the image, matching `.txt`/`.xml` sidecars (`imagesFolder` and `imagesFolder/labels`), and the VFSln `assets` row. When the inspector is on Assets, `setFrame` scrolls the current filename into view (`block: nearest`); Labels and Detections do not scroll. When an image is previewed, `#view-toolbar` (top-left of the stage) shows Zoom in/out, Fit to Screen, and Rotate (one-shot). Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps the asset list; A / ArrowLeft step back and D / ArrowRight step forward (any tool; ignored while typing). Plain wheel does not change the frame. Box ignore wheel. Rotate overwrites the current image file 90° clockwise and re-fits. Detection overlay uses the same zoom/pan transform as the image.
+Create / Open / Recent / double-click `.VFSln` → `showWorkspace(filePath)` → **Loading project** overlay → load VFSln (append-only `assets` sync + empty-detection sidecar import if `imagesFolder` set) → hide `#start-page` → select Cursor tool → restore `imagesFolder` if set → playback range = image count (`listImageFolder`, not `assets`) → current frame previewed fit-to-screen via `vfimg:` protocol → Detections tab + SVG boxes for that file → hide overlay. File → **Select Image Folder** and the Select Images tool share the same picker (same overlay while sync/import runs). File → **Export** opens the export dialog (destination folder, locked annotation type, changeable mode with file-extension labels) and writes YOLO/center `.txt`, YOLO OBB 8-point `.txt`, VOC `.xml`, or one COCO `annotations.json`. File → **Goto Startup page** closes the project (`closeWorkspace` + `closeProject`) and returns to `#start-page`. Playback skip/step/play/seek/frame follow `0 .. count-1`. Assets tab (default) lists image names with a detection-count chip (`assets[].detections.length`); click sets the current frame (Detections list and boxes update). Right-click an asset → Delete → confirm (`#delete-asset-overlay`) → `deleteAsset` unlinks the image, matching `.txt`/`.xml` sidecars (`imagesFolder` and `imagesFolder/labels`), and the VFSln `assets` row. When the inspector is on Assets, `setFrame` scrolls the current filename into view (`block: nearest`); Labels and Detections do not scroll. When an image is previewed, `#view-toolbar` (top-left of the stage) shows Zoom in/out, Fit to Screen, and Rotate (one-shot). Middle-button drag pans the image. Ctrl+wheel zooms toward the pointer; Shift+wheel on Cursor steps the asset list; A / ArrowLeft step back and D / ArrowRight step forward (any tool; ignored while typing). Plain wheel does not change the frame. Box ignore wheel. Rotate overwrites the current image file 90° clockwise and re-fits. Detection overlay uses the same zoom/pan transform as the image.
 
 ---
 
@@ -174,7 +175,7 @@ Create / Open / Recent → `showWorkspace(filePath)` → **Loading project** ove
 - `src/renderer/styles/app.css`
 
 **Workflow:**
-No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. **Open existing project** opens a native file picker filtered to `.VFSln`, then shows the workspace. Recent row click loads that `.VFSln` and shows the workspace. Right-click a recent row → **Remove from list** (`.asset-context-menu`) calls `removeHistorySolution` and re-renders; does not delete the `.VFSln`. If Softasium `ForceUpdate` is true, Create / Open / Recent do not leave the start page; the release modal re-opens instead.
+No project selected → `#start-page` visible. **Create new project** opens `#create-project-overlay`. **Open existing project** opens a native file picker filtered to `.VFSln`, then shows the workspace. Recent row click loads that `.VFSln` and shows the workspace. A double-clicked `.VFSln` (`onOpenSolution`) calls the same `showWorkspace`. Right-click a recent row → **Remove from list** (`.asset-context-menu`) calls `removeHistorySolution` and re-renders; does not delete the `.VFSln`. If Softasium `ForceUpdate` is true, Create / Open / Recent / shell open do not leave the start page; the release modal re-opens instead.
 
 ---
 
@@ -202,7 +203,7 @@ Create new project → modal (name + location + custom annotation-type dropdown 
 - `src/main/middleware/project-service.js` — `selectProjectFile()`
 
 **Workflow:**
-Open existing project → `openProjectFile()` → native dialog filtered to `.VFSln` → record in `history-solutions.vfson` → `loadProject` → show workspace (restore `imagesFolder` if present).
+Open existing project → `openProjectFile()` → native dialog filtered to `.VFSln` → record in `history-solutions.vfson` → `loadProject` → show workspace (restore `imagesFolder` if present). Double-click `.VFSln`: NSIS `fileAssociations` launches `VisionForge.exe "%1"` (per-user HKCU; takes effect after `build:win` and reinstall). `findSolutionArg` keeps that path until license is granted and the main window is shown, then `visionforge:open-solution` → `showWorkspace`. A second process while the app is open quits and forwards its argv to the first window. Access denied drops the path. Force update still blocks `showWorkspace`.
 
 ---
 
@@ -479,7 +480,7 @@ Modal → name + location + custom annotation-type dropdown + mode radios → Ne
 
 ### Open Project Workspace
 
-**Trigger:** Create succeeds, Open existing project, or Recent row click
+**Trigger:** Create succeeds, Open existing project, Recent row click, or `visionforge:open-solution` (double-click / second instance)
 
 **Flow:**
 Renderer `showWorkspace(filePath)` → show **Loading project** overlay → `loadProject` reads VFSln (import `classes.txt` into `labels` if empty: vfsln dir then `imagesFolder`; append missing image names to `assets`; import empty detections from txt/xml sidecars) → hide start page / show `#workspace-canvas` → Cursor tool selected → Assets tab selected → Labels tab populated → keep `project.assets` in renderer → if `imagesFolder` set, `listImageFolder` → playback slider max = count - 1, Assets list populated, current image fit-to-screen, Detections list + canvas boxes for that file → hide overlay
@@ -793,11 +794,12 @@ If Process Image screen is open, ignore. Read the open solution’s `onnxModelPa
 **Trigger:** `npm start` or packaged app launch
 
 **Flow:**
-`scripts/start-electron.js` → `src/main/index.js` → `app.whenReady` → `bootstrap()` → register splash IPC → create/show splash → lazy-load `register.js` + `main-window.js` → create main window (hidden) → wait `did-finish-load` → close splash → maximize/show main
+`scripts/start-electron.js` (forwards extra argv) → `src/main/index.js` → `requestSingleInstanceLock` → `app.whenReady` → `bootstrap()` → register splash IPC → create/show splash → lazy-load `register.js` + `main-window.js` → create main window (hidden) → wait `did-finish-load` → close splash → maximize/show main → push `visionforge:open-solution` when argv has a `.VFSln`
 
 **Files:**
 - `scripts/start-electron.js`
 - `src/main/index.js`
+- `src/main/helpers/solution-argv.js`
 - `src/main/ipc/register-splash-handlers.js`
 - `src/main/ipc/register.js`
 - `src/main/windows/splash-window.js`
@@ -893,6 +895,7 @@ checkout → Node 20 → `npm ci` → `npm run build:win` → upload `dist/*.exe
 | App configuration store | `src/main/services/configuration-store.js` |
 | Renderer logger | `src/renderer/scripts/renderer-logger.js` |
 | App icon resolver | `src/main/helpers/app-icon.js` |
+| `.VFSln` argv parser | `src/main/helpers/solution-argv.js` |
 | License registration | `src/main/services/license-service.js` |
 | Release update UI | `src/renderer/scripts/release-update-panel.js` |
 | Workspace canvas / playback | `src/renderer/scripts/workspace-canvas.js` |
@@ -955,9 +958,9 @@ Renderer JS
 
 ```
 Main process (index.js)
-  → webContents.send("visionforge:splash-status", payload)
-  → splash preload ipcRenderer.on
-  → splash.js callback
+  → webContents.send("visionforge:splash-status" | "visionforge:open-solution", payload)
+  → splash preload ipcRenderer.on | main preload onOpenSolution
+  → splash.js callback | start-page.js → showWorkspace
   → DOM update
 ```
 
@@ -1205,6 +1208,7 @@ Renderer
 | `visionforge:list-image-folder` | invoke | `register.js` | List image files in a folder (non-recursive) |
 | `visionforge:import-dropped-images` | invoke | `register.js` | Copy dropped image files into `imagesFolder` and append VFSln `assets` |
 | `visionforge:load-project` | invoke | `register.js` | Read `.VFSln`, sync `assets`, import empty detections, record history |
+| `visionforge:open-solution` | push (main→renderer) | `index.js` send | Open a double-clicked `.VFSln` (`{ filePath }`) via `showWorkspace` |
 | `visionforge:update-project` | invoke | `register.js` | Merge keys into `.VFSln` and write (`imagesFolder` also syncs assets + detections) |
 | `visionforge:delete-asset` | invoke | `register.js` | Unlink image + sidecar txt/xml; remove VFSln `assets` row; return remaining folder files |
 | `visionforge:rotate-image` | invoke | `register.js` | Rotate image 90° CW and overwrite file |
@@ -1246,15 +1250,15 @@ Renderer
 
 ---
 
-## Current State Notes (as of v1.0.8, `BUILD_VERSION` 8)
+## Current State Notes (as of v1.0.9, `BUILD_VERSION` 9)
 
-- **Splash/bootstrap** — Flowter-parity: splash shows immediately, license prefetch overlaps heavy IPC load, Register during `"Checking for updates…"`, `LICENSE_UPDATE` before splash close (no 1s delay before the send)
-- **Updates:** `#btn-new-release` (top-right, gold glow) when local `BUILD_VERSION` 8 is less than server `buildVersion`. ForceUpdate locks the start page behind a non-dismissible download modal (`z-index` 1000)
+- **Splash/bootstrap** — Flowter-parity: splash shows immediately, license prefetch overlaps heavy IPC load, Register during `"Checking for updates…"`, `LICENSE_UPDATE` before splash close (no 1s delay before the send). Version label is `Version {version} Build +{build}` (build zero-padded to two digits)
+- **Updates:** `#btn-new-release` (top-right, gold glow) when local `BUILD_VERSION` 9 is less than server `buildVersion`. ForceUpdate locks the start page behind a non-dismissible download modal (`z-index` 1000)
 - **Minimize** uses `win.minimize()` so the app stays on the Windows taskbar (no system tray)
 - **Main window** maximizes after splash (not fullscreen)
 - **App logo** at `src/renderer/images/logo/VisionForge.png`
 - **Create project** writes `{Name}.VFSln` (JSON: format, version, name, imagesFolder, labels, assets, annotationType, annotationMode, onnxModelPath, onnxModelType, onnxConfidence). Annotation type/mode come from the create dialog catalog and are required for new projects. All project config belongs in that file. `object-detection-bbox` and `oriented-object-detection` are creatable; all other types appear disabled with a **Coming soon** badge in the dropdown. The dialog defaults to Object Detection — Bounding Box. On an OBB project the left rail shows Hexagon instead of Box; **W** toggles Cursor and that draw tool. Click-drag creates an axis-aligned box (`angle: 0`); the selected box has a rotation handle (Shift snaps 15°) and Alt+wheel rotates it 1°. OBB detections store `{ xc, yc, w, h, angle }` (degrees). The middleware rejects coming-soon pairs via `isSupportedAnnotation`; existing projects with other types still load and export normally via `isValidAnnotation`.
-- **Open existing project** / **Recent** loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab). `loadProject` appends missing image names to `assets` and fills empty `detections` from sidecar txt/xml.
+- **Open existing project** / **Recent** / double-click loads the `.VFSln` and shows the workspace canvas (playback bar + Assets tab). `loadProject` appends missing image names to `assets` and fills empty `detections` from sidecar txt/xml. NSIS `fileAssociations` registers `.VFSln` to the installed exe (`VisionForge.exe "%1"`); `npm start` is not that handler. A second launch quits and forwards the path to the open window.
 - **Labels:** if VFSln `labels` is empty, import `{project-folder}/classes.txt` then `{imagesFolder}/classes.txt` as `{ id, name }` (id from 0) and list them in the Labels tab. Each row shows a circle in that `id`’s box color (golden-angle HSL) between the id and the name. Existing labels are never overwritten by that import. **Add**, **rename**, and **delete** write VFSln `labels` only (never `classes.txt`). Rename keeps the same `id`; delete does not renumber remaining ids.
 - **Image folder** is picked via File → Select Image Folder or the Select Images tool; path is stored as `imagesFolder` in the VFSln and restored on open. That save also syncs `assets` (append-only, with `addedAt` on new rows and a one-time creation-time backfill when a row has none) and imports empty detections. Drag image files onto the workspace, or File → **Import images** (multi-select), copies them into that folder and appends new `assets` rows through `importWorkspaceImages`. Requires a selected folder; existing names are not overwritten. After an import, the canvas opens the first image of that batch. Those names stay teal in Assets until the frame changes away from that file, and a later import does not clear earlier unvisited names. File → **Import from video** opens `#import-from-video-screen`. Browse accepts MP4, M4V, and WebM. **Apply object detections** is enabled only when the project has a detection model. **Process** extracts every Nth frame (`ffmpeg-static`) into a left-side grid, then runs that model on each frame when the checkbox is checked and draws amber boxes on the contained thumbnails. **Import (N)** appears when one or more frames are selected (N is the selection count) and copies those files through `importWorkspaceImages` then resets and closes this screen so the workspace shows the first new image; checked imports also write those detections onto the new assets. Choosing a video shows duration, size, frame rate, and total frames, and frame jump cannot exceed half that frame count. Ctrl+wheel on the frame grid changes thumbnail size between 80px and 360px and the boxes stay aligned. Both File items stay disabled until a project is open.
 - **Assets (VFSln):** `{ name, width, height, detections: [{ labelid, value }] }`. Folder sync is append-only; **Delete Asset** (Assets-tab right-click) removes the image file, matching `.txt`/`.xml` sidecars, and that VFSln row. Playback still lists the folder. `width`/`height` filled when that image is previewed (or on box persist). YOLO `value` is `{ xc, yc, w, h }` with `xc = ((x1+x2)/2)/image_width` (same pattern for `yc`, `w`, `h`), clamped to 0–1 and written to 6 decimal places on edit (LabelImg / Ultralytics style); VOC is integer `{ xmin, ymin, xmax, ymax }`. Non-empty detections are not overwritten by sidecar import.
@@ -1273,7 +1277,7 @@ Renderer
 - **Edit / Help:** Undo, Redo, Copy, Paste, and Delete live on Edit. Help opens Keyboard shortcuts (also F1) and About. Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z undo and redo per image (label edits use a project-level stack key). History clears when the project closes.
 - **Assets:** search, All / Labeled / Unlabeled / Flagged, **F** or the flag icon toggles `flagged`, and Thumbs (stored as `assetsThumbnails` in `configuration.vfson`). A/D and arrow frame steps follow the filtered list. Labels have an eye (hide) and Alt+click on the color circle (solo).
 - **Export OBB modes:** `yolo-obb`, `dota` (pixel corners, class name, difficulty 0), `rotated-rectangle-obb` (normalized xywh + radians), `4-point-quadrilateral` (pixel corners), `rotated-coco-json` (`bbox` xc,yc,w,h,angle in pixels plus 8-point `segmentation`).
-- **Tests:** `npm test` runs `tests/unit` for detection mapping, sidecar parse, and export modes.
+- **Tests:** `npm test` runs `tests/unit` for detection mapping, sidecar parse, export modes, and `.VFSln` argv parsing.
 - **Recent projects** come from `Documents/VisionForge/history-solutions.vfson` (create/open upsert, max 20). Right-click a row → **Remove from list** drops that entry from the file and refreshes the list; the `.VFSln` is not deleted.
-- **Tests:** `npm test` (`node:test`) covers mapping math, YOLO/VOC sidecar parse, and export modes
+- **Tests:** `npm test` (`node:test`) covers mapping math, YOLO/VOC sidecar parse, export modes, and `.VFSln` argv parsing
 - **Workspace folder** is `49. PixelTag` on disk; product name is **VisionForge**

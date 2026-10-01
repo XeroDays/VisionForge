@@ -28,6 +28,7 @@ const CH = {
   LIST_IMAGE_FOLDER: "visionforge:list-image-folder",
   IMPORT_DROPPED_IMAGES: "visionforge:import-dropped-images",
   LOAD_PROJECT: "visionforge:load-project",
+  OPEN_SOLUTION: "visionforge:open-solution",
   UPDATE_PROJECT: "visionforge:update-project",
   DELETE_ASSET: "visionforge:delete-asset",
   ROTATE_IMAGE: "visionforge:rotate-image",
@@ -97,6 +98,11 @@ contextBridge.exposeInMainWorld("visionforge", {
     const subscription = (_event, payload) => callback(payload);
     ipcRenderer.on(CH.LICENSE_UPDATE, subscription);
     return () => ipcRenderer.removeListener(CH.LICENSE_UPDATE, subscription);
+  },
+  onOpenSolution(callback) {
+    const subscription = (_event, payload) => callback(payload);
+    ipcRenderer.on(CH.OPEN_SOLUTION, subscription);
+    return () => ipcRenderer.removeListener(CH.OPEN_SOLUTION, subscription);
   },
   onLicenseDownloadProgress(callback) {
     const subscription = (_event, payload) => callback(payload);

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-10-01
+
+### Added
+
+- Double-click a `.VFSln` file to open that project. If VisionForge is already running, the file opens in the existing window.
+
+### Changed
+
+- The splash version label reads `Version 1.0.9 Build +09`.
+
 ## [1.0.8] - 2026-09-30
 
 ### Added
