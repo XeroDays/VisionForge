@@ -1174,7 +1174,7 @@ Renderer
 | Window preload | Separate preload per window (main vs splash) |
 | CSS | Dark theme (`#0b0b0d` main, `#0f1419` splash); thin custom scrollbar (`::-webkit-scrollbar` + `scrollbar-color`, gold active thumb) on overflow panes |
 | Storage path (planned) | `Documents/VisionForge/` |
-| App artifact name | `VisionForge Release LTS.exe` |
+| App artifact name | `VisionForgev{version}.exe` (for example `VisionForgev1.0.9.exe`; `{version}` is `package.json` `version`) |
 | Node version (CI) | 20 |
 | Module system | CommonJS (`require` / `module.exports`) |
 | HTML loading | `win.loadFile()` — no dev server |

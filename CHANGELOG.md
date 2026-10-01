@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Windows installer filename is `VisionForgev{version}.exe` (for example `VisionForgev1.0.9.exe`).
+
 ## [1.0.9] - 2026-10-01
 
 ### Added

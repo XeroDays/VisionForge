@@ -22,7 +22,7 @@ The Windows installer is produced with:
 npm run build:win
 ```
 
-Output: `dist/VisionForge Release LTS.exe`.
+Output: `dist/VisionForgev{version}.exe` (for the current version, `dist/VisionForgev1.0.9.exe`). `{version}` is the `version` field in `package.json`.
 
 ## Project layout
 
