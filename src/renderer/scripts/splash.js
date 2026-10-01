@@ -19,9 +19,15 @@
       const info = await window.visionforge.getAppInfo();
       if (!info || !versionLabel) return;
       const version = info.version || "—";
-      const build =
-        info.build != null && info.build !== "" ? ` (Build ${info.build})` : "";
-      versionLabel.textContent = `Version v${version}${build}`;
+      let build = "";
+      if (info.build != null && info.build !== "") {
+        const buildNumber = Number(info.build);
+        const label = Number.isFinite(buildNumber)
+          ? String(Math.trunc(buildNumber)).padStart(2, "0")
+          : String(info.build);
+        build = ` Build +${label}`;
+      }
+      versionLabel.textContent = `Version ${version}${build}`;
       log.debug("version label set", { version: info.version, build: info.build });
     } catch (err) {
       log.error("failed to load app info", { error: String(err?.message || err) });
