@@ -17,6 +17,8 @@
   const ZOOM_OUT = 0.8;
   const MAX_ZOOM = 16;
   const FRAME_WHEEL_COOLDOWN_MS = 80;
+  const WHEEL_BOX_SCALE_GROW = 1.03;
+  const WHEEL_BOX_SCALE_SHRINK = 0.97;
   const SVG_NS = "http://www.w3.org/2000/svg";
   const GOLDEN_ANGLE = 137.508;
   const BOX_HANDLE_PX = 8;
@@ -160,6 +162,9 @@
   let lastStagePointer = null;
   let wheelRotateTimer = null;
   let pendingWheelRotate = null;
+  let wheelResizeTimer = null;
+  let pendingWheelResize = null;
+  let wheelResizeBusy = false;
   let nudgeTimer = null;
   let pendingNudge = null;
   let historyBusy = false;
@@ -1184,7 +1189,8 @@
     await persistDetectionValue(pending.index, pending.value, pending.name);
   }
 
-  function rotateSelectedByWheel(deltaY, step) {
+  async function rotateSelectedByWheel(deltaY, step) {
+    await flushWheelResizePersist();
     if (!canRotateSelectedObb()) return;
     const index = state.selectedDetectionIndex;
     const file = currentFile();
@@ -1223,6 +1229,7 @@
     const edit = boxEdit;
     boxEdit = null;
     await flushWheelRotatePersist();
+    await flushWheelResizePersist();
     edit.group?.classList.remove("is-active");
     const start = edit.startRect;
     const next = edit.currentRect;
@@ -1356,6 +1363,7 @@
     historyBusy = true;
     try {
       await flushWheelRotatePersist();
+      await flushWheelResizePersist();
       const entry = history.undo(key, snapshotOf(pending));
       const ok = await applyHistoryEntry(entry);
       if (ok) log.info("undo", { verb: entry.verb, name: key });
@@ -1374,6 +1382,7 @@
     historyBusy = true;
     try {
       await flushWheelRotatePersist();
+      await flushWheelResizePersist();
       const entry = history.redo(key, snapshotOf(pending));
       const ok = await applyHistoryEntry(entry);
       if (ok) log.info("redo", { verb: entry.verb, name: key });
@@ -1759,7 +1768,131 @@
     await persistDetectionValue(pending.index, pending.value, pending.name);
   }
 
-  function nudgeSelectedBox(dx, dy) {
+  function centerInsideImage(rect, imgW, imgH) {
+    const center = rectCenter(rect);
+    return center.x >= 0 && center.y >= 0 && center.x <= imgW && center.y <= imgH;
+  }
+
+  function detectionValuesEqual(a, b) {
+    if (a === b) return true;
+    if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const key of keys) {
+      if (a[key] !== b[key]) return false;
+    }
+    return true;
+  }
+
+  function boxAnchoredToTopLeft(rect) {
+    return isObbProject() || Object.prototype.hasOwnProperty.call(rect || {}, "angle");
+  }
+
+  function resizeBoxFromTopLeft(rect, width, height, imgW, imgH) {
+    if (!(width >= BOX_MIN_SIZE) || !(height >= BOX_MIN_SIZE)) return null;
+    if (!boxAnchoredToTopLeft(rect)) {
+      const current = snapPixelRect(rect);
+      const snapped = snapPixelRect({ x: rect.x, y: rect.y, width, height });
+      if (
+        (snapped.width > current.width && snapped.x + snapped.width > imgW) ||
+        (snapped.height > current.height && snapped.y + snapped.height > imgH)
+      ) {
+        return null;
+      }
+      return { x: rect.x, y: rect.y, width, height };
+    }
+    const anchor = obbWorldCorner(rect, "nw");
+    const next = lockObbAnchor(
+      {
+        x: rect.x,
+        y: rect.y,
+        width,
+        height,
+        angle: Number(rect.angle) || 0,
+      },
+      "nw",
+      anchor,
+    );
+    if (!centerInsideImage(next, imgW, imgH)) return null;
+    return next;
+  }
+
+  function cancelWheelResizePersist() {
+    if (wheelResizeTimer) {
+      clearTimeout(wheelResizeTimer);
+      wheelResizeTimer = null;
+    }
+    pendingWheelResize = null;
+  }
+
+  async function flushWheelResizePersist() {
+    const pending = pendingWheelResize;
+    cancelWheelResizePersist();
+    if (!pending) return;
+    await persistDetectionValue(pending.index, pending.value, pending.name);
+  }
+
+  async function scaleSelectedBoxByWheel(deltaY) {
+    if (wheelResizeBusy) return false;
+    wheelResizeBusy = true;
+    try {
+      await flushWheelRotatePersist();
+      await flushNudgePersist();
+      if (!imageReady() || boxEdit || boxDraw) return false;
+      const index = state.selectedDetectionIndex;
+      const file = currentFile();
+      if (!file || index == null) return false;
+      const asset = state.assetsByName.get(file.name);
+      const detections = Array.isArray(asset?.detections) ? asset.detections.slice() : [];
+      const prev = detections[index];
+      if (!prev) return false;
+      const imgW = imageEl.naturalWidth || asset?.width || 0;
+      const imgH = imageEl.naturalHeight || asset?.height || 0;
+      const rect = detectionToRect(prev.value, imgW, imgH);
+      if (!rect || !imgW || !imgH) return false;
+      const grow = deltaY < 0;
+      const factor = grow ? WHEEL_BOX_SCALE_GROW : WHEEL_BOX_SCALE_SHRINK;
+      let nextRect = resizeBoxFromTopLeft(rect, rect.width * factor, rect.height * factor, imgW, imgH);
+      let mapped = nextRect ? rectToValue(nextRect, imgW, imgH, prev.value) : null;
+      let value = mapped ? { ...prev.value, ...mapped } : null;
+      if (nextRect && (!value || detectionValuesEqual(prev.value, value))) {
+        const base = snapPixelRect(rect);
+        const step = grow ? 1 : -1;
+        const stepped = {
+          ...rect,
+          x: base.x,
+          y: base.y,
+          width: base.width,
+          height: base.height,
+        };
+        nextRect = resizeBoxFromTopLeft(stepped, base.width + step, base.height + step, imgW, imgH);
+        mapped = nextRect ? rectToValue(nextRect, imgW, imgH, prev.value) : null;
+        value = mapped ? { ...prev.value, ...mapped } : null;
+      }
+      if (!nextRect || !value || detectionValuesEqual(prev.value, value)) return false;
+      if (!pendingWheelResize) pushDetectionHistory(file.name, "resize box");
+      detections[index] = { ...prev, value };
+      setAssets(
+        state.assets.map((row) =>
+          row?.name === file.name
+            ? formatAsset(row, { width: imgW, height: imgH, detections })
+            : row,
+        ),
+      );
+      drawDetectionBoxes();
+      pendingWheelResize = { name: file.name, index, value };
+      if (wheelResizeTimer) clearTimeout(wheelResizeTimer);
+      wheelResizeTimer = window.setTimeout(() => {
+        wheelResizeTimer = null;
+        void flushWheelResizePersist();
+      }, OBB_WHEEL_PERSIST_MS);
+      return true;
+    } finally {
+      wheelResizeBusy = false;
+    }
+  }
+
+  async function nudgeSelectedBox(dx, dy) {
+    await flushWheelResizePersist();
     if (state.currentTool !== "cursor" || !imageReady() || boxEdit || boxDraw) return false;
     const index = state.selectedDetectionIndex;
     const file = currentFile();
@@ -2313,6 +2446,7 @@
 
   function setFrame(index, options = {}) {
     void flushWheelRotatePersist();
+    void flushWheelResizePersist();
     void flushNudgePersist();
     if (boxEdit) cancelBoxEdit();
     boxDraw = null;
@@ -2514,6 +2648,7 @@
     window.closeImportFromVideoScreen?.({ restoreWorkspace: false });
     stopPlay();
     void flushWheelRotatePersist();
+    void flushWheelResizePersist();
     void flushNudgePersist();
     boxEdit = null;
     boxDraw = null;
@@ -2795,16 +2930,16 @@
         zoomBy(event.deltaY < 0 ? ZOOM_IN : ZOOM_OUT, origin);
         return;
       }
-      if (event.shiftKey && state.currentTool === "cursor" && !boxEdit && !boxDraw) {
+      if (event.shiftKey) {
+        if (boxEdit || boxDraw || state.selectedDetectionIndex == null) return;
         const now = Date.now();
         if (now - lastFrameWheelAt < FRAME_WHEEL_COOLDOWN_MS) return;
         lastFrameWheelAt = now;
-        stopPlay();
-        setFrame(state.frameIndex + (event.deltaY < 0 ? -1 : 1));
+        void scaleSelectedBoxByWheel(event.deltaY);
         return;
       }
       if (!event.altKey || !canRotateSelectedObb()) return;
-      rotateSelectedByWheel(event.deltaY, OBB_WHEEL_ROTATE_SMALL);
+      void rotateSelectedByWheel(event.deltaY, OBB_WHEEL_ROTATE_SMALL);
     },
     { passive: false },
   );
@@ -3305,7 +3440,7 @@
       else if (key === "ArrowDown") dy = step;
       if (dx || dy) {
         event.preventDefault();
-        nudgeSelectedBox(dx, dy);
+        void nudgeSelectedBox(dx, dy);
         return;
       }
     }

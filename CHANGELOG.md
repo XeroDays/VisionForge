@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.12] - 2026-10-02
+
+### Changed
+
+- Shift+wheel no longer steps through images. With a box selected, it grows or shrinks that box by 3% from the top-left corner.
+- The splash version label reads `Version 1.0.12 Build +12`.
+
 ## [1.0.11] - 2026-10-01
 
 ### Fixed

@@ -28,7 +28,6 @@
         [["A"], "Previous image"],
         [["D"], "Next image"],
         [["←", "→"], "Previous / next image (no box selected)"],
-        [["Shift", "wheel"], "Step through images (Cursor tool)"],
         [["Space"], "Play / pause from the playback bar"],
       ],
     },
@@ -44,6 +43,7 @@
       title: "Boxes",
       rows: [
         [["Click"], "Select a box; drag body to move, drag a corner to resize"],
+        [["Shift", "wheel"], "Grow or shrink the selected box from the top-left corner"],
         [["←", "↑", "→", "↓"], "Nudge the selected box by 1 px"],
         [["Shift", "arrow"], "Nudge by 10 px"],
         [["Alt", "wheel"], "Rotate the selected box by 1° (rotated projects)"],
